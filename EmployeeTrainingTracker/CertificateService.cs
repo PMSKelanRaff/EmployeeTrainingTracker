@@ -49,17 +49,18 @@ namespace EmployeeTrainingTracker
             }
         }
 
-        public static void UpdateCertificate(int certId, string certName, DateTime issueDate, DateTime expiryDate)
+        public static void UpdateCertificate(int certId, string certName, DateTime issueDate, DateTime expiryDate, string? filePath = null)
         {
             using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
             {
                 conn.Open();
                 using (var cmd = new SqliteCommand(
-                    "UPDATE TrainingCertificates SET CertificateName=@name, IssueDate=@issue, ExpiryDate=@expiry WHERE CertificateID=@id", conn))
+                    "UPDATE TrainingCertificates SET CertificateName=@name, IssueDate=@issue, ExpiryDate=@expiry, FilePath=@file WHERE CertificateID=@id", conn))
                 {
                     cmd.Parameters.AddWithValue("@name", certName);
                     cmd.Parameters.AddWithValue("@issue", issueDate.ToString("yyyy-MM-dd"));
                     cmd.Parameters.AddWithValue("@expiry", expiryDate.ToString("yyyy-MM-dd"));
+                    cmd.Parameters.AddWithValue("@file", string.IsNullOrEmpty(filePath) ? DBNull.Value : (object)filePath);
                     cmd.Parameters.AddWithValue("@id", certId);
                     cmd.ExecuteNonQuery();
                 }

@@ -48,26 +48,27 @@
             dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dataGridView1.Location = new Point(8, 7);
             dataGridView1.Name = "dataGridView1";
-            dataGridView1.Size = new Size(498, 431);
+            dataGridView1.Size = new Size(574, 399);
             dataGridView1.TabIndex = 0;
+            dataGridView1.CellContentClick += dataGridView1_CellContentClick;
             // 
             // txtCertName
             // 
-            txtCertName.Location = new Point(512, 88);
+            txtCertName.Location = new Point(588, 88);
             txtCertName.Name = "txtCertName";
             txtCertName.Size = new Size(200, 23);
             txtCertName.TabIndex = 1;
             // 
             // dtpIssueDate
             // 
-            dtpIssueDate.Location = new Point(512, 161);
+            dtpIssueDate.Location = new Point(588, 161);
             dtpIssueDate.Name = "dtpIssueDate";
             dtpIssueDate.Size = new Size(200, 23);
             dtpIssueDate.TabIndex = 2;
             // 
             // dtpExpiryDate
             // 
-            dtpExpiryDate.Location = new Point(512, 206);
+            dtpExpiryDate.Location = new Point(588, 205);
             dtpExpiryDate.Name = "dtpExpiryDate";
             dtpExpiryDate.Size = new Size(200, 23);
             dtpExpiryDate.TabIndex = 3;
@@ -104,7 +105,7 @@
             // 
             // txtFilePath
             // 
-            txtFilePath.Location = new Point(512, 275);
+            txtFilePath.Location = new Point(588, 275);
             txtFilePath.Name = "txtFilePath";
             txtFilePath.Size = new Size(200, 23);
             txtFilePath.TabIndex = 7;
@@ -112,7 +113,7 @@
             // lbl_Certname
             // 
             lbl_Certname.AutoSize = true;
-            lbl_Certname.Location = new Point(512, 70);
+            lbl_Certname.Location = new Point(588, 70);
             lbl_Certname.Name = "lbl_Certname";
             lbl_Certname.Size = new Size(105, 15);
             lbl_Certname.TabIndex = 12;
@@ -121,7 +122,7 @@
             // lbl_IssueDate
             // 
             lbl_IssueDate.AutoSize = true;
-            lbl_IssueDate.Location = new Point(512, 143);
+            lbl_IssueDate.Location = new Point(588, 143);
             lbl_IssueDate.Name = "lbl_IssueDate";
             lbl_IssueDate.Size = new Size(66, 15);
             lbl_IssueDate.TabIndex = 13;
@@ -130,7 +131,7 @@
             // lbl_ExpiryDate
             // 
             lbl_ExpiryDate.AutoSize = true;
-            lbl_ExpiryDate.Location = new Point(512, 187);
+            lbl_ExpiryDate.Location = new Point(588, 187);
             lbl_ExpiryDate.Name = "lbl_ExpiryDate";
             lbl_ExpiryDate.Size = new Size(71, 15);
             lbl_ExpiryDate.TabIndex = 14;
@@ -139,7 +140,7 @@
             // label1
             // 
             label1.AutoSize = true;
-            label1.Location = new Point(512, 257);
+            label1.Location = new Point(588, 257);
             label1.Name = "label1";
             label1.Size = new Size(115, 15);
             label1.TabIndex = 16;

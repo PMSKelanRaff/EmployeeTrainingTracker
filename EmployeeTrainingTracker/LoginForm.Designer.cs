@@ -28,11 +28,13 @@
         /// </summary>
         private void InitializeComponent()
         {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(LoginForm));
             txtUsername = new TextBox();
             txtPassword = new TextBox();
             label1 = new Label();
             label2 = new Label();
             Login_btn = new Button();
+            label3 = new Label();
             SuspendLayout();
             // 
             // txtUsername
@@ -77,18 +79,30 @@
             Login_btn.UseVisualStyleBackColor = true;
             Login_btn.Click += Login_btn_Click;
             // 
+            // label3
+            // 
+            label3.AutoSize = true;
+            label3.Font = new Font("Segoe UI Emoji", 15.75F, FontStyle.Bold, GraphicsUnit.Point, 0);
+            label3.Location = new Point(22, 29);
+            label3.Name = "label3";
+            label3.Size = new Size(228, 28);
+            label3.TabIndex = 5;
+            label3.Text = "PMS Training Tracker";
+            // 
             // LoginForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(276, 237);
+            Controls.Add(label3);
             Controls.Add(Login_btn);
             Controls.Add(label2);
             Controls.Add(label1);
             Controls.Add(txtPassword);
             Controls.Add(txtUsername);
+            Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "LoginForm";
-            Text = "LoginForm";
+            Text = "Login Form";
             ResumeLayout(false);
             PerformLayout();
         }
@@ -100,5 +114,6 @@
         private Label label1;
         private Label label2;
         private Button Login_btn;
+        private Label label3;
     }
 }

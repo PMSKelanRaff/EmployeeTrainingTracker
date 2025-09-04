@@ -19,19 +19,21 @@ namespace EmployeeTrainingTracker
         // Load certificates for the employee
         private void LoadCertificates(int employeeId)
         {
-            // Get the data from the service (database layer)
             DataTable table = CertificateService.GetCertificates(employeeId);
 
             dataGridView1.DataSource = table;
 
-            // Add clickable link column for FilePath if it doesn't exist yet
+            if (dataGridView1.Columns.Contains("FilePath"))
+                dataGridView1.Columns["FilePath"].Visible = false;
+
+            // Add clickable link column if not already present
             if (!dataGridView1.Columns.Contains("FileLink"))
             {
                 var linkCol = new DataGridViewLinkColumn
                 {
                     Name = "FileLink",
                     HeaderText = "Certificate File",
-                    DataPropertyName = "FilePath",
+                    DataPropertyName = "FilePath", // bind to hidden FilePath
                     TrackVisitedState = true,
                     UseColumnTextForLinkValue = false
                 };
@@ -51,7 +53,7 @@ namespace EmployeeTrainingTracker
                 return;
             }
 
-            string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim()) ? null : txtFilePath.Text.Trim();
+            string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim()) ? null : txtFilePath.Text.Trim('"').Trim();
             CertificateService.AddCertificate(employeeId, certName, issueDate, expiryDate, filePath);
 
             LoadCertificates(employeeId);
@@ -70,8 +72,9 @@ namespace EmployeeTrainingTracker
             string certName = txtCertName.Text.Trim();
             DateTime issueDate = dtpIssueDate.Value;
             DateTime expiryDate = dtpExpiryDate.Value;
+            string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim()) ? null : txtFilePath.Text.Trim();
 
-            CertificateService.UpdateCertificate(certId, certName, issueDate, expiryDate);
+            CertificateService.UpdateCertificate(certId, certName, issueDate, expiryDate, filePath);
 
             LoadCertificates(employeeId);
             ClearInputs();
@@ -95,18 +98,6 @@ namespace EmployeeTrainingTracker
             LoadCertificates(employeeId);
         }
 
-        private void dataGridView1_SelectionChanged(object sender, EventArgs e)
-        {
-            if (dataGridView1.CurrentRow != null)
-            {
-                txtCertName.Text = dataGridView1.CurrentRow.Cells["CertificateName"].Value?.ToString() ?? "";
-                if (DateTime.TryParse(dataGridView1.CurrentRow.Cells["IssueDate"].Value?.ToString(), out DateTime issue))
-                    dtpIssueDate.Value = issue;
-                if (DateTime.TryParse(dataGridView1.CurrentRow.Cells["ExpiryDate"].Value?.ToString(), out DateTime expiry))
-                    dtpExpiryDate.Value = expiry;
-            }
-        }
-
         private void ClearInputs()
         {
             txtCertName.Text = "";
@@ -114,24 +105,33 @@ namespace EmployeeTrainingTracker
             dtpExpiryDate.Value = DateTime.Today;
         }
 
-        private void dgvCertificates_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        // Events
+
+        private void dataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0) return;
 
             if (dataGridView1.Columns[e.ColumnIndex].Name == "FileLink")
             {
-                string? path = dataGridView1.Rows[e.RowIndex].Cells["FileLink"].Value?.ToString();
-                if (!string.IsNullOrEmpty(path) && System.IO.File.Exists(path))
+                string? path = dataGridView1.Rows[e.RowIndex].Cells["FilePath"].Value?.ToString();
+
+                if (!string.IsNullOrEmpty(path))
                 {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    // Remove any surrounding quotes
+                    path = path.Trim('"');
+
+                    if (System.IO.File.Exists(path))
                     {
-                        FileName = path,
-                        UseShellExecute = true
-                    });
-                }
-                else
-                {
-                    MessageBox.Show("File not found.");
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = path,
+                            UseShellExecute = true
+                        });
+                    }
+                    else
+                    {
+                        MessageBox.Show($"File not found:\n{path}");
+                    }
                 }
             }
         }
