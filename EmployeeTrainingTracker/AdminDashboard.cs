@@ -21,20 +21,27 @@ namespace EmployeeTrainingTracker
             {
                 conn.Open();
 
-                using (var cmd = new SqliteCommand(
-                    @"SELECT Users.Username,
-                     Users.Role,
-                     IFNULL(Employees.Department, 'Unknown') AS Department,
-                     IFNULL(Employees.JobTitle, 'Unknown') AS JobTitle,
-                     Users.EmployeeID
-              FROM Users
-              LEFT JOIN Employees ON Users.EmployeeID = Employees.EmployeeID", conn))
+                using (var cmd = new SqliteCommand(@"
+            SELECT 
+                u.UserID,
+                u.Username,
+                u.Role,
+                e.EmployeeID,
+                IFNULL(e.FullName, u.Username) AS FullName,
+                IFNULL(e.Department, 'Unknown') AS Department,
+                IFNULL(e.JobTitle, 'Unknown') AS JobTitle
+            FROM Users u
+            LEFT JOIN Employees e ON u.EmployeeID = e.EmployeeID", conn))
                 {
                     using (var reader = cmd.ExecuteReader())
                     {
                         DataTable table = new DataTable();
                         table.Load(reader);
                         dgvEmployees.DataSource = table;
+
+                        // Optional: hide technical ID columns so UI looks cleaner
+                        if (dgvEmployees.Columns.Contains("UserID"))
+                            dgvEmployees.Columns["UserID"].Visible = false;
 
                         if (dgvEmployees.Columns.Contains("EmployeeID"))
                             dgvEmployees.Columns["EmployeeID"].Visible = false;
@@ -175,9 +182,11 @@ namespace EmployeeTrainingTracker
             {
                 conn.Open();
 
-                // Create Employee row with Department and JobTitle from form
+                // Insert Employee first
                 using (var cmdEmp = new SqliteCommand(
-                    "INSERT INTO Employees (FullName, Department, JobTitle) VALUES (@name, @dept, @title); SELECT last_insert_rowid();", conn))
+                    @"INSERT INTO Employees (FullName, Department, JobTitle) 
+              VALUES (@name, @dept, @title); 
+              SELECT last_insert_rowid();", conn))
                 {
                     cmdEmp.Parameters.AddWithValue("@name", username);
                     cmdEmp.Parameters.AddWithValue("@dept", department);
@@ -185,22 +194,25 @@ namespace EmployeeTrainingTracker
                     newEmpId = (long)cmdEmp.ExecuteScalar();
                 }
 
-                // Create User row linked to the EmployeeID
+                // Insert User linked to Employee
                 using (var cmdUser = new SqliteCommand(
-                    "INSERT INTO Users (Username, PasswordHash, Role, EmployeeID) VALUES (@u, @p, @r, @eid); SELECT last_insert_rowid();", conn))
+                    @"INSERT INTO Users (Username, PasswordHash, Role, EmployeeID) 
+              VALUES (@u, @p, @r, @eid); 
+              SELECT last_insert_rowid();", conn))
                 {
                     cmdUser.Parameters.AddWithValue("@u", username);
-                    cmdUser.Parameters.AddWithValue("@p", password); // hash later
+                    cmdUser.Parameters.AddWithValue("@p", password); // TODO: hash later
                     cmdUser.Parameters.AddWithValue("@r", role);
                     cmdUser.Parameters.AddWithValue("@eid", newEmpId);
                     newUserId = (long)cmdUser.ExecuteScalar();
                 }
             }
 
+            // Refresh UI
             LoadEmployees();
             ClearEmployeeInputs();
 
-            // Select the newly added user
+            // Auto-select the newly added row
             foreach (DataGridViewRow row in dgvEmployees.Rows)
             {
                 if (row.Cells["Username"].Value?.ToString() == username)
@@ -212,52 +224,79 @@ namespace EmployeeTrainingTracker
             }
         }
 
-        private void btnEditEmployee_Click(object sender, EventArgs e)
+        private void btnUpdateEmployee_Click(object sender, EventArgs e)
         {
             if (dgvEmployees.CurrentRow == null) return;
 
-            int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
-            string username = txtUsername.Text.Trim();
-            string password = txtPassword.Text.Trim();
-            string role = cmbRole.SelectedItem?.ToString() ?? "Employee";
-            string department = cmbDept.Text.Trim();   // new TextBox
-            string jobTitle = txtJobTitle.Text.Trim();       // new TextBox
+            var empIdObj = dgvEmployees.CurrentRow.Cells["EmployeeID"].Value;
+            var userIdObj = dgvEmployees.CurrentRow.Cells["UserID"].Value;
 
-            if (string.IsNullOrEmpty(username))
+            if (userIdObj == null || userIdObj == DBNull.Value)
             {
-                MessageBox.Show("Username is required.");
+                MessageBox.Show("Please select a valid employee.");
                 return;
             }
+
+            int userId = Convert.ToInt32(userIdObj);
+            int? employeeId = empIdObj == null || empIdObj == DBNull.Value ? (int?)null : Convert.ToInt32(empIdObj);
+
+            string username = txtUsername.Text.Trim();
+            string role = cmbRole.SelectedItem?.ToString() ?? "Employee";
+            string department = string.IsNullOrEmpty(cmbDept.Text.Trim()) ? "Unknown" : cmbDept.Text.Trim();
+            string jobTitle = string.IsNullOrEmpty(txtJobTitle.Text.Trim()) ? "Unknown" : txtJobTitle.Text.Trim();
 
             using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
             {
                 conn.Open();
 
-                // Update Employee info
-                using (var cmdEmp = new SqliteCommand(
-                    "UPDATE Employees SET FullName=@name, Department=@dept, JobTitle=@title WHERE EmployeeID=@id", conn))
+                if (employeeId.HasValue)
                 {
-                    cmdEmp.Parameters.AddWithValue("@name", username);
-                    cmdEmp.Parameters.AddWithValue("@dept", string.IsNullOrEmpty(department) ? "Unknown" : department);
-                    cmdEmp.Parameters.AddWithValue("@title", string.IsNullOrEmpty(jobTitle) ? "Unknown" : jobTitle);
-                    cmdEmp.Parameters.AddWithValue("@id", empId);
-                    cmdEmp.ExecuteNonQuery();
+                    // Update existing Employee
+                    using (var cmdEmp = new SqliteCommand(
+                        "UPDATE Employees SET FullName=@name, Department=@dept, JobTitle=@title WHERE EmployeeID=@id", conn))
+                    {
+                        cmdEmp.Parameters.AddWithValue("@name", username);
+                        cmdEmp.Parameters.AddWithValue("@dept", department);
+                        cmdEmp.Parameters.AddWithValue("@title", jobTitle);
+                        cmdEmp.Parameters.AddWithValue("@id", employeeId.Value);
+                        cmdEmp.ExecuteNonQuery();
+                    }
+                }
+                else
+                {
+                    // Insert new Employee
+                    using (var cmdInsertEmp = new SqliteCommand(
+                        "INSERT INTO Employees (FullName, Department, JobTitle) VALUES (@name,@dept,@title); SELECT last_insert_rowid();", conn))
+                    {
+                        cmdInsertEmp.Parameters.AddWithValue("@name", username);
+                        cmdInsertEmp.Parameters.AddWithValue("@dept", department);
+                        cmdInsertEmp.Parameters.AddWithValue("@title", jobTitle);
+
+                        long newEmpId = (long)cmdInsertEmp.ExecuteScalar();
+
+                        // Link back to Users
+                        using (var cmdUpdateUserEmp = new SqliteCommand(
+                            "UPDATE Users SET EmployeeID=@empId WHERE UserID=@uid", conn))
+                        {
+                            cmdUpdateUserEmp.Parameters.AddWithValue("@empId", newEmpId);
+                            cmdUpdateUserEmp.Parameters.AddWithValue("@uid", userId);
+                            cmdUpdateUserEmp.ExecuteNonQuery();
+                        }
+                    }
                 }
 
-                // Update User info
+                // Always update Users table (username + role)
                 using (var cmdUser = new SqliteCommand(
-                    "UPDATE Users SET Username=@u, PasswordHash=@p, Role=@r WHERE EmployeeID=@id", conn))
+                    "UPDATE Users SET Username=@u, Role=@r WHERE UserID=@uid", conn))
                 {
                     cmdUser.Parameters.AddWithValue("@u", username);
-                    cmdUser.Parameters.AddWithValue("@p", password); // hash later
                     cmdUser.Parameters.AddWithValue("@r", role);
-                    cmdUser.Parameters.AddWithValue("@id", empId);
+                    cmdUser.Parameters.AddWithValue("@uid", userId);
                     cmdUser.ExecuteNonQuery();
                 }
             }
 
             LoadEmployees();
-            ClearEmployeeInputs();
         }
 
         private void btnDeleteEmployee_Click(object sender, EventArgs e)
@@ -325,39 +364,37 @@ namespace EmployeeTrainingTracker
             if (dgvEmployees.CurrentRow != null)
             {
                 var empIdObj = dgvEmployees.CurrentRow.Cells["EmployeeID"].Value;
+                var userIdObj = dgvEmployees.CurrentRow.Cells["UserID"].Value;
 
-                if (empIdObj != null && empIdObj != DBNull.Value)
+                if (userIdObj != null && userIdObj != DBNull.Value)
                 {
-                    int empId = Convert.ToInt32(empIdObj);
+                    int userId = Convert.ToInt32(userIdObj);
 
-                    // Load employee details into the input fields
-                    using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
+                    // Load employee + user details directly from DataGridView (faster than requerying DB)
+                    txtUsername.Text = dgvEmployees.CurrentRow.Cells["Username"].Value?.ToString();
+                    cmbRole.SelectedItem = dgvEmployees.CurrentRow.Cells["Role"].Value?.ToString();
+                    cmbDept.Text = dgvEmployees.CurrentRow.Cells["Department"].Value?.ToString();
+                    txtJobTitle.Text = dgvEmployees.CurrentRow.Cells["JobTitle"].Value?.ToString();
+
+                    // If EmployeeID exists, load certificates
+                    if (empIdObj != null && empIdObj != DBNull.Value)
                     {
-                        conn.Open();
-                        using (var cmd = new SqliteCommand("SELECT Username, Role, Department, JobTitle FROM Employees INNER JOIN Users ON Employees.EmployeeID = Users.EmployeeID WHERE Employees.EmployeeID=@id", conn))
-                        {
-                            cmd.Parameters.AddWithValue("@id", empId);
-                            using (var reader = cmd.ExecuteReader())
-                            {
-                                if (reader.Read())
-                                {
-                                    txtUsername.Text = reader["Username"].ToString();
-                                    cmbRole.SelectedItem = reader["Role"].ToString();
-                                    cmbDept.Text = reader["Department"].ToString();
-                                    txtJobTitle.Text = reader["JobTitle"].ToString();
-                                }
-                            }
-                        }
+                        int empId = Convert.ToInt32(empIdObj);
+                        LoadCertificates(empId);
+                        tabCertificates.Enabled = true;
                     }
-
-                    LoadCertificates(empId);
-                    tabCertificates.Enabled = true;
+                    else
+                    {
+                        dgvCertificates.DataSource = null;
+                        tabCertificates.Enabled = false;
+                    }
                 }
                 else
                 {
+                    // No valid user selected
+                    ClearEmployeeInputs();
                     dgvCertificates.DataSource = null;
                     tabCertificates.Enabled = false;
-                    ClearEmployeeInputs();
                 }
             }
             else
@@ -366,7 +403,7 @@ namespace EmployeeTrainingTracker
                 tabCertificates.Enabled = false;
             }
 
-            // Update certificate buttons
+            // Update certificate buttons (add/edit/delete)
             UpdateCertificateButtons();
         }
 

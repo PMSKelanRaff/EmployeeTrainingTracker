@@ -171,7 +171,7 @@ namespace EmployeeTrainingTracker
             btnEditEmployee.TabIndex = 16;
             btnEditEmployee.Text = "Edit";
             btnEditEmployee.UseVisualStyleBackColor = true;
-            btnEditEmployee.Click += btnEditEmployee_Click;
+            btnEditEmployee.Click += btnUpdateEmployee_Click;
             // 
             // btnAddEmployee
             // 
