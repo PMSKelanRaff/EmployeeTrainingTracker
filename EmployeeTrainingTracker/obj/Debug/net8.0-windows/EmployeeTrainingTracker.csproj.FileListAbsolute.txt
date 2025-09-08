@@ -6,7 +6,6 @@ C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTrac
 C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\obj\Debug\net8.0-windows\EmployeeTrainingTracker.csproj.AssemblyReference.cache
 C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\obj\Debug\net8.0-windows\EmployeeTrainingTracker.AdminDashboard.resources
 C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\obj\Debug\net8.0-windows\EmployeeTrainingTracker.EmployeeDashboard.resources
-C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\obj\Debug\net8.0-windows\EmployeeTrainingTracker.Form1.resources
 C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\obj\Debug\net8.0-windows\EmployeeTrainingTracker.LoginForm.resources
 C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\obj\Debug\net8.0-windows\EmployeeTrainingTracker.csproj.GenerateResource.cache
 C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\obj\Debug\net8.0-windows\EmployeeTrainingTracker.GeneratedMSBuildEditorConfig.editorconfig

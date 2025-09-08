@@ -28,81 +28,67 @@
         /// </summary>
         private void InitializeComponent()
         {
-            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(LoginForm));
             txtUsername = new TextBox();
             txtPassword = new TextBox();
-            label1 = new Label();
-            label2 = new Label();
+            lbl_Username = new Label();
+            lbl_Password = new Label();
             Login_btn = new Button();
-            label3 = new Label();
             SuspendLayout();
             // 
             // txtUsername
             // 
-            txtUsername.Location = new Point(12, 113);
+            txtUsername.Location = new Point(12, 107);
             txtUsername.Name = "txtUsername";
-            txtUsername.Size = new Size(250, 23);
+            txtUsername.Size = new Size(191, 23);
             txtUsername.TabIndex = 0;
             // 
             // txtPassword
             // 
-            txtPassword.Location = new Point(12, 161);
+            txtPassword.Location = new Point(12, 151);
             txtPassword.Name = "txtPassword";
-            txtPassword.Size = new Size(250, 23);
+            txtPassword.Size = new Size(191, 23);
             txtPassword.TabIndex = 1;
             // 
-            // label1
+            // lbl_Username
             // 
-            label1.AutoSize = true;
-            label1.Location = new Point(12, 95);
-            label1.Name = "label1";
-            label1.Size = new Size(66, 15);
-            label1.TabIndex = 2;
-            label1.Text = "Username :";
+            lbl_Username.AutoSize = true;
+            lbl_Username.Location = new Point(15, 89);
+            lbl_Username.Name = "lbl_Username";
+            lbl_Username.Size = new Size(71, 15);
+            lbl_Username.TabIndex = 2;
+            lbl_Username.Text = "User Name :";
             // 
-            // label2
+            // lbl_Password
             // 
-            label2.AutoSize = true;
-            label2.Location = new Point(12, 143);
-            label2.Name = "label2";
-            label2.Size = new Size(63, 15);
-            label2.TabIndex = 3;
-            label2.Text = "Password :";
+            lbl_Password.AutoSize = true;
+            lbl_Password.Location = new Point(12, 133);
+            lbl_Password.Name = "lbl_Password";
+            lbl_Password.Size = new Size(63, 15);
+            lbl_Password.TabIndex = 3;
+            lbl_Password.Text = "Password :";
             // 
             // Login_btn
             // 
-            Login_btn.Location = new Point(187, 203);
+            Login_btn.Location = new Point(62, 192);
             Login_btn.Name = "Login_btn";
             Login_btn.Size = new Size(75, 23);
             Login_btn.TabIndex = 4;
-            Login_btn.Text = "Login";
+            Login_btn.Text = "Log In";
             Login_btn.UseVisualStyleBackColor = true;
             Login_btn.Click += Login_btn_Click;
-            // 
-            // label3
-            // 
-            label3.AutoSize = true;
-            label3.Font = new Font("Segoe UI Emoji", 15.75F, FontStyle.Bold, GraphicsUnit.Point, 0);
-            label3.Location = new Point(22, 29);
-            label3.Name = "label3";
-            label3.Size = new Size(228, 28);
-            label3.TabIndex = 5;
-            label3.Text = "PMS Training Tracker";
             // 
             // LoginForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(276, 237);
-            Controls.Add(label3);
+            ClientSize = new Size(229, 227);
             Controls.Add(Login_btn);
-            Controls.Add(label2);
-            Controls.Add(label1);
+            Controls.Add(lbl_Password);
+            Controls.Add(lbl_Username);
             Controls.Add(txtPassword);
             Controls.Add(txtUsername);
-            Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "LoginForm";
-            Text = "Login Form";
+            Text = "LoginForm";
             ResumeLayout(false);
             PerformLayout();
         }
@@ -111,9 +97,8 @@
 
         private TextBox txtUsername;
         private TextBox txtPassword;
-        private Label label1;
-        private Label label2;
+        private Label lbl_Username;
+        private Label lbl_Password;
         private Button Login_btn;
-        private Label label3;
     }
 }

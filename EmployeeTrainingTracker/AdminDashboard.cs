@@ -163,17 +163,16 @@ namespace EmployeeTrainingTracker
         // CRUD for employees
         private void btnAddEmployee_Click(object sender, EventArgs e)
         {
-            string username = txtUsername.Text.Trim();
-            string password = txtPassword.Text.Trim();
+            // Get Windows username
+            string windowsUser = System.Security.Principal.WindowsIdentity.GetCurrent().Name;
+            string shortUser = windowsUser.Contains("\\")
+                ? windowsUser.Split('\\')[1]
+                : windowsUser;
+
+            string username = shortUser;  // Store the short name as Username
             string role = cmbRole.SelectedItem?.ToString() ?? "Employee";
             string department = string.IsNullOrEmpty(cmbDept.Text.Trim()) ? "Unknown" : cmbDept.Text.Trim();
             string jobTitle = string.IsNullOrEmpty(txtJobTitle.Text.Trim()) ? "Unknown" : txtJobTitle.Text.Trim();
-
-            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
-            {
-                MessageBox.Show("Username and password are required.");
-                return;
-            }
 
             long newEmpId;
             long newUserId;
@@ -182,11 +181,9 @@ namespace EmployeeTrainingTracker
             {
                 conn.Open();
 
-                // Insert Employee first
+                // Create Employee row
                 using (var cmdEmp = new SqliteCommand(
-                    @"INSERT INTO Employees (FullName, Department, JobTitle) 
-              VALUES (@name, @dept, @title); 
-              SELECT last_insert_rowid();", conn))
+                    "INSERT INTO Employees (FullName, Department, JobTitle) VALUES (@name, @dept, @title); SELECT last_insert_rowid();", conn))
                 {
                     cmdEmp.Parameters.AddWithValue("@name", username);
                     cmdEmp.Parameters.AddWithValue("@dept", department);
@@ -194,25 +191,21 @@ namespace EmployeeTrainingTracker
                     newEmpId = (long)cmdEmp.ExecuteScalar();
                 }
 
-                // Insert User linked to Employee
+                // Create User row (no password)
                 using (var cmdUser = new SqliteCommand(
-                    @"INSERT INTO Users (Username, PasswordHash, Role, EmployeeID) 
-              VALUES (@u, @p, @r, @eid); 
-              SELECT last_insert_rowid();", conn))
+                    "INSERT INTO Users (Username, Role, EmployeeID) VALUES (@u, @r, @eid); SELECT last_insert_rowid();", conn))
                 {
                     cmdUser.Parameters.AddWithValue("@u", username);
-                    cmdUser.Parameters.AddWithValue("@p", password); // TODO: hash later
                     cmdUser.Parameters.AddWithValue("@r", role);
                     cmdUser.Parameters.AddWithValue("@eid", newEmpId);
                     newUserId = (long)cmdUser.ExecuteScalar();
                 }
             }
 
-            // Refresh UI
             LoadEmployees();
             ClearEmployeeInputs();
 
-            // Auto-select the newly added row
+            // Select the newly added user
             foreach (DataGridViewRow row in dgvEmployees.Rows)
             {
                 if (row.Cells["Username"].Value?.ToString() == username)
