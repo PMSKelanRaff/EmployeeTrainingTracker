@@ -400,7 +400,6 @@ namespace EmployeeTrainingTracker
             UpdateCertificateButtons();
         }
 
-
         private void dgvCertificates_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             // 🚨 Defensive guards

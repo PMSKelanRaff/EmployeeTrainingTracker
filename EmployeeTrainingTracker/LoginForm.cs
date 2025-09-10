@@ -1,13 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Data.Sqlite;
+using System.Security.Principal; // for WindowsIdentity if needed
 
 namespace EmployeeTrainingTracker
 {
@@ -32,45 +27,66 @@ namespace EmployeeTrainingTracker
                     cmd.Parameters.AddWithValue("@u", username);
                     cmd.Parameters.AddWithValue("@p", password); // TODO: hash in production
 
-                    using (var reader = cmd.ExecuteReader())
-                    {
-                        if (!reader.Read())
-                        {
-                            MessageBox.Show("Invalid login.");
-                            return;
-                        }
-
-                        // Safely handle nullable Role
-                        object roleObj = reader["Role"];
-                        if (roleObj == DBNull.Value)
-                        {
-                            MessageBox.Show("Role is missing for this user!");
-                            return;
-                        }
-                        string role = roleObj.ToString()!; // non-null now
-
-                        // Safely handle nullable EmployeeID
-                        object empIdObj = reader["EmployeeID"];
-                        int? employeeId = empIdObj == DBNull.Value ? null : Convert.ToInt32(empIdObj);
-
-                        // Open the appropriate dashboard
-                        if (role == "Admin")
-                        {
-                            new AdminDashboard().Show();
-                        }
-                        else if (role == "Employee" && employeeId.HasValue)
-                        {
-                            new EmployeeDashboard(employeeId.Value).Show();
-                        }
-                        else
-                        {
-                            MessageBox.Show("This account is not linked to an employee.");
-                            return;
-                        }
-
-                        this.Hide();
-                    }
+                    HandleLogin(cmd);
                 }
+            }
+        }
+
+        private void WindowsLogin_btn_Click(object sender, EventArgs e)
+        {
+            string windowsUser = (Environment.UserDomainName + "\\" + Environment.UserName).ToLower();
+
+            MessageBox.Show($"Detected Windows user: {windowsUser}");
+
+            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
+            {
+                conn.Open();
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "SELECT Role, EmployeeID FROM Users WHERE lower(WindowsUsername) = @wu";
+                    cmd.Parameters.AddWithValue("@wu", windowsUser);
+
+                    HandleLogin(cmd);
+                }
+            }
+        }
+
+        private void HandleLogin(SqliteCommand cmd)
+        {
+            using (var reader = cmd.ExecuteReader())
+            {
+                if (!reader.Read())
+                {
+                    MessageBox.Show("Invalid login.");
+                    return;
+                }
+
+                object roleObj = reader["Role"];
+                if (roleObj == DBNull.Value)
+                {
+                    MessageBox.Show("Role is missing for this user!");
+                    return;
+                }
+                string role = roleObj.ToString()!;
+
+                object empIdObj = reader["EmployeeID"];
+                int? employeeId = empIdObj == DBNull.Value ? null : Convert.ToInt32(empIdObj);
+
+                if (role == "Admin")
+                {
+                    new AdminDashboard().Show();
+                }
+                else if (role == "Employee" && employeeId.HasValue)
+                {
+                    new EmployeeDashboard(employeeId.Value).Show();
+                }
+                else
+                {
+                    MessageBox.Show("This account is not linked to an employee.");
+                    return;
+                }
+
+                this.Hide();
             }
         }
 
