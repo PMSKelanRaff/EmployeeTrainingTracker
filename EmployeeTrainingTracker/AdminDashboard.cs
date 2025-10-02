@@ -24,7 +24,7 @@ namespace EmployeeTrainingTracker
                 using (var cmd = new SqliteCommand(@"
             SELECT 
                 u.UserID,
-                u.Username,
+                u.Username AS Email,
                 u.Role,
                 e.EmployeeID,
                 IFNULL(e.FullName, u.Username) AS FullName,
@@ -97,7 +97,15 @@ namespace EmployeeTrainingTracker
                 Name = "FileLink",
                 DataPropertyName = "FilePath",
                 HeaderText = "Certificate File",
-                TrackVisitedState = true
+                TrackVisitedState = true,
+                Width = 200 // width (pixels)
+            });
+
+            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "LastNotifiedDate",
+                DataPropertyName = "LastNotifiedDate",
+                HeaderText = "Last Notified"
             });
 
             // Set DataSource last
@@ -364,7 +372,7 @@ namespace EmployeeTrainingTracker
                     int userId = Convert.ToInt32(userIdObj);
 
                     // Load employee + user details directly from DataGridView (faster than requerying DB)
-                    txtUsername.Text = dgvEmployees.CurrentRow.Cells["Username"].Value?.ToString();
+                    txtUsername.Text = dgvEmployees.CurrentRow.Cells["Email"].Value?.ToString();
                     cmbRole.SelectedItem = dgvEmployees.CurrentRow.Cells["Role"].Value?.ToString();
                     cmbDept.Text = dgvEmployees.CurrentRow.Cells["Department"].Value?.ToString();
                     txtJobTitle.Text = dgvEmployees.CurrentRow.Cells["JobTitle"].Value?.ToString();
@@ -400,30 +408,81 @@ namespace EmployeeTrainingTracker
             UpdateCertificateButtons();
         }
 
+        private void dgvCertificates_SelectionChanged(object sender, EventArgs e)
+        {
+            if (dgvCertificates.CurrentRow == null || dgvCertificates.CurrentRow.IsNewRow)
+            {
+                txtCertName.Text = "";
+                dtpIssueDate.Value = DateTime.Today;
+                dtpExpiryDate.Value = DateTime.Today;
+                txtFilePath.Text = "";
+                return;
+            }
+
+            if (dgvCertificates.CurrentRow.DataBoundItem is not DataRowView rowView) return;
+
+            txtCertName.Text = rowView["CertificateName"]?.ToString() ?? "";
+
+            if (DateTime.TryParse(rowView["IssueDate"]?.ToString(), out var issue))
+                dtpIssueDate.Value = issue;
+            else
+                dtpIssueDate.Value = DateTime.Today;
+
+            if (DateTime.TryParse(rowView["ExpiryDate"]?.ToString(), out var expiry))
+                dtpExpiryDate.Value = expiry;
+            else
+                dtpExpiryDate.Value = DateTime.Today;
+
+            txtFilePath.Text = rowView["FilePath"]?.ToString() ?? "";
+        }
+
         private void dgvCertificates_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
-            // 🚨 Defensive guards
-            if (e.RowIndex < 0 || e.ColumnIndex < 0) return; // Ignore header or invalid clicks
-            if (e.ColumnIndex >= dgvCertificates.Columns.Count) return; // Prevent out-of-range
+            // Ignore header clicks or invalid clicks
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
 
-            if (dgvCertificates.Columns[e.ColumnIndex].Name == "FileLink")
+            // Only handle clicks on the FileLink column
+            if (dgvCertificates.Columns[e.ColumnIndex].Name != "FileLink")
+                return;
+
+            if (dgvCertificates.Rows[e.RowIndex].DataBoundItem is not DataRowView rowView)
+                return;
+
+            string? path = rowView["FilePath"]?.ToString()?.Trim('"').Trim();
+
+            if (string.IsNullOrEmpty(path))
             {
-                if (dgvCertificates.Rows[e.RowIndex].DataBoundItem is not DataRowView rowView) return;
+                MessageBox.Show("No file linked for this certificate.");
+                return;
+            }
 
-                string? path = rowView["FilePath"]?.ToString()?.Trim('"').Trim();
+            // Allowed extensions
+            string[] allowedExtensions = { ".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx" };
+            string ext = System.IO.Path.GetExtension(path).ToLower();
 
-                if (!string.IsNullOrEmpty(path) && System.IO.File.Exists(path))
+            if (!System.IO.File.Exists(path))
+            {
+                MessageBox.Show($"File not found:\n{path}");
+                return;
+            }
+
+            if (!allowedExtensions.Contains(ext))
+            {
+                MessageBox.Show($"Unsupported file type: {ext}");
+                return;
+            }
+
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = path,
-                        UseShellExecute = true
-                    });
-                }
-                else
-                {
-                    MessageBox.Show($"File not found:\n{path}");
-                }
+                    FileName = path,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not open file:\n{ex.Message}");
             }
         }
 

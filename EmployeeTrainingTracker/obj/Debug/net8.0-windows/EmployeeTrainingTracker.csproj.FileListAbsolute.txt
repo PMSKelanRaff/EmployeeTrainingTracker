@@ -45,3 +45,4 @@ C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTrac
 C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\bin\Debug\net8.0-windows\runtimes\win-x86\native\e_sqlite3.dll
 C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\obj\Debug\net8.0-windows\EmployeeTrainingTracker.sourcelink.json
 C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\obj\Debug\net8.0-windows\EmployeeTrainingTracker.Properties.Resources.resources
+C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\obj\Debug\net8.0-windows\EmployeeTrainingTracker.SignUpForm.resources

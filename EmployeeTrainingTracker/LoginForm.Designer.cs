@@ -36,6 +36,7 @@
             Login_btn = new Button();
             WindowsLogin_btn = new Button();
             label1 = new Label();
+            SignUp_btn = new Button();
             SuspendLayout();
             // 
             // txtUsername
@@ -57,9 +58,9 @@
             lbl_Username.AutoSize = true;
             lbl_Username.Location = new Point(15, 89);
             lbl_Username.Name = "lbl_Username";
-            lbl_Username.Size = new Size(71, 15);
+            lbl_Username.Size = new Size(42, 15);
             lbl_Username.TabIndex = 2;
-            lbl_Username.Text = "User Name :";
+            lbl_Username.Text = "Email :";
             // 
             // lbl_Password
             // 
@@ -72,7 +73,7 @@
             // 
             // Login_btn
             // 
-            Login_btn.Location = new Point(145, 192);
+            Login_btn.Location = new Point(11, 221);
             Login_btn.Name = "Login_btn";
             Login_btn.Size = new Size(58, 23);
             Login_btn.TabIndex = 4;
@@ -94,17 +95,28 @@
             // 
             label1.AutoSize = true;
             label1.Font = new Font("Segoe UI Black", 12F, FontStyle.Bold, GraphicsUnit.Point, 0);
-            label1.Location = new Point(25, 35);
+            label1.Location = new Point(25, 34);
             label1.Name = "label1";
             label1.Size = new Size(178, 21);
             label1.TabIndex = 6;
             label1.Text = "PMS Training Tracker";
             // 
+            // SignUp_btn
+            // 
+            SignUp_btn.Location = new Point(75, 221);
+            SignUp_btn.Name = "SignUp_btn";
+            SignUp_btn.Size = new Size(58, 23);
+            SignUp_btn.TabIndex = 7;
+            SignUp_btn.Text = "Sign Up";
+            SignUp_btn.UseVisualStyleBackColor = true;
+            SignUp_btn.Click += SignUp_btn_Click;
+            // 
             // LoginForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(229, 227);
+            ClientSize = new Size(229, 252);
+            Controls.Add(SignUp_btn);
             Controls.Add(label1);
             Controls.Add(WindowsLogin_btn);
             Controls.Add(Login_btn);
@@ -128,5 +140,6 @@
         private Button Login_btn;
         private Button WindowsLogin_btn;
         private Label label1;
+        private Button SignUp_btn;
     }
 }

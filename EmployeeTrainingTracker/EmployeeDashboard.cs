@@ -136,5 +136,33 @@ namespace EmployeeTrainingTracker
             }
         }
 
+        private void dataGridView1_SelectionChanged(object sender, EventArgs e)
+        {
+            if (dataGridView1.CurrentRow == null || dataGridView1.CurrentRow.IsNewRow)
+            {
+                txtCertName.Text = "";
+                dtpIssueDate.Value = DateTime.Today;
+                dtpExpiryDate.Value = DateTime.Today;
+                txtFilePath.Text = "";
+                return;
+            }
+
+            if (dataGridView1.CurrentRow.DataBoundItem is not DataRowView rowView) return;
+
+            txtCertName.Text = rowView["CertificateName"]?.ToString() ?? "";
+
+            if (DateTime.TryParse(rowView["IssueDate"]?.ToString(), out var issue))
+                dtpIssueDate.Value = issue;
+            else
+                dtpIssueDate.Value = DateTime.Today;
+
+            if (DateTime.TryParse(rowView["ExpiryDate"]?.ToString(), out var expiry))
+                dtpExpiryDate.Value = expiry;
+            else
+                dtpExpiryDate.Value = DateTime.Today;
+
+            txtFilePath.Text = rowView["FilePath"]?.ToString() ?? "";
+        }
+
     }
 }

@@ -3,20 +3,12 @@
   "WorkspaceRootPath": "C:\\Users\\KelanRafferty\\source\\repos\\EmployeeTrainingTracker\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|c:\\users\\kelanrafferty\\source\\repos\\employeetrainingtracker\\employeetrainingtracker\\admindashboard.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|solutionrelative:employeetrainingtracker\\admindashboard.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|c:\\users\\kelanrafferty\\source\\repos\\employeetrainingtracker\\employeetrainingtracker\\certificateservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|solutionrelative:employeetrainingtracker\\certificateservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|c:\\users\\kelanrafferty\\source\\repos\\employeetrainingtracker\\employeetrainingtracker\\loginform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form",
-      "RelativeMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|solutionrelative:employeetrainingtracker\\loginform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|c:\\users\\kelanrafferty\\source\\repos\\employeetrainingtracker\\employeetrainingtracker\\loginform.designer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|solutionrelative:employeetrainingtracker\\loginform.designer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|c:\\users\\kelanrafferty\\source\\repos\\employeetrainingtracker\\employeetrainingtracker\\loginform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|solutionrelative:employeetrainingtracker\\loginform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|c:\\users\\kelanrafferty\\source\\repos\\employeetrainingtracker\\employeetrainingtracker\\databasehelper.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|solutionrelative:employeetrainingtracker\\databasehelper.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -26,7 +18,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 2,
+          "SelectedChildIndex": 3,
           "Children": [
             {
               "$type": "Bookmark",
@@ -38,53 +30,29 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
-              "Title": "AdminDashboard.cs",
-              "DocumentMoniker": "C:\\Users\\KelanRafferty\\source\\repos\\EmployeeTrainingTracker\\EmployeeTrainingTracker\\AdminDashboard.cs",
-              "RelativeDocumentMoniker": "EmployeeTrainingTracker\\AdminDashboard.cs",
-              "ToolTip": "C:\\Users\\KelanRafferty\\source\\repos\\EmployeeTrainingTracker\\EmployeeTrainingTracker\\AdminDashboard.cs",
-              "RelativeToolTip": "EmployeeTrainingTracker\\AdminDashboard.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAADIAAAAJAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-10T10:38:40.165Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
               "DocumentIndex": 1,
-              "Title": "LoginForm.cs [Design]",
-              "DocumentMoniker": "C:\\Users\\KelanRafferty\\source\\repos\\EmployeeTrainingTracker\\EmployeeTrainingTracker\\LoginForm.cs",
-              "RelativeDocumentMoniker": "EmployeeTrainingTracker\\LoginForm.cs",
-              "ToolTip": "C:\\Users\\KelanRafferty\\source\\repos\\EmployeeTrainingTracker\\EmployeeTrainingTracker\\LoginForm.cs [Design]",
-              "RelativeToolTip": "EmployeeTrainingTracker\\LoginForm.cs [Design]",
+              "Title": "DatabaseHelper.cs",
+              "DocumentMoniker": "C:\\Users\\KelanRafferty\\source\\repos\\EmployeeTrainingTracker\\EmployeeTrainingTracker\\DatabaseHelper.cs",
+              "RelativeDocumentMoniker": "EmployeeTrainingTracker\\DatabaseHelper.cs",
+              "ToolTip": "C:\\Users\\KelanRafferty\\source\\repos\\EmployeeTrainingTracker\\EmployeeTrainingTracker\\DatabaseHelper.cs",
+              "RelativeToolTip": "EmployeeTrainingTracker\\DatabaseHelper.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAANYAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-10T10:35:13.612Z",
-              "EditorCaption": " [Design]"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 2,
-              "Title": "LoginForm.Designer.cs",
-              "DocumentMoniker": "C:\\Users\\KelanRafferty\\source\\repos\\EmployeeTrainingTracker\\EmployeeTrainingTracker\\LoginForm.Designer.cs",
-              "RelativeDocumentMoniker": "EmployeeTrainingTracker\\LoginForm.Designer.cs",
-              "ToolTip": "C:\\Users\\KelanRafferty\\source\\repos\\EmployeeTrainingTracker\\EmployeeTrainingTracker\\LoginForm.Designer.cs",
-              "RelativeToolTip": "EmployeeTrainingTracker\\LoginForm.Designer.cs",
-              "ViewState": "AgIAADMAAAAAAAAAAIAwwFgAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-10T10:32:18.748Z",
+              "WhenOpened": "2025-10-02T09:48:13.132Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
-              "Title": "LoginForm.cs",
-              "DocumentMoniker": "C:\\Users\\KelanRafferty\\source\\repos\\EmployeeTrainingTracker\\EmployeeTrainingTracker\\LoginForm.cs",
-              "RelativeDocumentMoniker": "EmployeeTrainingTracker\\LoginForm.cs",
-              "ToolTip": "C:\\Users\\KelanRafferty\\source\\repos\\EmployeeTrainingTracker\\EmployeeTrainingTracker\\LoginForm.cs",
-              "RelativeToolTip": "EmployeeTrainingTracker\\LoginForm.cs",
-              "ViewState": "AgIAABcAAAAAAAAAAADgvzIAAAANAAAAAAAAAA==",
+              "DocumentIndex": 0,
+              "Title": "CertificateService.cs",
+              "DocumentMoniker": "C:\\Users\\KelanRafferty\\source\\repos\\EmployeeTrainingTracker\\EmployeeTrainingTracker\\CertificateService.cs",
+              "RelativeDocumentMoniker": "EmployeeTrainingTracker\\CertificateService.cs",
+              "ToolTip": "C:\\Users\\KelanRafferty\\source\\repos\\EmployeeTrainingTracker\\EmployeeTrainingTracker\\CertificateService.cs",
+              "RelativeToolTip": "EmployeeTrainingTracker\\CertificateService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAkAAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-10T10:24:21.923Z"
+              "WhenOpened": "2025-10-02T08:52:10.975Z",
+              "EditorCaption": ""
             }
           ]
         }

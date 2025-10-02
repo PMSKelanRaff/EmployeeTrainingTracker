@@ -16,7 +16,9 @@ namespace EmployeeTrainingTracker
             {
                 conn.Open();
                 using (var cmd = new SqliteCommand(
-                    "SELECT CertificateID, CertificateName, IssueDate, ExpiryDate, FilePath FROM TrainingCertificates WHERE EmployeeID = @id", conn))
+                    @"SELECT CertificateID, CertificateName, IssueDate, ExpiryDate, FilePath, LastNotifiedDate
+              FROM TrainingCertificates
+              WHERE EmployeeID = @id", conn))
                 {
                     cmd.Parameters.AddWithValue("@id", employeeId);
 

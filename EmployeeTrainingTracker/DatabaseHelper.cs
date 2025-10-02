@@ -2,7 +2,7 @@
 
 public static class DatabaseHelper
 {
-    private static string dbFile = "TrainingDB.db";
+    private static string dbFile = @"\\2016fs03\d$\Kelan\Apps\TrainingTracker\Database\TrainingDB.db";
     private static string connectionString = $"Data Source={dbFile}";
 
     public static string ConnectionString => connectionString;
