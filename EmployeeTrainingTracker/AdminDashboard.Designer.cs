@@ -49,6 +49,7 @@ namespace EmployeeTrainingTracker
             txtUsername = new TextBox();
             tabCertificates = new TabPage();
             label1 = new Label();
+            cmbCurrentEmployee = new ComboBox();
             txtFilePath = new TextBox();
             lbl_ExpiryDate = new Label();
             lbl_IssueDate = new Label();
@@ -59,15 +60,28 @@ namespace EmployeeTrainingTracker
             btnDelete = new Button();
             btnEdit = new Button();
             btnAdd = new Button();
+            Reports = new TabPage();
+            btnExportCsv = new Button();
+            btnGenerateReport = new Button();
+            lblDtpEnd = new Label();
+            lblDtpStart = new Label();
+            dtpEnd = new DateTimePicker();
+            dtpStart = new DateTimePicker();
+            lblReportType = new Label();
+            dgvReportResults = new DataGridView();
+            cmbReportType = new ComboBox();
             ((System.ComponentModel.ISupportInitialize)dgvEmployees).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvCertificates).BeginInit();
             tabControl.SuspendLayout();
             tabEmployees.SuspendLayout();
             tabCertificates.SuspendLayout();
+            Reports.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)dgvReportResults).BeginInit();
             SuspendLayout();
             // 
             // dgvEmployees
             // 
+            dgvEmployees.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             dgvEmployees.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgvEmployees.Location = new Point(6, 6);
             dgvEmployees.Name = "dgvEmployees";
@@ -80,7 +94,7 @@ namespace EmployeeTrainingTracker
             dgvCertificates.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgvCertificates.Location = new Point(6, 6);
             dgvCertificates.Name = "dgvCertificates";
-            dgvCertificates.Size = new Size(636, 406);
+            dgvCertificates.Size = new Size(636, 408);
             dgvCertificates.TabIndex = 1;
             dgvCertificates.CellContentClick += dgvCertificates_CellContentClick;
             dgvCertificates.SelectionChanged += dgvCertificates_SelectionChanged;
@@ -89,6 +103,7 @@ namespace EmployeeTrainingTracker
             // 
             tabControl.Controls.Add(tabEmployees);
             tabControl.Controls.Add(tabCertificates);
+            tabControl.Controls.Add(Reports);
             tabControl.Dock = DockStyle.Fill;
             tabControl.Location = new Point(0, 0);
             tabControl.Name = "tabControl";
@@ -123,7 +138,7 @@ namespace EmployeeTrainingTracker
             // lbl_JobTitle
             // 
             lbl_JobTitle.AutoSize = true;
-            lbl_JobTitle.Location = new Point(631, 275);
+            lbl_JobTitle.Location = new Point(631, 277);
             lbl_JobTitle.Name = "lbl_JobTitle";
             lbl_JobTitle.Size = new Size(57, 15);
             lbl_JobTitle.TabIndex = 22;
@@ -131,7 +146,7 @@ namespace EmployeeTrainingTracker
             // 
             // txtJobTitle
             // 
-            txtJobTitle.Location = new Point(631, 293);
+            txtJobTitle.Location = new Point(631, 295);
             txtJobTitle.Name = "txtJobTitle";
             txtJobTitle.Size = new Size(228, 23);
             txtJobTitle.TabIndex = 21;
@@ -140,7 +155,7 @@ namespace EmployeeTrainingTracker
             // 
             cmbDept.FormattingEnabled = true;
             cmbDept.Items.AddRange(new object[] { "Administration", "Engineering", "IT", "Site" });
-            cmbDept.Location = new Point(631, 248);
+            cmbDept.Location = new Point(631, 226);
             cmbDept.Name = "cmbDept";
             cmbDept.Size = new Size(228, 23);
             cmbDept.TabIndex = 20;
@@ -148,7 +163,7 @@ namespace EmployeeTrainingTracker
             // lbl_Department
             // 
             lbl_Department.AutoSize = true;
-            lbl_Department.Location = new Point(631, 230);
+            lbl_Department.Location = new Point(631, 208);
             lbl_Department.Name = "lbl_Department";
             lbl_Department.Size = new Size(76, 15);
             lbl_Department.TabIndex = 19;
@@ -187,7 +202,7 @@ namespace EmployeeTrainingTracker
             // lbl_Type
             // 
             lbl_Type.AutoSize = true;
-            lbl_Type.Location = new Point(631, 186);
+            lbl_Type.Location = new Point(635, 164);
             lbl_Type.Name = "lbl_Type";
             lbl_Type.Size = new Size(38, 15);
             lbl_Type.TabIndex = 14;
@@ -196,7 +211,7 @@ namespace EmployeeTrainingTracker
             // lbl_Password
             // 
             lbl_Password.AutoSize = true;
-            lbl_Password.Location = new Point(631, 122);
+            lbl_Password.Location = new Point(631, 83);
             lbl_Password.Name = "lbl_Password";
             lbl_Password.Size = new Size(63, 15);
             lbl_Password.TabIndex = 13;
@@ -205,7 +220,7 @@ namespace EmployeeTrainingTracker
             // lbl_Username
             // 
             lbl_Username.AutoSize = true;
-            lbl_Username.Location = new Point(631, 78);
+            lbl_Username.Location = new Point(631, 39);
             lbl_Username.Name = "lbl_Username";
             lbl_Username.Size = new Size(42, 15);
             lbl_Username.TabIndex = 12;
@@ -215,21 +230,21 @@ namespace EmployeeTrainingTracker
             // 
             cmbRole.FormattingEnabled = true;
             cmbRole.Items.AddRange(new object[] { "Employee", "Admin" });
-            cmbRole.Location = new Point(631, 204);
+            cmbRole.Location = new Point(631, 182);
             cmbRole.Name = "cmbRole";
             cmbRole.Size = new Size(228, 23);
             cmbRole.TabIndex = 11;
             // 
             // txtPassword
             // 
-            txtPassword.Location = new Point(631, 140);
+            txtPassword.Location = new Point(631, 101);
             txtPassword.Name = "txtPassword";
             txtPassword.Size = new Size(228, 23);
             txtPassword.TabIndex = 10;
             // 
             // txtUsername
             // 
-            txtUsername.Location = new Point(631, 96);
+            txtUsername.Location = new Point(631, 57);
             txtUsername.Name = "txtUsername";
             txtUsername.Size = new Size(228, 23);
             txtUsername.TabIndex = 9;
@@ -237,6 +252,7 @@ namespace EmployeeTrainingTracker
             // tabCertificates
             // 
             tabCertificates.Controls.Add(label1);
+            tabCertificates.Controls.Add(cmbCurrentEmployee);
             tabCertificates.Controls.Add(txtFilePath);
             tabCertificates.Controls.Add(lbl_ExpiryDate);
             tabCertificates.Controls.Add(lbl_IssueDate);
@@ -259,15 +275,24 @@ namespace EmployeeTrainingTracker
             // label1
             // 
             label1.AutoSize = true;
-            label1.Location = new Point(648, 242);
+            label1.Font = new Font("Segoe UI", 9.75F, FontStyle.Bold | FontStyle.Underline, GraphicsUnit.Point, 0);
+            label1.Location = new Point(681, 6);
             label1.Name = "label1";
-            label1.Size = new Size(115, 15);
-            label1.TabIndex = 15;
-            label1.Text = "Certificate File path :";
+            label1.Size = new Size(126, 17);
+            label1.TabIndex = 26;
+            label1.Text = "Current Employee :";
+            // 
+            // cmbCurrentEmployee
+            // 
+            cmbCurrentEmployee.FormattingEnabled = true;
+            cmbCurrentEmployee.Location = new Point(681, 26);
+            cmbCurrentEmployee.Name = "cmbCurrentEmployee";
+            cmbCurrentEmployee.Size = new Size(126, 23);
+            cmbCurrentEmployee.TabIndex = 25;
             // 
             // txtFilePath
             // 
-            txtFilePath.Location = new Point(648, 260);
+            txtFilePath.Location = new Point(648, 307);
             txtFilePath.Name = "txtFilePath";
             txtFilePath.Size = new Size(200, 23);
             txtFilePath.TabIndex = 14;
@@ -275,7 +300,7 @@ namespace EmployeeTrainingTracker
             // lbl_ExpiryDate
             // 
             lbl_ExpiryDate.AutoSize = true;
-            lbl_ExpiryDate.Location = new Point(648, 170);
+            lbl_ExpiryDate.Location = new Point(648, 207);
             lbl_ExpiryDate.Name = "lbl_ExpiryDate";
             lbl_ExpiryDate.Size = new Size(71, 15);
             lbl_ExpiryDate.TabIndex = 13;
@@ -284,7 +309,7 @@ namespace EmployeeTrainingTracker
             // lbl_IssueDate
             // 
             lbl_IssueDate.AutoSize = true;
-            lbl_IssueDate.Location = new Point(648, 116);
+            lbl_IssueDate.Location = new Point(648, 153);
             lbl_IssueDate.Name = "lbl_IssueDate";
             lbl_IssueDate.Size = new Size(66, 15);
             lbl_IssueDate.TabIndex = 12;
@@ -293,7 +318,7 @@ namespace EmployeeTrainingTracker
             // lbl_Certname
             // 
             lbl_Certname.AutoSize = true;
-            lbl_Certname.Location = new Point(648, 48);
+            lbl_Certname.Location = new Point(648, 80);
             lbl_Certname.Name = "lbl_Certname";
             lbl_Certname.Size = new Size(105, 15);
             lbl_Certname.TabIndex = 11;
@@ -301,21 +326,21 @@ namespace EmployeeTrainingTracker
             // 
             // dtpExpiryDate
             // 
-            dtpExpiryDate.Location = new Point(648, 188);
+            dtpExpiryDate.Location = new Point(648, 225);
             dtpExpiryDate.Name = "dtpExpiryDate";
             dtpExpiryDate.Size = new Size(200, 23);
             dtpExpiryDate.TabIndex = 10;
             // 
             // dtpIssueDate
             // 
-            dtpIssueDate.Location = new Point(648, 134);
+            dtpIssueDate.Location = new Point(648, 171);
             dtpIssueDate.Name = "dtpIssueDate";
             dtpIssueDate.Size = new Size(200, 23);
             dtpIssueDate.TabIndex = 9;
             // 
             // txtCertName
             // 
-            txtCertName.Location = new Point(648, 66);
+            txtCertName.Location = new Point(648, 98);
             txtCertName.Name = "txtCertName";
             txtCertName.Size = new Size(200, 23);
             txtCertName.TabIndex = 8;
@@ -350,6 +375,104 @@ namespace EmployeeTrainingTracker
             btnAdd.UseVisualStyleBackColor = true;
             btnAdd.Click += btnAddCert_Click;
             // 
+            // Reports
+            // 
+            Reports.Controls.Add(btnExportCsv);
+            Reports.Controls.Add(btnGenerateReport);
+            Reports.Controls.Add(lblDtpEnd);
+            Reports.Controls.Add(lblDtpStart);
+            Reports.Controls.Add(dtpEnd);
+            Reports.Controls.Add(dtpStart);
+            Reports.Controls.Add(lblReportType);
+            Reports.Controls.Add(dgvReportResults);
+            Reports.Controls.Add(cmbReportType);
+            Reports.Location = new Point(4, 24);
+            Reports.Name = "Reports";
+            Reports.Padding = new Padding(3);
+            Reports.Size = new Size(867, 422);
+            Reports.TabIndex = 2;
+            Reports.Text = "Reports";
+            Reports.UseVisualStyleBackColor = true;
+            // 
+            // btnExportCsv
+            // 
+            btnExportCsv.Location = new Point(771, 391);
+            btnExportCsv.Name = "btnExportCsv";
+            btnExportCsv.Size = new Size(90, 23);
+            btnExportCsv.TabIndex = 9;
+            btnExportCsv.Text = "Export CSV";
+            btnExportCsv.UseVisualStyleBackColor = true;
+            btnExportCsv.Click += btnExportCsv_Click;
+            // 
+            // btnGenerateReport
+            // 
+            btnGenerateReport.Location = new Point(771, 362);
+            btnGenerateReport.Name = "btnGenerateReport";
+            btnGenerateReport.Size = new Size(90, 23);
+            btnGenerateReport.TabIndex = 8;
+            btnGenerateReport.Text = "Create Report";
+            btnGenerateReport.UseVisualStyleBackColor = true;
+            btnGenerateReport.Click += btnGenerateReport_Click;
+            // 
+            // lblDtpEnd
+            // 
+            lblDtpEnd.AutoSize = true;
+            lblDtpEnd.Location = new Point(649, 160);
+            lblDtpEnd.Name = "lblDtpEnd";
+            lblDtpEnd.Size = new Size(60, 15);
+            lblDtpEnd.TabIndex = 7;
+            lblDtpEnd.Text = "End Date :";
+            // 
+            // lblDtpStart
+            // 
+            lblDtpStart.AutoSize = true;
+            lblDtpStart.Location = new Point(649, 106);
+            lblDtpStart.Name = "lblDtpStart";
+            lblDtpStart.Size = new Size(64, 15);
+            lblDtpStart.TabIndex = 6;
+            lblDtpStart.Text = "Start Date :";
+            // 
+            // dtpEnd
+            // 
+            dtpEnd.Location = new Point(649, 178);
+            dtpEnd.Name = "dtpEnd";
+            dtpEnd.Size = new Size(200, 23);
+            dtpEnd.TabIndex = 5;
+            // 
+            // dtpStart
+            // 
+            dtpStart.Location = new Point(649, 124);
+            dtpStart.Name = "dtpStart";
+            dtpStart.Size = new Size(200, 23);
+            dtpStart.TabIndex = 4;
+            // 
+            // lblReportType
+            // 
+            lblReportType.AutoSize = true;
+            lblReportType.Location = new Point(649, 30);
+            lblReportType.Name = "lblReportType";
+            lblReportType.Size = new Size(76, 15);
+            lblReportType.TabIndex = 3;
+            lblReportType.Text = "Report Type :";
+            // 
+            // dgvReportResults
+            // 
+            dgvReportResults.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dgvReportResults.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dgvReportResults.Location = new Point(3, 6);
+            dgvReportResults.Name = "dgvReportResults";
+            dgvReportResults.Size = new Size(640, 413);
+            dgvReportResults.TabIndex = 2;
+            // 
+            // cmbReportType
+            // 
+            cmbReportType.FormattingEnabled = true;
+            cmbReportType.Items.AddRange(new object[] { "Current Year", "Out Of Date", "Custom Range" });
+            cmbReportType.Location = new Point(649, 48);
+            cmbReportType.Name = "cmbReportType";
+            cmbReportType.Size = new Size(121, 23);
+            cmbReportType.TabIndex = 0;
+            // 
             // AdminDashboard
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -366,6 +489,9 @@ namespace EmployeeTrainingTracker
             tabEmployees.PerformLayout();
             tabCertificates.ResumeLayout(false);
             tabCertificates.PerformLayout();
+            Reports.ResumeLayout(false);
+            Reports.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)dgvReportResults).EndInit();
             ResumeLayout(false);
         }
 
@@ -396,10 +522,22 @@ namespace EmployeeTrainingTracker
         private Label lbl_IssueDate;
         private Label lbl_ExpiryDate;
         private TextBox txtFilePath;
-        private Label label1;
         private Label lbl_Department;
         private ComboBox cmbDept;
         private Label lbl_JobTitle;
         private TextBox txtJobTitle;
+        private TabPage Reports;
+        private Label lblCurrentEmployee;
+        private Label label1;
+        private ComboBox cmbCurrentEmployee;
+        private ComboBox cmbReportType;
+        private DataGridView dgvReportResults;
+        private Label lblReportType;
+        private DateTimePicker dtpEnd;
+        private DateTimePicker dtpStart;
+        private Label lblDtpStart;
+        private Label lblDtpEnd;
+        private Button btnGenerateReport;
+        private Button btnExportCsv;
     }
 }

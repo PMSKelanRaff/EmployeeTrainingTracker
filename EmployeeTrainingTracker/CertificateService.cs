@@ -51,22 +51,28 @@ namespace EmployeeTrainingTracker
             }
         }
 
-        public static void UpdateCertificate(int certId, string certName, DateTime issueDate, DateTime expiryDate, string? filePath = null)
+        public static void UpdateCertificate(int certId, string name, DateTime issue, DateTime expiry, string? filePath)
         {
-            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
-            {
-                conn.Open();
-                using (var cmd = new SqliteCommand(
-                    "UPDATE TrainingCertificates SET CertificateName=@name, IssueDate=@issue, ExpiryDate=@expiry, FilePath=@file WHERE CertificateID=@id", conn))
-                {
-                    cmd.Parameters.AddWithValue("@name", certName);
-                    cmd.Parameters.AddWithValue("@issue", issueDate.ToString("yyyy-MM-dd"));
-                    cmd.Parameters.AddWithValue("@expiry", expiryDate.ToString("yyyy-MM-dd"));
-                    cmd.Parameters.AddWithValue("@file", string.IsNullOrEmpty(filePath) ? DBNull.Value : (object)filePath);
-                    cmd.Parameters.AddWithValue("@id", certId);
-                    cmd.ExecuteNonQuery();
-                }
-            }
+            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+            conn.Open();
+
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+                UPDATE TrainingCertificates
+                SET CertificateName = @name,
+                    IssueDate = @issue,
+                    ExpiryDate = @expiry,
+                    FilePath = @filePath
+                WHERE CertificateID = @id";
+
+            // Use only the date part
+            cmd.Parameters.AddWithValue("@name", name);
+            cmd.Parameters.AddWithValue("@issue", issue.Date.ToString("yyyy-MM-dd"));
+            cmd.Parameters.AddWithValue("@expiry", expiry.Date.ToString("yyyy-MM-dd"));
+            cmd.Parameters.AddWithValue("@filePath", (object?)filePath ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@id", certId);
+
+            cmd.ExecuteNonQuery();
         }
 
         public static void DeleteCertificate(int certId)

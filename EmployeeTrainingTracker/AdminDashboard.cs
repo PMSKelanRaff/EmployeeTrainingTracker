@@ -2,11 +2,20 @@
 using System.Data;
 using Microsoft.Data.Sqlite;
 using System.Windows.Forms;
+using System.Text;
 
 namespace EmployeeTrainingTracker
 {
     public partial class AdminDashboard : Form
     {
+
+        private string currentEmployeeName = "None";
+
+        private void SetCurrentEmployeeName(string employeeName)
+        {
+            currentEmployeeName = employeeName;
+        }
+
         public AdminDashboard()
         {
             InitializeComponent();
@@ -45,6 +54,11 @@ namespace EmployeeTrainingTracker
 
                         if (dgvEmployees.Columns.Contains("EmployeeID"))
                             dgvEmployees.Columns["EmployeeID"].Visible = false;
+
+                        // Populate ComboBox
+                        cmbCurrentEmployee.DataSource = table;
+                        cmbCurrentEmployee.DisplayMember = "FullName";
+                        cmbCurrentEmployee.ValueMember = "EmployeeID";
                     }
                 }
             }
@@ -148,8 +162,13 @@ namespace EmployeeTrainingTracker
             string name = txtCertName.Text.Trim();
             DateTime issue = dtpIssueDate.Value;
             DateTime expiry = dtpExpiryDate.Value;
+            string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim())
+                ? null
+                : txtFilePath.Text.Trim('"').Trim();
 
-            CertificateService.UpdateCertificate(certId, name, issue, expiry);
+            // Make sure your service method accepts filePath now
+            CertificateService.UpdateCertificate(certId, name, issue, expiry, filePath);
+
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
             LoadCertificates(empId);
         }
@@ -166,6 +185,7 @@ namespace EmployeeTrainingTracker
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
             LoadCertificates(empId);
         }
+
 
 
         // CRUD for employees
@@ -381,11 +401,14 @@ namespace EmployeeTrainingTracker
                     if (empIdObj != null && empIdObj != DBNull.Value)
                     {
                         int empId = Convert.ToInt32(empIdObj);
+                        string fullName = dgvEmployees.CurrentRow.Cells["FullName"].Value?.ToString() ?? "Unknown";
+                        SetCurrentEmployeeName(fullName);
                         LoadCertificates(empId);
                         tabCertificates.Enabled = true;
                     }
                     else
                     {
+                        SetCurrentEmployeeName("None");
                         dgvCertificates.DataSource = null;
                         tabCertificates.Enabled = false;
                     }
@@ -434,6 +457,18 @@ namespace EmployeeTrainingTracker
                 dtpExpiryDate.Value = DateTime.Today;
 
             txtFilePath.Text = rowView["FilePath"]?.ToString() ?? "";
+        }
+
+        private void cmbCurrentEmployee_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (cmbCurrentEmployee.SelectedItem == null) return;
+
+            if (cmbCurrentEmployee.SelectedItem is DataRowView drv)
+            {
+                int empId = Convert.ToInt32(drv["EmployeeID"]);
+                LoadCertificates(empId);
+                SyncDgvSelection(empId);
+            }
         }
 
         private void dgvCertificates_CellContentClick(object sender, DataGridViewCellEventArgs e)
@@ -495,6 +530,132 @@ namespace EmployeeTrainingTracker
             btnDelete.Enabled = employeeSelected;
         }
 
+        private void SyncDgvSelection(int employeeId)
+        {
+            foreach (DataGridViewRow row in dgvEmployees.Rows)
+            {
+                if (row.Cells["EmployeeID"].Value != null &&
+                    Convert.ToInt32(row.Cells["EmployeeID"].Value) == employeeId)
+                {
+                    row.Selected = true;
+                    dgvEmployees.CurrentCell = row.Cells["Email"]; // or any visible cell
+                    break;
+                }
+            }
+        }
+
+        private void btnExportCsv_Click(object sender, EventArgs e)
+        {
+            if (dgvReportResults.Rows.Count == 0)
+            {
+                MessageBox.Show("No data to export.");
+                return;
+            }
+
+            using (SaveFileDialog sfd = new SaveFileDialog())
+            {
+                sfd.Filter = "CSV files (*.csv)|*.csv";
+                sfd.FileName = $"Report_{DateTime.Now:yyyyMMdd}.csv";
+
+                if (sfd.ShowDialog() != DialogResult.OK) return;
+
+                try
+                {
+                    StringBuilder sb = new StringBuilder();
+
+                    // Header row
+                    var columnNames = dgvReportResults.Columns
+                                       .Cast<DataGridViewColumn>()
+                                       .Where(c => c.Visible)
+                                       .Select(c => c.HeaderText);
+                    sb.AppendLine(string.Join(",", columnNames));
+
+                    // Data rows
+                    foreach (DataGridViewRow row in dgvReportResults.Rows)
+                    {
+                        if (!row.IsNewRow)
+                        {
+                            var cells = row.Cells.Cast<DataGridViewCell>()
+                                           .Where(c => c.OwningColumn.Visible)
+                                           .Select(c => EscapeCsvValue(c.Value?.ToString() ?? ""));
+                            sb.AppendLine(string.Join(",", cells));
+                        }
+                    }
+
+                    System.IO.File.WriteAllText(sfd.FileName, sb.ToString());
+                    MessageBox.Show("CSV exported successfully!");
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error exporting CSV: {ex.Message}");
+                }
+            }
+        }
+
+        // Escape values containing commas, quotes, or newlines
+        private string EscapeCsvValue(string value)
+        {
+            if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
+            {
+                value = value.Replace("\"", "\"\"");
+                value = $"\"{value}\"";
+            }
+            return value;
+        }
+
+        //Reports
+        private void btnGenerateReport_Click(object sender, EventArgs e)
+        {
+            string query = @"SELECT tc.CertificateID, tc.CertificateName, tc.IssueDate, tc.ExpiryDate, u.Username AS Email
+                     FROM TrainingCertificates tc
+                     JOIN Users u ON tc.EmployeeID = u.EmployeeID";
+
+            List<SqliteParameter> parameters = new List<SqliteParameter>();
+            string reportType = cmbReportType.SelectedItem?.ToString() ?? "";
+
+            if (reportType == "Current Year")
+            {
+                // Certificates that are valid now
+                query += " WHERE date(tc.IssueDate) <= date('now') AND date(tc.ExpiryDate) >= date('now')";
+            }
+            else if (reportType == "Out of Date")
+            {
+                // Certificates that have expired
+                query += " WHERE date(tc.ExpiryDate) < date('now')";
+            }
+            else if (reportType == "Custom Range")
+            {
+                query += " WHERE date(tc.ExpiryDate) BETWEEN @start AND @end";
+                parameters.Add(new SqliteParameter("@start", dtpStart.Value.ToString("yyyy-MM-dd")));
+                parameters.Add(new SqliteParameter("@end", dtpEnd.Value.ToString("yyyy-MM-dd")));
+            }
+            else
+            {
+                MessageBox.Show("Please select a report type.");
+                return;
+            }
+
+            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
+            {
+                conn.Open();
+                using (var cmd = new SqliteCommand(query, conn))
+                {
+                    if (parameters.Any())
+                        cmd.Parameters.AddRange(parameters.ToArray());
+
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        DataTable table = new DataTable();
+                        table.Load(reader);
+                        dgvReportResults.DataSource = table;
+                    }
+                }
+            }
+        }
+
+
+
 
     }
+
 }
