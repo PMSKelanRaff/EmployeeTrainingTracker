@@ -70,6 +70,7 @@ namespace EmployeeTrainingTracker
             lblReportType = new Label();
             dgvReportResults = new DataGridView();
             cmbReportType = new ComboBox();
+            chkAddToTrainingFolder = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)dgvEmployees).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvCertificates).BeginInit();
             tabControl.SuspendLayout();
@@ -113,6 +114,7 @@ namespace EmployeeTrainingTracker
             // 
             // tabEmployees
             // 
+            tabEmployees.Controls.Add(chkAddToTrainingFolder);
             tabEmployees.Controls.Add(lbl_JobTitle);
             tabEmployees.Controls.Add(txtJobTitle);
             tabEmployees.Controls.Add(cmbDept);
@@ -473,6 +475,18 @@ namespace EmployeeTrainingTracker
             cmbReportType.Size = new Size(121, 23);
             cmbReportType.TabIndex = 0;
             // 
+            // chkAddToTrainingFolder
+            // 
+            chkAddToTrainingFolder.AutoSize = true;
+            chkAddToTrainingFolder.Checked = true;
+            chkAddToTrainingFolder.CheckState = CheckState.Checked;
+            chkAddToTrainingFolder.Location = new Point(631, 324);
+            chkAddToTrainingFolder.Name = "chkAddToTrainingFolder";
+            chkAddToTrainingFolder.Size = new Size(140, 19);
+            chkAddToTrainingFolder.TabIndex = 23;
+            chkAddToTrainingFolder.Text = "Add to training folder";
+            chkAddToTrainingFolder.UseVisualStyleBackColor = true;
+            // 
             // AdminDashboard
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -527,7 +541,6 @@ namespace EmployeeTrainingTracker
         private Label lbl_JobTitle;
         private TextBox txtJobTitle;
         private TabPage Reports;
-        private Label lblCurrentEmployee;
         private Label label1;
         private ComboBox cmbCurrentEmployee;
         private ComboBox cmbReportType;
@@ -539,5 +552,6 @@ namespace EmployeeTrainingTracker
         private Label lblDtpEnd;
         private Button btnGenerateReport;
         private Button btnExportCsv;
+        private CheckBox chkAddToTrainingFolder;
     }
 }

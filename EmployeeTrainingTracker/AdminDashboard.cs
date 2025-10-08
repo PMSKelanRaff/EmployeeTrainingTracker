@@ -31,16 +31,16 @@ namespace EmployeeTrainingTracker
                 conn.Open();
 
                 using (var cmd = new SqliteCommand(@"
-            SELECT 
-                u.UserID,
-                u.Username AS Email,
-                u.Role,
-                e.EmployeeID,
-                IFNULL(e.FullName, u.Username) AS FullName,
-                IFNULL(e.Department, 'Unknown') AS Department,
-                IFNULL(e.JobTitle, 'Unknown') AS JobTitle
-            FROM Users u
-            LEFT JOIN Employees e ON u.EmployeeID = e.EmployeeID", conn))
+                SELECT 
+                    u.UserID,
+                    u.Email AS Email,
+                    u.Role,
+                    e.EmployeeID,
+                    IFNULL(e.FullName, u.Email) AS FullName,
+                    IFNULL(e.Department, 'Unknown') AS Department,
+                    IFNULL(e.JobTitle, 'Unknown') AS JobTitle
+                FROM Users u
+                LEFT JOIN Employees e ON u.EmployeeID = e.EmployeeID", conn))
                 {
                     using (var reader = cmd.ExecuteReader())
                     {
@@ -152,6 +152,20 @@ namespace EmployeeTrainingTracker
             CertificateService.AddCertificate(empId, name, issue, expiry, filePath);
 
             LoadCertificates(empId);
+
+            // ✅ Only update Excel file if checkbox is checked
+            if (chkAddToTrainingFolder.Checked)
+            {
+                try
+                {
+                    LegacyExcelService.AppendTrainingRecord(empId, name, issue);
+                    MessageBox.Show("Record also added to employee's training sheet.");
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Certificate added, but failed to update Excel sheet:\n{ex.Message}");
+                }
+            }
         }
 
         private void btnEditCert_Click(object sender, EventArgs e)
