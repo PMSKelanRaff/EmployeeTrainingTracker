@@ -48,6 +48,7 @@ namespace EmployeeTrainingTracker
             txtPassword = new TextBox();
             txtUsername = new TextBox();
             tabCertificates = new TabPage();
+            chkAddToTrainingFolder = new CheckBox();
             label1 = new Label();
             cmbCurrentEmployee = new ComboBox();
             txtFilePath = new TextBox();
@@ -61,6 +62,7 @@ namespace EmployeeTrainingTracker
             btnEdit = new Button();
             btnAdd = new Button();
             Reports = new TabPage();
+            lbEmployees = new ListBox();
             btnExportCsv = new Button();
             btnGenerateReport = new Button();
             lblDtpEnd = new Label();
@@ -70,7 +72,7 @@ namespace EmployeeTrainingTracker
             lblReportType = new Label();
             dgvReportResults = new DataGridView();
             cmbReportType = new ComboBox();
-            chkAddToTrainingFolder = new CheckBox();
+            tabPage1 = new TabPage();
             ((System.ComponentModel.ISupportInitialize)dgvEmployees).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvCertificates).BeginInit();
             tabControl.SuspendLayout();
@@ -105,6 +107,7 @@ namespace EmployeeTrainingTracker
             tabControl.Controls.Add(tabEmployees);
             tabControl.Controls.Add(tabCertificates);
             tabControl.Controls.Add(Reports);
+            tabControl.Controls.Add(tabPage1);
             tabControl.Dock = DockStyle.Fill;
             tabControl.Location = new Point(0, 0);
             tabControl.Name = "tabControl";
@@ -114,7 +117,6 @@ namespace EmployeeTrainingTracker
             // 
             // tabEmployees
             // 
-            tabEmployees.Controls.Add(chkAddToTrainingFolder);
             tabEmployees.Controls.Add(lbl_JobTitle);
             tabEmployees.Controls.Add(txtJobTitle);
             tabEmployees.Controls.Add(cmbDept);
@@ -253,6 +255,7 @@ namespace EmployeeTrainingTracker
             // 
             // tabCertificates
             // 
+            tabCertificates.Controls.Add(chkAddToTrainingFolder);
             tabCertificates.Controls.Add(label1);
             tabCertificates.Controls.Add(cmbCurrentEmployee);
             tabCertificates.Controls.Add(txtFilePath);
@@ -273,6 +276,18 @@ namespace EmployeeTrainingTracker
             tabCertificates.TabIndex = 1;
             tabCertificates.Text = "Certificates";
             tabCertificates.UseVisualStyleBackColor = true;
+            // 
+            // chkAddToTrainingFolder
+            // 
+            chkAddToTrainingFolder.AutoSize = true;
+            chkAddToTrainingFolder.Checked = true;
+            chkAddToTrainingFolder.CheckState = CheckState.Checked;
+            chkAddToTrainingFolder.Location = new Point(648, 336);
+            chkAddToTrainingFolder.Name = "chkAddToTrainingFolder";
+            chkAddToTrainingFolder.Size = new Size(140, 19);
+            chkAddToTrainingFolder.TabIndex = 27;
+            chkAddToTrainingFolder.Text = "Add to training folder";
+            chkAddToTrainingFolder.UseVisualStyleBackColor = true;
             // 
             // label1
             // 
@@ -379,6 +394,7 @@ namespace EmployeeTrainingTracker
             // 
             // Reports
             // 
+            Reports.Controls.Add(lbEmployees);
             Reports.Controls.Add(btnExportCsv);
             Reports.Controls.Add(btnGenerateReport);
             Reports.Controls.Add(lblDtpEnd);
@@ -395,6 +411,16 @@ namespace EmployeeTrainingTracker
             Reports.TabIndex = 2;
             Reports.Text = "Reports";
             Reports.UseVisualStyleBackColor = true;
+            // 
+            // lbEmployees
+            // 
+            lbEmployees.FormattingEnabled = true;
+            lbEmployees.ItemHeight = 15;
+            lbEmployees.Location = new Point(649, 189);
+            lbEmployees.Name = "lbEmployees";
+            lbEmployees.SelectionMode = SelectionMode.MultiExtended;
+            lbEmployees.Size = new Size(200, 94);
+            lbEmployees.TabIndex = 10;
             // 
             // btnExportCsv
             // 
@@ -419,7 +445,7 @@ namespace EmployeeTrainingTracker
             // lblDtpEnd
             // 
             lblDtpEnd.AutoSize = true;
-            lblDtpEnd.Location = new Point(649, 160);
+            lblDtpEnd.Location = new Point(649, 120);
             lblDtpEnd.Name = "lblDtpEnd";
             lblDtpEnd.Size = new Size(60, 15);
             lblDtpEnd.TabIndex = 7;
@@ -428,7 +454,7 @@ namespace EmployeeTrainingTracker
             // lblDtpStart
             // 
             lblDtpStart.AutoSize = true;
-            lblDtpStart.Location = new Point(649, 106);
+            lblDtpStart.Location = new Point(649, 67);
             lblDtpStart.Name = "lblDtpStart";
             lblDtpStart.Size = new Size(64, 15);
             lblDtpStart.TabIndex = 6;
@@ -436,14 +462,14 @@ namespace EmployeeTrainingTracker
             // 
             // dtpEnd
             // 
-            dtpEnd.Location = new Point(649, 178);
+            dtpEnd.Location = new Point(649, 138);
             dtpEnd.Name = "dtpEnd";
             dtpEnd.Size = new Size(200, 23);
             dtpEnd.TabIndex = 5;
             // 
             // dtpStart
             // 
-            dtpStart.Location = new Point(649, 124);
+            dtpStart.Location = new Point(649, 85);
             dtpStart.Name = "dtpStart";
             dtpStart.Size = new Size(200, 23);
             dtpStart.TabIndex = 4;
@@ -451,7 +477,7 @@ namespace EmployeeTrainingTracker
             // lblReportType
             // 
             lblReportType.AutoSize = true;
-            lblReportType.Location = new Point(649, 30);
+            lblReportType.Location = new Point(649, 6);
             lblReportType.Name = "lblReportType";
             lblReportType.Size = new Size(76, 15);
             lblReportType.TabIndex = 3;
@@ -470,22 +496,20 @@ namespace EmployeeTrainingTracker
             // 
             cmbReportType.FormattingEnabled = true;
             cmbReportType.Items.AddRange(new object[] { "Current Year", "Out Of Date", "Custom Range" });
-            cmbReportType.Location = new Point(649, 48);
+            cmbReportType.Location = new Point(649, 24);
             cmbReportType.Name = "cmbReportType";
             cmbReportType.Size = new Size(121, 23);
             cmbReportType.TabIndex = 0;
             // 
-            // chkAddToTrainingFolder
+            // tabPage1
             // 
-            chkAddToTrainingFolder.AutoSize = true;
-            chkAddToTrainingFolder.Checked = true;
-            chkAddToTrainingFolder.CheckState = CheckState.Checked;
-            chkAddToTrainingFolder.Location = new Point(631, 324);
-            chkAddToTrainingFolder.Name = "chkAddToTrainingFolder";
-            chkAddToTrainingFolder.Size = new Size(140, 19);
-            chkAddToTrainingFolder.TabIndex = 23;
-            chkAddToTrainingFolder.Text = "Add to training folder";
-            chkAddToTrainingFolder.UseVisualStyleBackColor = true;
+            tabPage1.Location = new Point(4, 24);
+            tabPage1.Name = "tabPage1";
+            tabPage1.Padding = new Padding(3);
+            tabPage1.Size = new Size(867, 422);
+            tabPage1.TabIndex = 3;
+            tabPage1.Text = "Planning";
+            tabPage1.UseVisualStyleBackColor = true;
             // 
             // AdminDashboard
             // 
@@ -553,5 +577,7 @@ namespace EmployeeTrainingTracker
         private Button btnGenerateReport;
         private Button btnExportCsv;
         private CheckBox chkAddToTrainingFolder;
+        private ListBox lbEmployees;
+        private TabPage tabPage1;
     }
 }

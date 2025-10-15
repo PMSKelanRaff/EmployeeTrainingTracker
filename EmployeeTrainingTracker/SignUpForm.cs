@@ -64,7 +64,7 @@ namespace EmployeeTrainingTracker
                             cmd.Transaction = tran;
                             cmd.CommandText = @"
                                 INSERT INTO Users 
-                                (Username, PasswordHash, Role, EmployeeID, WindowsUsername)
+                                (Email, PasswordHash, Role, EmployeeID, WindowsUsername)
                                 VALUES (@u, @p, @r, @emp, @wu)";
                             cmd.Parameters.AddWithValue("@u", username);
                             cmd.Parameters.AddWithValue("@p", HashPassword(password)); // hashed

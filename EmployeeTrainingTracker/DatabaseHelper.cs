@@ -146,19 +146,35 @@ public static class DatabaseHelper
             cmd.ExecuteNonQuery();
         }
     }
-
     private static void EnsureSQLiteTablesExist(SqliteConnection conn)
     {
         using (var cmd = conn.CreateCommand())
         {
+            // Employees table
             cmd.CommandText = @"
                 CREATE TABLE IF NOT EXISTS Employees (
                     EmployeeID INTEGER PRIMARY KEY AUTOINCREMENT,
                     FullName TEXT NOT NULL,
                     Department TEXT,
                     JobTitle TEXT
-                );
+                );";
+            cmd.ExecuteNonQuery();
 
+            // Users table with Email instead of Username
+            cmd.CommandText = @"
+                CREATE TABLE IF NOT EXISTS Users (
+                    UserID INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Email TEXT NOT NULL UNIQUE,
+                    PasswordHash TEXT NOT NULL,
+                    Role TEXT CHECK(Role IN ('Admin','Employee')),
+                    EmployeeID INTEGER,
+                    WindowsUsername NVARCHAR(100),
+                    FOREIGN KEY (EmployeeID) REFERENCES Employees(EmployeeID)
+                );";
+            cmd.ExecuteNonQuery();
+
+            // TrainingCertificates table
+            cmd.CommandText = @"
                 CREATE TABLE IF NOT EXISTS TrainingCertificates (
                     CertificateID INTEGER PRIMARY KEY AUTOINCREMENT,
                     EmployeeID INTEGER,
@@ -167,8 +183,7 @@ public static class DatabaseHelper
                     ExpiryDate TEXT,
                     FilePath TEXT,
                     FOREIGN KEY (EmployeeID) REFERENCES Employees(EmployeeID)
-                );
-            ";
+                );";
             cmd.ExecuteNonQuery();
         }
     }
@@ -180,32 +195,57 @@ public static class DatabaseHelper
 
     private static void SeedData(SqliteConnection conn)
     {
-        // Only seed if tables are empty
         using (var cmd = conn.CreateCommand())
         {
+            // Only seed Employees if empty
             cmd.CommandText = "SELECT COUNT(*) FROM Employees";
-            int count = Convert.ToInt32(cmd.ExecuteScalar());
+            int empCount = Convert.ToInt32(cmd.ExecuteScalar());
 
-            if (count == 0)
+            if (empCount == 0)
             {
                 cmd.CommandText = @"
                     INSERT INTO Employees (FullName, Department, JobTitle) VALUES
-                    ('Alice Smith', 'HR', 'Manager'),
-                    ('Bob Jones', 'IT', 'Technician'),
-                    ('Charlie Brown', 'Finance', 'Accountant');
+                        ('Alice Smith', 'HR', 'Manager'),
+                        ('Bob Jones', 'IT', 'Technician'),
+                        ('Kelan Rafferty', 'Operations', 'Employee'),
+                        ('Charlie Brown', 'Finance', 'Accountant');";
+                cmd.ExecuteNonQuery();
+            }
 
+            // Only seed Users if empty
+            cmd.CommandText = "SELECT COUNT(*) FROM Users";
+            int userCount = Convert.ToInt32(cmd.ExecuteScalar());
+
+            if (userCount == 0)
+            {
+                cmd.CommandText = @"
+                    INSERT INTO Users (Email, PasswordHash, Role, EmployeeID, WindowsUsername) VALUES
+                        ('alice@pms.ie','', 'Admin', 1, 'AliceS'),
+                        ('bob@pms.ie','', 'Employee', 2, 'BobJ'),
+                        ('kelan@pms.ie','', 'Employee', 3, 'KelanR'),
+                        ('charlie@pms.ie','', 'Employee', 4, 'CharlieB');";
+                cmd.ExecuteNonQuery();
+            }
+
+            // Only seed TrainingCertificates if empty
+            cmd.CommandText = "SELECT COUNT(*) FROM TrainingCertificates";
+            int certCount = Convert.ToInt32(cmd.ExecuteScalar());
+
+            if (certCount == 0)
+            {
+                cmd.CommandText = @"
                     INSERT INTO TrainingCertificates (EmployeeID, CertificateName, IssueDate, ExpiryDate, FilePath) VALUES
-                    (2, 'Fire Warden', '2024-01-01', '2026-01-01', NULL),
-                    (2, 'Safe Pass', '2023-06-12', '2025-06-12', NULL),
-                    (3, 'First Aid', '2022-05-20', '2025-05-20', NULL),
-                    (3, 'Manual Handling', '2023-02-10', '2026-02-10', NULL);
-                ";
+                        (3, 'Fire Warden', '2024-01-01', '2026-01-01', NULL),
+                        (3, 'Safe Pass', '2023-06-12', '2025-06-12', NULL),
+                        (4, 'First Aid', '2022-05-20', '2025-05-20', NULL),
+                        (4, 'Manual Handling', '2023-02-10', '2026-02-10', NULL);";
                 cmd.ExecuteNonQuery();
             }
         }
     }
 
-    private enum DatabaseType
+
+private enum DatabaseType
     {
         New,
         SQLServerStyle,

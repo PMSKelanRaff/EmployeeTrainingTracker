@@ -21,6 +21,7 @@ namespace EmployeeTrainingTracker
             InitializeComponent();
             LoadEmployees();
             tabCertificates.Enabled = false;
+            LoadEmployeeList();
         }
 
         // Load all users into DataGridView (Employees tab)
@@ -180,11 +181,27 @@ namespace EmployeeTrainingTracker
                 ? null
                 : txtFilePath.Text.Trim('"').Trim();
 
-            // Make sure your service method accepts filePath now
+            // Update the certificate in the database
             CertificateService.UpdateCertificate(certId, name, issue, expiry, filePath);
 
+            // Reload the employee’s certificates
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
             LoadCertificates(empId);
+
+            // 🔄 Optional: Update legacy Excel (if checkbox is checked)
+            if (chkAddToTrainingFolder.Checked)
+            {
+                try
+                {
+                    LegacyExcelService.UpdateTrainingRecord(empId, name, issue);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Certificate updated, but failed to update Excel sheet:\n{ex.Message}");
+                }
+            }
+
+            MessageBox.Show("Certificate updated successfully!");
         }
 
         private void btnDeleteCert_Click(object sender, EventArgs e)
@@ -192,14 +209,28 @@ namespace EmployeeTrainingTracker
             if (dgvCertificates.CurrentRow == null) return;
 
             int certId = Convert.ToInt32(dgvCertificates.CurrentRow.Cells["CertificateID"].Value);
+            string certName = dgvCertificates.CurrentRow.Cells["CertificateName"].Value.ToString();
+
             var confirm = MessageBox.Show("Delete this certificate?", "Confirm", MessageBoxButtons.YesNo);
             if (confirm == DialogResult.No) return;
 
-            CertificateService.DeleteCertificate(certId);
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
+
+            // Delete from database
+            CertificateService.DeleteCertificate(certId);
+
+            // Delete from Excel
+            try
+            {
+                LegacyExcelService.DeleteTrainingRecord(empId, certName);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Deleted from database, but failed to update Excel: {ex.Message}");
+            }
+
             LoadCertificates(empId);
         }
-
 
 
         // CRUD for employees
@@ -235,7 +266,7 @@ namespace EmployeeTrainingTracker
 
                 // Create User row (no password)
                 using (var cmdUser = new SqliteCommand(
-                    "INSERT INTO Users (Username, Role, EmployeeID) VALUES (@u, @r, @eid); SELECT last_insert_rowid();", conn))
+                    "INSERT INTO Users (Email, Role, EmployeeID) VALUES (@u, @r, @eid); SELECT last_insert_rowid();", conn))
                 {
                     cmdUser.Parameters.AddWithValue("@u", username);
                     cmdUser.Parameters.AddWithValue("@r", role);
@@ -322,7 +353,7 @@ namespace EmployeeTrainingTracker
 
                 // Always update Users table (username + role)
                 using (var cmdUser = new SqliteCommand(
-                    "UPDATE Users SET Username=@u, Role=@r WHERE UserID=@uid", conn))
+                    "UPDATE Users SET Email=@u, Role=@r WHERE UserID=@uid", conn))
                 {
                     cmdUser.Parameters.AddWithValue("@u", username);
                     cmdUser.Parameters.AddWithValue("@r", role);
@@ -362,6 +393,13 @@ namespace EmployeeTrainingTracker
                 {
                     cmdUser.Parameters.AddWithValue("@id", empId.Value);
                     cmdUser.ExecuteNonQuery();
+                }
+
+                // Finally, delete the employee record
+                using (var cmdEmp = new SqliteCommand("DELETE FROM Employees WHERE EmployeeID=@id", conn))
+                {
+                    cmdEmp.Parameters.AddWithValue("@id", empId.Value);
+                    cmdEmp.ExecuteNonQuery();
                 }
             }
 
@@ -620,56 +658,56 @@ namespace EmployeeTrainingTracker
         //Reports
         private void btnGenerateReport_Click(object sender, EventArgs e)
         {
-            string query = @"SELECT tc.CertificateID, tc.CertificateName, tc.IssueDate, tc.ExpiryDate, u.Username AS Email
-                     FROM TrainingCertificates tc
-                     JOIN Users u ON tc.EmployeeID = u.EmployeeID";
-
-            List<SqliteParameter> parameters = new List<SqliteParameter>();
             string reportType = cmbReportType.SelectedItem?.ToString() ?? "";
+            DateTime? start = (reportType == "Custom Range") ? dtpStart.Value : null;
+            DateTime? end = (reportType == "Custom Range") ? dtpEnd.Value : null;
 
-            if (reportType == "Current Year")
-            {
-                // Certificates that are valid now
-                query += " WHERE date(tc.IssueDate) <= date('now') AND date(tc.ExpiryDate) >= date('now')";
-            }
-            else if (reportType == "Out of Date")
-            {
-                // Certificates that have expired
-                query += " WHERE date(tc.ExpiryDate) < date('now')";
-            }
-            else if (reportType == "Custom Range")
-            {
-                query += " WHERE date(tc.ExpiryDate) BETWEEN @start AND @end";
-                parameters.Add(new SqliteParameter("@start", dtpStart.Value.ToString("yyyy-MM-dd")));
-                parameters.Add(new SqliteParameter("@end", dtpEnd.Value.ToString("yyyy-MM-dd")));
-            }
-            else
-            {
-                MessageBox.Show("Please select a report type.");
-                return;
-            }
+            // Get selected employee IDs
+            var selectedEmployees = lbEmployees.SelectedItems
+                .Cast<EmployeeItem>()
+                .Select(x => x.Id)
+                .ToList();
 
+            try
+            {
+                DataTable results = ReportService.GenerateReport(reportType, start, end, selectedEmployees);
+                dgvReportResults.DataSource = results;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error generating report: {ex.Message}");
+            }
+        }
+
+        private void LoadEmployeeList()
+        {
+            lbEmployees.Items.Clear();
             using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
             {
                 conn.Open();
-                using (var cmd = new SqliteCommand(query, conn))
+                var cmd = new SqliteCommand("SELECT EmployeeID, FullName FROM Employees ORDER BY FullName", conn);
+                using (var reader = cmd.ExecuteReader())
                 {
-                    if (parameters.Any())
-                        cmd.Parameters.AddRange(parameters.ToArray());
-
-                    using (var reader = cmd.ExecuteReader())
+                    while (reader.Read())
                     {
-                        DataTable table = new DataTable();
-                        table.Load(reader);
-                        dgvReportResults.DataSource = table;
+                        lbEmployees.Items.Add(new EmployeeItem
+                        {
+                            Id = reader.GetInt32(0),
+                            Name = reader.GetString(1)
+                        });
                     }
                 }
             }
         }
 
+        private class EmployeeItem
+        {
+            public int Id { get; set; }
+            public string Name { get; set; }
+            public override string ToString() => Name;
+        }
 
-
-
+       
     }
 
 }
