@@ -22,6 +22,7 @@ namespace EmployeeTrainingTracker
             LoadEmployees();
             tabCertificates.Enabled = false;
             LoadEmployeeList();
+
         }
 
         // Load all users into DataGridView (Employees tab)
@@ -90,6 +91,27 @@ namespace EmployeeTrainingTracker
                 HeaderText = "Certificate Name"
             });
 
+            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "Key",
+                DataPropertyName = "Key",
+                HeaderText = "Training Key"
+            });
+
+            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "HRS",
+                DataPropertyName = "HRS",  // or CPDHrs depending on your DB
+                HeaderText = "CPD Hrs"
+            });
+
+            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "Provider",
+                DataPropertyName = "Provider",
+                HeaderText = "Provider"
+            });
+
             // Issue Date
             dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
             {
@@ -123,6 +145,8 @@ namespace EmployeeTrainingTracker
                 HeaderText = "Last Notified"
             });
 
+
+
             // Set DataSource last
             dgvCertificates.DataSource = table;
 
@@ -138,6 +162,9 @@ namespace EmployeeTrainingTracker
 
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
             string name = txtCertName.Text.Trim();
+            string key = txtKey.Text.Trim();
+            string hrsText = txtHrs.Text.Trim();
+            string provider = txtProvider.Text.Trim();
             DateTime issue = dtpIssueDate.Value;
             DateTime expiry = dtpExpiryDate.Value;
             string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim()) ? null : txtFilePath.Text.Trim('"').Trim();
@@ -148,13 +175,12 @@ namespace EmployeeTrainingTracker
                 return;
             }
 
-            // Pass filePath to service
-            filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim()) ? null : txtFilePath.Text.Trim('"').Trim();
-            CertificateService.AddCertificate(empId, name, issue, expiry, filePath);
+            double.TryParse(hrsText, out double cpdHrs);
+
+            CertificateService.AddCertificate(empId, name, key, cpdHrs, provider, issue, expiry, filePath);
 
             LoadCertificates(empId);
 
-            // ✅ Only update Excel file if checkbox is checked
             if (chkAddToTrainingFolder.Checked)
             {
                 try
@@ -175,20 +201,22 @@ namespace EmployeeTrainingTracker
 
             int certId = Convert.ToInt32(dgvCertificates.CurrentRow.Cells["CertificateID"].Value);
             string name = txtCertName.Text.Trim();
+            string key = txtKey.Text.Trim();
+            string hrsText = txtHrs.Text.Trim();
+            string provider = txtProvider.Text.Trim();
             DateTime issue = dtpIssueDate.Value;
             DateTime expiry = dtpExpiryDate.Value;
             string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim())
                 ? null
                 : txtFilePath.Text.Trim('"').Trim();
 
-            // Update the certificate in the database
-            CertificateService.UpdateCertificate(certId, name, issue, expiry, filePath);
+            double.TryParse(hrsText, out double cpdHrs);
 
-            // Reload the employee’s certificates
+            CertificateService.UpdateCertificate(certId, name, key, cpdHrs, provider, issue, expiry, filePath);
+
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
             LoadCertificates(empId);
 
-            // 🔄 Optional: Update legacy Excel (if checkbox is checked)
             if (chkAddToTrainingFolder.Checked)
             {
                 try
@@ -488,6 +516,9 @@ namespace EmployeeTrainingTracker
             if (dgvCertificates.CurrentRow == null || dgvCertificates.CurrentRow.IsNewRow)
             {
                 txtCertName.Text = "";
+                txtKeyCertsTab.Text = "";
+                txtHrsCertsTab.Text = "";
+                txtProviderCertsTab.Text = "";
                 dtpIssueDate.Value = DateTime.Today;
                 dtpExpiryDate.Value = DateTime.Today;
                 txtFilePath.Text = "";
@@ -497,6 +528,9 @@ namespace EmployeeTrainingTracker
             if (dgvCertificates.CurrentRow.DataBoundItem is not DataRowView rowView) return;
 
             txtCertName.Text = rowView["CertificateName"]?.ToString() ?? "";
+            txtKeyCertsTab.Text = rowView["Key"]?.ToString() ?? "";
+            txtHrsCertsTab.Text = rowView["HRS"]?.ToString() ?? "";
+            txtProviderCertsTab.Text = rowView["Provider"]?.ToString() ?? "";
 
             if (DateTime.TryParse(rowView["IssueDate"]?.ToString(), out var issue))
                 dtpIssueDate.Value = issue;
@@ -510,6 +544,7 @@ namespace EmployeeTrainingTracker
 
             txtFilePath.Text = rowView["FilePath"]?.ToString() ?? "";
         }
+
 
         private void cmbCurrentEmployee_SelectedIndexChanged(object sender, EventArgs e)
         {
@@ -705,6 +740,74 @@ namespace EmployeeTrainingTracker
             public int Id { get; set; }
             public string Name { get; set; }
             public override string ToString() => Name;
+        }
+
+        //Planning
+        private void btnCompleteTraining_Click(object sender, EventArgs e)
+        {
+            if (dgvPlannedTraining.CurrentRow != null)
+            {
+                int sessionId = Convert.ToInt32(dgvPlannedTraining.CurrentRow.Cells["SessionID"].Value);
+                PlannedTrainingService.CompleteTrainingSession(sessionId, DateTime.Today, DateTime.Today.AddYears(3));
+                LoadPlannedTraining(); // refresh grid
+            }
+        }
+
+        private void btnAddSession_Click(object sender, EventArgs e)
+        {
+            var employees = GetSelectedEmployees(); // implement multi-select to return List<int> of EmployeeIDs
+
+            PlannedTrainingService.AddPlannedSession(
+                txtCertificateName.Text,
+                txtKey.Text,
+                double.TryParse(txtHrs.Text, out double hrs) ? hrs : (double?)null,
+                txtProvider.Text,
+                dtpPlannedDate.Value,
+                dtpExpiryDate.Value,  // now using expiry date from DateTimePicker
+                txtFilePath.Text,
+                employees
+            );
+
+            LoadPlannedTraining(); // refresh DGV
+        }
+
+        private void PlanningTabForm_Load(object sender, EventArgs e)
+        {
+            LoadPlannedTraining();
+            LoadPlannedEmployees();
+        }
+
+        private void LoadPlannedTraining()
+        {
+            dgvPlannedTraining.DataSource = PlannedTrainingService.GetPlannedTraining();
+        }
+
+        private void LoadPlannedEmployees()
+        {
+            string query = "SELECT EmployeeID, FullName FROM Employees ORDER BY FullName";
+
+            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+            conn.Open();
+            using var cmd = new SqliteCommand(query, conn);
+            using var reader = cmd.ExecuteReader();
+
+            clbEmployees.Items.Clear();
+            while (reader.Read())
+            {
+                clbEmployees.Items.Add(new EmployeeItem
+                {
+                    Id = reader.GetInt32(0),
+                    Name = reader.GetString(1)
+                });
+            }
+        }
+
+        private List<int> GetSelectedEmployees()
+        {
+            return clbEmployees.CheckedItems
+                .Cast<EmployeeItem>()
+                .Select(emp => emp.Id)
+                .ToList();
         }
 
        

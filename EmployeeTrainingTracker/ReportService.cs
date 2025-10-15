@@ -4,7 +4,6 @@ using System.Data;
 public static class ReportService
 {
 
-
     public static DataTable GenerateReport(string reportType, DateTime? start, DateTime? end, List<int> employeeIds)
     {
         string query = @"

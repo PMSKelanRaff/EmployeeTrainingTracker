@@ -35,7 +35,7 @@ namespace EmployeeTrainingTracker
                 // 1) Try hashed password first
                 using (var cmd = conn.CreateCommand())
                 {
-                    cmd.CommandText = "SELECT Role, EmployeeID FROM Users WHERE Username = @u AND PasswordHash = @p";
+                    cmd.CommandText = "SELECT Role, EmployeeID FROM Users WHERE Email = @u AND PasswordHash = @p";
                     cmd.Parameters.AddWithValue("@u", username);
                     cmd.Parameters.AddWithValue("@p", hashed);
 
@@ -50,7 +50,7 @@ namespace EmployeeTrainingTracker
                             reader.Close();
                             using (var cmd2 = conn.CreateCommand())
                             {
-                                cmd2.CommandText = "SELECT Role, EmployeeID FROM Users WHERE Username = @u";
+                                cmd2.CommandText = "SELECT Role, EmployeeID FROM Users WHERE Email = @u";
                                 cmd2.Parameters.AddWithValue("@u", username);
                                 HandleLogin(cmd2);
                                 return;
@@ -62,7 +62,7 @@ namespace EmployeeTrainingTracker
                 // 2) Fallback - try raw/plaintext (for legacy accounts)
                 using (var cmdPlain = conn.CreateCommand())
                 {
-                    cmdPlain.CommandText = "SELECT UserID FROM Users WHERE Username = @u AND PasswordHash = @pPlain";
+                    cmdPlain.CommandText = "SELECT UserID FROM Users WHERE Email = @u AND PasswordHash = @pPlain";
                     cmdPlain.Parameters.AddWithValue("@u", username);
                     cmdPlain.Parameters.AddWithValue("@pPlain", password);
 
