@@ -42,114 +42,184 @@ namespace EmployeeTrainingTracker
         }
 
         // Add a new planned training session
-        public static int AddPlannedSession(string certificateName, string key, double? hrs, string provider, DateTime plannedDate, DateTime expiryDate, string filePath, List<int> employeeIds)
+        public static void AddPlannedSession(string certificateName, string key, double? hrs, string provider, DateTime plannedDate, string notes, List<int> employeeIds)
         {
             using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
             conn.Open();
             using var tx = conn.BeginTransaction();
 
-            // Insert session with ExpiryDate
-            var insertSessionCmd = new SqliteCommand(@"
-        INSERT INTO TrainingSessions 
-            (CertificateName, Key, HRS, Provider, PlannedDate, ExpiryDate, FilePath)
-        VALUES (@cert, @key, @hrs, @prov, @planned, @exp, @path);
-        SELECT last_insert_rowid();", conn, tx);
+            var cmd = new SqliteCommand(@"
+            INSERT INTO TrainingSessions (CertificateName, Key, HRS, Provider, PlannedDate, Notes)
+            VALUES (@cert, @key, @hrs, @prov, @planned, @notes);
+            SELECT last_insert_rowid();", conn, tx);
 
-            insertSessionCmd.Parameters.AddWithValue("@cert", certificateName);
-            insertSessionCmd.Parameters.AddWithValue("@key", key ?? (object)DBNull.Value);
-            insertSessionCmd.Parameters.AddWithValue("@hrs", hrs.HasValue ? hrs.Value : (object)DBNull.Value);
-            insertSessionCmd.Parameters.AddWithValue("@prov", provider ?? (object)DBNull.Value);
-            insertSessionCmd.Parameters.AddWithValue("@planned", plannedDate.ToString("yyyy-MM-dd"));
-            insertSessionCmd.Parameters.AddWithValue("@exp", expiryDate.ToString("yyyy-MM-dd"));
-            insertSessionCmd.Parameters.AddWithValue("@path", filePath ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@cert", certificateName);
+            cmd.Parameters.AddWithValue("@key", key ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@hrs", hrs ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@prov", provider ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@planned", plannedDate.ToString("yyyy-MM-dd"));
+            cmd.Parameters.AddWithValue("@notes", notes ?? (object)DBNull.Value);
 
-            long sessionId = (long)insertSessionCmd.ExecuteScalar();
+            long sessionId = (long)cmd.ExecuteScalar();
 
             // Insert participants
-            foreach (var empId in employeeIds)
+            foreach (int empId in employeeIds)
             {
-                var partCmd = new SqliteCommand(@"
-            INSERT INTO TrainingParticipants (SessionID, EmployeeID)
-            VALUES (@sid, @emp)", conn, tx);
+                var partCmd = new SqliteCommand("INSERT INTO TrainingParticipants (SessionID, EmployeeID) VALUES (@sid, @eid)", conn, tx);
                 partCmd.Parameters.AddWithValue("@sid", sessionId);
-                partCmd.Parameters.AddWithValue("@emp", empId);
+                partCmd.Parameters.AddWithValue("@eid", empId);
                 partCmd.ExecuteNonQuery();
             }
 
             tx.Commit();
-            return (int)sessionId;
         }
 
-        // Complete a training session
-        public static void CompleteTrainingSession(int sessionId, DateTime issueDate, DateTime expiryDate)
+        // Update an existing session
+        public static void UpdatePlannedSession(int sessionId, string certificateName, string key, double? hrs, string provider, DateTime plannedDate, string notes, List<int> employeeIds)
         {
             using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
             conn.Open();
             using var tx = conn.BeginTransaction();
 
-            // Get session info
-            var sessionCmd = new SqliteCommand(@"
-            SELECT CertificateName, Key, HRS, Provider, FilePath
-            FROM TrainingSessions
-            WHERE SessionID = @sid", conn, tx);
-            sessionCmd.Parameters.AddWithValue("@sid", sessionId);
+            var cmd = new SqliteCommand(@"
+            UPDATE TrainingSessions 
+            SET CertificateName=@cert, Key=@key, HRS=@hrs, Provider=@prov, PlannedDate=@planned, Notes=@notes
+            WHERE SessionID=@sid", conn, tx);
 
-            using var sessionReader = sessionCmd.ExecuteReader();
-            if (!sessionReader.Read())
-                throw new Exception("Training session not found.");
+            cmd.Parameters.AddWithValue("@cert", certificateName);
+            cmd.Parameters.AddWithValue("@key", key ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@hrs", hrs ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@prov", provider ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@planned", plannedDate.ToString("yyyy-MM-dd"));
+            cmd.Parameters.AddWithValue("@notes", notes ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@sid", sessionId);
 
-            string certificateName = sessionReader["CertificateName"].ToString();
-            string key = sessionReader["Key"]?.ToString();
-            double? hrs = sessionReader["HRS"] as double?;
-            string provider = sessionReader["Provider"]?.ToString();
-            string filePath = sessionReader["FilePath"]?.ToString();
-            sessionReader.Close();
+            cmd.ExecuteNonQuery();
 
-            // Get participants
-            var partCmd = new SqliteCommand("SELECT EmployeeID FROM TrainingParticipants WHERE SessionID = @sid", conn, tx);
-            partCmd.Parameters.AddWithValue("@sid", sessionId);
-            using var partReader = partCmd.ExecuteReader();
+            // Remove old participants
+            var delCmd = new SqliteCommand("DELETE FROM TrainingParticipants WHERE SessionID=@sid", conn, tx);
+            delCmd.Parameters.AddWithValue("@sid", sessionId);
+            delCmd.ExecuteNonQuery();
 
-            while (partReader.Read())
+            // Add new participants
+            foreach (int empId in employeeIds)
             {
-                int employeeId = partReader.GetInt32(0);
-                var insertCmd = new SqliteCommand(@"
-                INSERT INTO TrainingCertificates 
-                    (EmployeeID, CertificateName, Key, HRS, Provider, IssueDate, ExpiryDate, FilePath)
-                VALUES 
-                    (@emp, @cert, @key, @hrs, @prov, @issue, @exp, @path)", conn, tx);
-
-                insertCmd.Parameters.AddWithValue("@emp", employeeId);
-                insertCmd.Parameters.AddWithValue("@cert", certificateName);
-                insertCmd.Parameters.AddWithValue("@key", key ?? (object)DBNull.Value);
-                insertCmd.Parameters.AddWithValue("@hrs", hrs.HasValue ? hrs.Value : (object)DBNull.Value);
-                insertCmd.Parameters.AddWithValue("@prov", provider ?? (object)DBNull.Value);
-                insertCmd.Parameters.AddWithValue("@issue", issueDate.ToString("yyyy-MM-dd"));
-                insertCmd.Parameters.AddWithValue("@exp", expiryDate.ToString("yyyy-MM-dd"));
-                insertCmd.Parameters.AddWithValue("@path", filePath ?? (object)DBNull.Value);
-                insertCmd.ExecuteNonQuery();
+                var partCmd = new SqliteCommand("INSERT INTO TrainingParticipants (SessionID, EmployeeID) VALUES (@sid, @eid)", conn, tx);
+                partCmd.Parameters.AddWithValue("@sid", sessionId);
+                partCmd.Parameters.AddWithValue("@eid", empId);
+                partCmd.ExecuteNonQuery();
             }
-
-            // Mark session completed
-            var updateCmd = new SqliteCommand("UPDATE TrainingSessions SET Status = 'Completed' WHERE SessionID = @sid", conn, tx);
-            updateCmd.Parameters.AddWithValue("@sid", sessionId);
-            updateCmd.ExecuteNonQuery();
 
             tx.Commit();
         }
 
-        private static void AddParticipants(SqliteConnection conn, SqliteTransaction tx, long sessionId, List<int> employeeIds)
+        // Delete a planned session
+        public static void DeletePlannedSession(int sessionId)
         {
-            foreach (var empId in employeeIds)
-            {
-                var cmd = new SqliteCommand(
-                    "INSERT INTO TrainingParticipants (SessionID, EmployeeID) VALUES (@sid, @emp)",
-                    conn, tx);
-                cmd.Parameters.AddWithValue("@sid", sessionId);
-                cmd.Parameters.AddWithValue("@emp", empId);
-                cmd.ExecuteNonQuery();
-            }
+            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+            conn.Open();
+            using var tx = conn.BeginTransaction();
+
+            var delParticipants = new SqliteCommand("DELETE FROM TrainingParticipants WHERE SessionID=@sid", conn, tx);
+            delParticipants.Parameters.AddWithValue("@sid", sessionId);
+            delParticipants.ExecuteNonQuery();
+
+            var delSession = new SqliteCommand("DELETE FROM TrainingSessions WHERE SessionID=@sid", conn, tx);
+            delSession.Parameters.AddWithValue("@sid", sessionId);
+            delSession.ExecuteNonQuery();
+
+            tx.Commit();
         }
+
+        // Complete a training session
+        public static void CompleteTrainingSession(int sessionId)
+        {
+            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+            conn.Open();
+            using var tx = conn.BeginTransaction();
+
+            // --- 1️⃣ Get session info ---
+            var sessionCmd = new SqliteCommand(@"
+        SELECT CertificateName, Key, HRS, Provider, FilePath, IssueDate, ExpiryDate
+        FROM TrainingSessions
+        WHERE SessionID = @sid", conn, tx);
+            sessionCmd.Parameters.AddWithValue("@sid", sessionId);
+
+            using var sessionReader = sessionCmd.ExecuteReader();
+            if (!sessionReader.Read())
+            {
+                MessageBox.Show("Training session not found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            string certificateName = sessionReader["CertificateName"]?.ToString();
+            string key = sessionReader["Key"]?.ToString();
+            double? hrs = sessionReader["HRS"] == DBNull.Value ? null : Convert.ToDouble(sessionReader["HRS"]);
+            string provider = sessionReader["Provider"]?.ToString();
+            string filePath = sessionReader["FilePath"]?.ToString();
+
+            DateTime issueDate = sessionReader["IssueDate"] != DBNull.Value
+                ? DateTime.Parse(sessionReader["IssueDate"].ToString())
+                : DateTime.Today;
+
+            DateTime expiryDate = sessionReader["ExpiryDate"] != DBNull.Value
+                ? DateTime.Parse(sessionReader["ExpiryDate"].ToString())
+                : issueDate.AddYears(1); // fallback to 1 year if missing
+
+            sessionReader.Close();
+
+            // --- 2️⃣ Get participants ---
+            var partCmd = new SqliteCommand("SELECT EmployeeID FROM TrainingParticipants WHERE SessionID = @sid", conn, tx);
+            partCmd.Parameters.AddWithValue("@sid", sessionId);
+
+            List<int> participants = new();
+            using (var pr = partCmd.ExecuteReader())
+            {
+                while (pr.Read())
+                    participants.Add(pr.GetInt32(0));
+            }
+
+            if (participants.Count == 0)
+            {
+                MessageBox.Show("No participants found for this training session.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // --- 3️⃣ Insert into TrainingCertificates ---
+            foreach (int empId in participants)
+            {
+                var insertCmd = new SqliteCommand(@"
+            INSERT INTO TrainingCertificates 
+                (EmployeeID, CertificateName, Key, HRS, Provider, IssueDate, ExpiryDate, FilePath)
+            VALUES 
+                (@emp, @cert, @key, @hrs, @prov, @issue, @exp, @path)", conn, tx);
+
+                insertCmd.Parameters.AddWithValue("@emp", empId);
+                insertCmd.Parameters.AddWithValue("@cert", certificateName ?? (object)DBNull.Value);
+                insertCmd.Parameters.AddWithValue("@key", string.IsNullOrEmpty(key) ? (object)DBNull.Value : key);
+                insertCmd.Parameters.AddWithValue("@hrs", hrs ?? (object)DBNull.Value);
+                insertCmd.Parameters.AddWithValue("@prov", string.IsNullOrEmpty(provider) ? (object)DBNull.Value : provider);
+                insertCmd.Parameters.AddWithValue("@issue", issueDate.ToString("yyyy-MM-dd"));
+                insertCmd.Parameters.AddWithValue("@exp", expiryDate.ToString("yyyy-MM-dd"));
+                insertCmd.Parameters.AddWithValue("@path", string.IsNullOrEmpty(filePath) ? (object)DBNull.Value : filePath);
+
+                insertCmd.ExecuteNonQuery();
+            }
+
+            // --- 4️⃣ Update session status ---
+            var updateCmd = new SqliteCommand(
+                "UPDATE TrainingSessions SET Status = 'Completed' WHERE SessionID = @sid", conn, tx);
+            updateCmd.Parameters.AddWithValue("@sid", sessionId);
+            updateCmd.ExecuteNonQuery();
+
+            tx.Commit();
+
+            MessageBox.Show("Training session marked as completed and moved to Certificates.",
+                "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+
 
     }
 }
+

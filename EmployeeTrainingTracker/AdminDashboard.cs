@@ -20,12 +20,12 @@ namespace EmployeeTrainingTracker
         {
             InitializeComponent();
             LoadEmployees();
-            tabCertificates.Enabled = false;
             LoadEmployeeList();
-
+            LoadPlannedTraining();
+            tabCertificates.Enabled = false;
         }
 
-        // Load all users into DataGridView (Employees tab)
+        // Load data for each tab
         private void LoadEmployees()
         {
             using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
@@ -64,10 +64,8 @@ namespace EmployeeTrainingTracker
                     }
                 }
             }
-        }
+        } //Employees
 
-
-        // Load certificates for selected employee (Certificates tab)
         private void LoadCertificates(int employeeId)
         {
             DataTable table = CertificateService.GetCertificates(employeeId);
@@ -152,7 +150,67 @@ namespace EmployeeTrainingTracker
 
             // update buttons correctly
             UpdateCertificateButtons();
-        }
+        } //Certs
+
+        private void LoadEmployeeList()
+        {
+            lbEmployees.Items.Clear();
+            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
+            {
+                conn.Open();
+                var cmd = new SqliteCommand("SELECT EmployeeID, FullName FROM Employees ORDER BY FullName", conn);
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        lbEmployees.Items.Add(new EmployeeItem
+                        {
+                            Id = reader.GetInt32(0),
+                            Name = reader.GetString(1)
+                        });
+                    }
+                }
+            }
+        } //Reports
+
+        private void LoadPlannedTraining()
+        {
+            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+            conn.Open();
+
+            // No transaction needed for a simple SELECT
+            var cmd = new SqliteCommand(@"
+        SELECT 
+            ts.SessionID,
+            ts.CertificateName,
+            ts.Key,
+            ts.HRS,
+            ts.Provider,
+            ts.PlannedDate,
+            ts.Status,
+            ts.Notes,
+            GROUP_CONCAT(e.FullName, ', ') AS Participants
+        FROM TrainingSessions ts
+        LEFT JOIN TrainingParticipants tp ON ts.SessionID = tp.SessionID
+        LEFT JOIN Employees e ON tp.EmployeeID = e.EmployeeID
+        GROUP BY ts.SessionID
+        ORDER BY ts.PlannedDate;", conn);
+
+            DataTable table = new DataTable();
+            using (var reader = cmd.ExecuteReader())
+            {
+                table.Load(reader);
+            }
+
+            dgvPlannedTraining.DataSource = table;
+
+            // Optional: nicer UI setup
+            dgvPlannedTraining.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+
+            if (dgvPlannedTraining.Columns.Contains("SessionID"))
+                dgvPlannedTraining.Columns["SessionID"].Visible = false;
+        } //Planning
+
 
 
         // CRUD for certificates
@@ -162,9 +220,9 @@ namespace EmployeeTrainingTracker
 
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
             string name = txtCertName.Text.Trim();
-            string key = txtKey.Text.Trim();
-            string hrsText = txtHrs.Text.Trim();
-            string provider = txtProvider.Text.Trim();
+            string key = txtKeyPlan.Text.Trim();
+            string hrsText = txtHrsPlan.Text.Trim();
+            string provider = txtProviderPlan.Text.Trim();
             DateTime issue = dtpIssueDate.Value;
             DateTime expiry = dtpExpiryDate.Value;
             string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim()) ? null : txtFilePath.Text.Trim('"').Trim();
@@ -201,9 +259,9 @@ namespace EmployeeTrainingTracker
 
             int certId = Convert.ToInt32(dgvCertificates.CurrentRow.Cells["CertificateID"].Value);
             string name = txtCertName.Text.Trim();
-            string key = txtKey.Text.Trim();
-            string hrsText = txtHrs.Text.Trim();
-            string provider = txtProvider.Text.Trim();
+            string key = txtKeyPlan.Text.Trim();
+            string hrsText = txtHrsPlan.Text.Trim();
+            string provider = txtProviderPlan.Text.Trim();
             DateTime issue = dtpIssueDate.Value;
             DateTime expiry = dtpExpiryDate.Value;
             string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim())
@@ -545,7 +603,6 @@ namespace EmployeeTrainingTracker
             txtFilePath.Text = rowView["FilePath"]?.ToString() ?? "";
         }
 
-
         private void cmbCurrentEmployee_SelectedIndexChanged(object sender, EventArgs e)
         {
             if (cmbCurrentEmployee.SelectedItem == null) return;
@@ -555,6 +612,54 @@ namespace EmployeeTrainingTracker
                 int empId = Convert.ToInt32(drv["EmployeeID"]);
                 LoadCertificates(empId);
                 SyncDgvSelection(empId);
+            }
+        }
+
+        private void dgvPlannedTraining_SelectionChanged(object sender, EventArgs e)
+        {
+            if (dgvPlannedTraining.CurrentRow == null || dgvPlannedTraining.CurrentRow.IsNewRow)
+            {
+                txtCertificateNamePlan.Text = "";
+                txtKeyPlan.Text = "";
+                txtHrsPlan.Text = "";
+                txtProviderPlan.Text = "";
+                dtpPlannedDate.Value = DateTime.Today;
+                textNotesPlan.Text = "";
+                textStatusPlan.Text = "";
+                clbEmployeesPlan.ClearSelected();
+                return;
+            }
+
+            if (dgvPlannedTraining.CurrentRow.DataBoundItem is not DataRowView rowView)
+                return;
+
+            txtCertificateNamePlan.Text = rowView["CertificateName"]?.ToString() ?? "";
+            txtKeyPlan.Text = rowView["Key"]?.ToString() ?? "";
+            txtHrsPlan.Text = rowView["HRS"]?.ToString() ?? "";
+            txtProviderPlan.Text = rowView["Provider"]?.ToString() ?? "";
+            textNotesPlan.Text = rowView["Notes"]?.ToString() ?? "";
+            textStatusPlan.Text = rowView["Status"]?.ToString() ?? "";
+
+            if (DateTime.TryParse(rowView["PlannedDate"]?.ToString(), out var planned))
+                dtpPlannedDate.Value = planned;
+            else
+                dtpPlannedDate.Value = DateTime.Today;
+
+            // Populate participants CheckedListBox
+            clbEmployeesPlan.ClearSelected();
+            if (rowView["Participants"] != DBNull.Value)
+            {
+                string[] participants = rowView["Participants"].ToString().Split(',', StringSplitOptions.RemoveEmptyEntries);
+                for (int i = 0; i < clbEmployeesPlan.Items.Count; i++)
+                {
+                    if (clbEmployeesPlan.Items[i] is EmployeeItem emp)
+                    {
+                        if (participants.Any(p => p.Trim() == emp.Name))
+                            clbEmployeesPlan.SetItemChecked(i, true);
+                        else
+                            clbEmployeesPlan.SetItemChecked(i, false);
+                    }
+                }
             }
         }
 
@@ -631,6 +736,58 @@ namespace EmployeeTrainingTracker
             }
         }
 
+
+        // Helper Functions
+        private string EscapeCsvValue(string value)
+        {
+            if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
+            {
+                value = value.Replace("\"", "\"\"");
+                value = $"\"{value}\"";
+            }
+            return value;
+        }
+
+        private class EmployeeItem
+        {
+            public int Id { get; set; }
+            public string Name { get; set; }
+            public override string ToString() => Name;
+        }
+
+        private List<int> GetSelectedEmployees() //For Planning tab - Employees CLB
+        {
+            return clbEmployeesPlan.CheckedItems
+                .Cast<EmployeeItem>() // your EmployeeItem class with Id property
+                .Select(e => e.Id)
+                .ToList();
+        }
+
+
+        //Reports
+        private void btnGenerateReport_Click(object sender, EventArgs e)
+        {
+            string reportType = cmbReportType.SelectedItem?.ToString() ?? "";
+            DateTime? start = (reportType == "Custom Range") ? dtpStart.Value : null;
+            DateTime? end = (reportType == "Custom Range") ? dtpEnd.Value : null;
+
+            // Get selected employee IDs
+            var selectedEmployees = lbEmployees.SelectedItems
+                .Cast<EmployeeItem>()
+                .Select(x => x.Id)
+                .ToList();
+
+            try
+            {
+                DataTable results = ReportService.GenerateReport(reportType, start, end, selectedEmployees);
+                dgvReportResults.DataSource = results;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error generating report: {ex.Message}");
+            }
+        }
+
         private void btnExportCsv_Click(object sender, EventArgs e)
         {
             if (dgvReportResults.Rows.Count == 0)
@@ -679,68 +836,6 @@ namespace EmployeeTrainingTracker
             }
         }
 
-        // Escape values containing commas, quotes, or newlines
-        private string EscapeCsvValue(string value)
-        {
-            if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
-            {
-                value = value.Replace("\"", "\"\"");
-                value = $"\"{value}\"";
-            }
-            return value;
-        }
-
-        //Reports
-        private void btnGenerateReport_Click(object sender, EventArgs e)
-        {
-            string reportType = cmbReportType.SelectedItem?.ToString() ?? "";
-            DateTime? start = (reportType == "Custom Range") ? dtpStart.Value : null;
-            DateTime? end = (reportType == "Custom Range") ? dtpEnd.Value : null;
-
-            // Get selected employee IDs
-            var selectedEmployees = lbEmployees.SelectedItems
-                .Cast<EmployeeItem>()
-                .Select(x => x.Id)
-                .ToList();
-
-            try
-            {
-                DataTable results = ReportService.GenerateReport(reportType, start, end, selectedEmployees);
-                dgvReportResults.DataSource = results;
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error generating report: {ex.Message}");
-            }
-        }
-
-        private void LoadEmployeeList()
-        {
-            lbEmployees.Items.Clear();
-            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
-            {
-                conn.Open();
-                var cmd = new SqliteCommand("SELECT EmployeeID, FullName FROM Employees ORDER BY FullName", conn);
-                using (var reader = cmd.ExecuteReader())
-                {
-                    while (reader.Read())
-                    {
-                        lbEmployees.Items.Add(new EmployeeItem
-                        {
-                            Id = reader.GetInt32(0),
-                            Name = reader.GetString(1)
-                        });
-                    }
-                }
-            }
-        }
-
-        private class EmployeeItem
-        {
-            public int Id { get; set; }
-            public string Name { get; set; }
-            public override string ToString() => Name;
-        }
 
         //Planning
         private void btnCompleteTraining_Click(object sender, EventArgs e)
@@ -748,69 +843,61 @@ namespace EmployeeTrainingTracker
             if (dgvPlannedTraining.CurrentRow != null)
             {
                 int sessionId = Convert.ToInt32(dgvPlannedTraining.CurrentRow.Cells["SessionID"].Value);
-                PlannedTrainingService.CompleteTrainingSession(sessionId, DateTime.Today, DateTime.Today.AddYears(3));
+                PlannedTrainingService.CompleteTrainingSession(sessionId);
                 LoadPlannedTraining(); // refresh grid
             }
         }
 
         private void btnAddSession_Click(object sender, EventArgs e)
         {
-            var employees = GetSelectedEmployees(); // implement multi-select to return List<int> of EmployeeIDs
-
+            var selectedEmployeeIds = GetSelectedEmployees(); // List<int> from CheckedListBox
             PlannedTrainingService.AddPlannedSession(
-                txtCertificateName.Text,
-                txtKey.Text,
-                double.TryParse(txtHrs.Text, out double hrs) ? hrs : (double?)null,
-                txtProvider.Text,
+                txtCertificateNamePlan.Text,
+                txtKeyPlan.Text,
+                double.TryParse(txtHrsPlan.Text, out double hrs) ? hrs : (double?)null,
+                txtProviderPlan.Text,
                 dtpPlannedDate.Value,
-                dtpExpiryDate.Value,  // now using expiry date from DateTimePicker
-                txtFilePath.Text,
-                employees
+                textNotesPlan.Text,
+                selectedEmployeeIds
             );
 
             LoadPlannedTraining(); // refresh DGV
         }
 
-        private void PlanningTabForm_Load(object sender, EventArgs e)
+        private void btnEditSession_Click(object sender, EventArgs e)
         {
+            if (dgvPlannedTraining.CurrentRow == null) return;
+
+            int sessionId = Convert.ToInt32(dgvPlannedTraining.CurrentRow.Cells["SessionID"].Value);
+            var selectedEmployeeIds = GetSelectedEmployees();
+
+            PlannedTrainingService.UpdatePlannedSession(
+                sessionId,
+                txtCertificateNamePlan.Text,
+                txtKeyPlan.Text,
+                double.TryParse(txtHrsPlan.Text, out double hrs) ? hrs : (double?)null,
+                txtProviderPlan.Text,
+                dtpPlannedDate.Value,
+                textNotesPlan.Text,
+                selectedEmployeeIds
+            );
+
             LoadPlannedTraining();
-            LoadPlannedEmployees();
         }
 
-        private void LoadPlannedTraining()
+        private void btnDeleteSession_Click(object sender, EventArgs e)
         {
-            dgvPlannedTraining.DataSource = PlannedTrainingService.GetPlannedTraining();
+            if (dgvPlannedTraining.CurrentRow == null) return;
+
+            int sessionId = Convert.ToInt32(dgvPlannedTraining.CurrentRow.Cells["SessionID"].Value);
+
+            var confirm = MessageBox.Show("Are you sure you want to delete this session?", "Confirm", MessageBoxButtons.YesNo);
+            if (confirm == DialogResult.No) return;
+
+            PlannedTrainingService.DeletePlannedSession(sessionId);
+            LoadPlannedTraining();
         }
 
-        private void LoadPlannedEmployees()
-        {
-            string query = "SELECT EmployeeID, FullName FROM Employees ORDER BY FullName";
-
-            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
-            conn.Open();
-            using var cmd = new SqliteCommand(query, conn);
-            using var reader = cmd.ExecuteReader();
-
-            clbEmployees.Items.Clear();
-            while (reader.Read())
-            {
-                clbEmployees.Items.Add(new EmployeeItem
-                {
-                    Id = reader.GetInt32(0),
-                    Name = reader.GetString(1)
-                });
-            }
-        }
-
-        private List<int> GetSelectedEmployees()
-        {
-            return clbEmployees.CheckedItems
-                .Cast<EmployeeItem>()
-                .Select(emp => emp.Id)
-                .ToList();
-        }
-
-       
     }
 
 }
