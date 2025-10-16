@@ -176,7 +176,6 @@ public static class LegacyExcelService
         }
     }
 
-
     private static string GetEmployeeName(int employeeId)
     {
         using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);

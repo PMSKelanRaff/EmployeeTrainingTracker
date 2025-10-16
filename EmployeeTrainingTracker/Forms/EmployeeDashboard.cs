@@ -2,6 +2,7 @@
 using System.Data;
 using Microsoft.Data.Sqlite;
 using System.Windows.Forms;
+using EmployeeTrainingTracker.Utilities;
 
 namespace EmployeeTrainingTracker
 {

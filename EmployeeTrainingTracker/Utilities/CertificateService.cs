@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 
-namespace EmployeeTrainingTracker
+namespace EmployeeTrainingTracker.Utilities
 {
     public static class CertificateService
     {
@@ -39,12 +39,12 @@ namespace EmployeeTrainingTracker
 
             cmd.Parameters.AddWithValue("@eid", employeeId);
             cmd.Parameters.AddWithValue("@name", certName);
-            cmd.Parameters.AddWithValue("@key", string.IsNullOrEmpty(key) ? DBNull.Value : (object)key);
+            cmd.Parameters.AddWithValue("@key", string.IsNullOrEmpty(key) ? DBNull.Value : key);
             cmd.Parameters.AddWithValue("@hrs", cpdHrs);
-            cmd.Parameters.AddWithValue("@provider", string.IsNullOrEmpty(provider) ? DBNull.Value : (object)provider);
+            cmd.Parameters.AddWithValue("@provider", string.IsNullOrEmpty(provider) ? DBNull.Value : provider);
             cmd.Parameters.AddWithValue("@issue", issueDate.ToString("yyyy-MM-dd"));
             cmd.Parameters.AddWithValue("@expiry", expiryDate.ToString("yyyy-MM-dd"));
-            cmd.Parameters.AddWithValue("@file", string.IsNullOrEmpty(filePath) ? DBNull.Value : (object)filePath);
+            cmd.Parameters.AddWithValue("@file", string.IsNullOrEmpty(filePath) ? DBNull.Value : filePath);
 
             cmd.ExecuteNonQuery();
         }
@@ -67,9 +67,9 @@ namespace EmployeeTrainingTracker
         WHERE CertificateID = @id";
 
             cmd.Parameters.AddWithValue("@name", name);
-            cmd.Parameters.AddWithValue("@key", string.IsNullOrEmpty(key) ? DBNull.Value : (object)key);
+            cmd.Parameters.AddWithValue("@key", string.IsNullOrEmpty(key) ? DBNull.Value : key);
             cmd.Parameters.AddWithValue("@hrs", cpdHrs);
-            cmd.Parameters.AddWithValue("@provider", string.IsNullOrEmpty(provider) ? DBNull.Value : (object)provider);
+            cmd.Parameters.AddWithValue("@provider", string.IsNullOrEmpty(provider) ? DBNull.Value : provider);
             cmd.Parameters.AddWithValue("@issue", issue.Date.ToString("yyyy-MM-dd"));
             cmd.Parameters.AddWithValue("@expiry", expiry.Date.ToString("yyyy-MM-dd"));
             cmd.Parameters.AddWithValue("@file", (object?)filePath ?? DBNull.Value);

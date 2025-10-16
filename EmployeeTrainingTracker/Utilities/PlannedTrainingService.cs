@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 
-namespace EmployeeTrainingTracker
+namespace EmployeeTrainingTracker.Utilities
 {
     internal class PlannedTrainingService
     {
@@ -196,12 +196,12 @@ namespace EmployeeTrainingTracker
 
                 insertCmd.Parameters.AddWithValue("@emp", empId);
                 insertCmd.Parameters.AddWithValue("@cert", certificateName ?? (object)DBNull.Value);
-                insertCmd.Parameters.AddWithValue("@key", string.IsNullOrEmpty(key) ? (object)DBNull.Value : key);
+                insertCmd.Parameters.AddWithValue("@key", string.IsNullOrEmpty(key) ? DBNull.Value : key);
                 insertCmd.Parameters.AddWithValue("@hrs", hrs ?? (object)DBNull.Value);
-                insertCmd.Parameters.AddWithValue("@prov", string.IsNullOrEmpty(provider) ? (object)DBNull.Value : provider);
+                insertCmd.Parameters.AddWithValue("@prov", string.IsNullOrEmpty(provider) ? DBNull.Value : provider);
                 insertCmd.Parameters.AddWithValue("@issue", issueDate.ToString("yyyy-MM-dd"));
                 insertCmd.Parameters.AddWithValue("@exp", expiryDate.ToString("yyyy-MM-dd"));
-                insertCmd.Parameters.AddWithValue("@path", string.IsNullOrEmpty(filePath) ? (object)DBNull.Value : filePath);
+                insertCmd.Parameters.AddWithValue("@path", string.IsNullOrEmpty(filePath) ? DBNull.Value : filePath);
 
                 insertCmd.ExecuteNonQuery();
             }

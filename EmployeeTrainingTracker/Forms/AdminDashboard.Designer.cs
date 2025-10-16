@@ -101,6 +101,7 @@ namespace EmployeeTrainingTracker
             btnEditSession = new Button();
             btnAddSession = new Button();
             dgvPlannedTraining = new DataGridView();
+            label8 = new Label();
             ((System.ComponentModel.ISupportInitialize)dgvEmployees).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvCertificates).BeginInit();
             tabControl.SuspendLayout();
@@ -523,6 +524,7 @@ namespace EmployeeTrainingTracker
             // 
             // Reports
             // 
+            Reports.Controls.Add(label8);
             Reports.Controls.Add(lbEmployees);
             Reports.Controls.Add(btnExportCsv);
             Reports.Controls.Add(btnGenerateReport);
@@ -871,6 +873,16 @@ namespace EmployeeTrainingTracker
             dgvPlannedTraining.TabIndex = 3;
             dgvPlannedTraining.SelectionChanged += dgvPlannedTraining_SelectionChanged;
             // 
+            // label8
+            // 
+            label8.Anchor = AnchorStyles.Right;
+            label8.AutoSize = true;
+            label8.Location = new Point(649, 247);
+            label8.Name = "label8";
+            label8.Size = new Size(70, 15);
+            label8.TabIndex = 51;
+            label8.Text = "Employees :";
+            // 
             // AdminDashboard
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -971,5 +983,6 @@ namespace EmployeeTrainingTracker
         private Label label2;
         private Button btnCompleteTraining;
         private ComboBox textStatusPlan;
+        private Label label8;
     }
 }

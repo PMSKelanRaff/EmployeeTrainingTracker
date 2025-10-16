@@ -3,6 +3,7 @@ using System.Data;
 using Microsoft.Data.Sqlite;
 using System.Windows.Forms;
 using System.Text;
+using EmployeeTrainingTracker.Utilities;
 
 namespace EmployeeTrainingTracker
 {
@@ -24,6 +25,7 @@ namespace EmployeeTrainingTracker
             LoadPlannedTraining();
             tabCertificates.Enabled = false;
         }
+
 
         // Load data for each tab
         private void LoadEmployees()
@@ -517,6 +519,141 @@ namespace EmployeeTrainingTracker
         }
 
 
+        //CRUD for Planning
+        private void btnAddSession_Click(object sender, EventArgs e)
+        {
+            var selectedEmployeeIds = GetSelectedEmployees(); // List<int> from CheckedListBox
+            PlannedTrainingService.AddPlannedSession(
+                txtCertificateNamePlan.Text,
+                txtKeyPlan.Text,
+                double.TryParse(txtHrsPlan.Text, out double hrs) ? hrs : (double?)null,
+                txtProviderPlan.Text,
+                dtpPlannedDate.Value,
+                textNotesPlan.Text,
+                selectedEmployeeIds
+            );
+
+            LoadPlannedTraining(); // refresh DGV
+        }
+
+        private void btnEditSession_Click(object sender, EventArgs e)
+        {
+            if (dgvPlannedTraining.CurrentRow == null) return;
+
+            int sessionId = Convert.ToInt32(dgvPlannedTraining.CurrentRow.Cells["SessionID"].Value);
+            var selectedEmployeeIds = GetSelectedEmployees();
+
+            PlannedTrainingService.UpdatePlannedSession(
+                sessionId,
+                txtCertificateNamePlan.Text,
+                txtKeyPlan.Text,
+                double.TryParse(txtHrsPlan.Text, out double hrs) ? hrs : (double?)null,
+                txtProviderPlan.Text,
+                dtpPlannedDate.Value,
+                textNotesPlan.Text,
+                selectedEmployeeIds
+            );
+
+            LoadPlannedTraining();
+        }
+
+        private void btnDeleteSession_Click(object sender, EventArgs e)
+        {
+            if (dgvPlannedTraining.CurrentRow == null) return;
+
+            int sessionId = Convert.ToInt32(dgvPlannedTraining.CurrentRow.Cells["SessionID"].Value);
+
+            var confirm = MessageBox.Show("Are you sure you want to delete this session?", "Confirm", MessageBoxButtons.YesNo);
+            if (confirm == DialogResult.No) return;
+
+            PlannedTrainingService.DeletePlannedSession(sessionId);
+            LoadPlannedTraining();
+        }
+
+        private void btnCompleteTraining_Click(object sender, EventArgs e)
+        {
+            if (dgvPlannedTraining.CurrentRow != null)
+            {
+                int sessionId = Convert.ToInt32(dgvPlannedTraining.CurrentRow.Cells["SessionID"].Value);
+                PlannedTrainingService.CompleteTrainingSession(sessionId);
+                LoadPlannedTraining(); // refresh grid
+            }
+        }
+
+
+        // Reporting and Exports
+        private void btnGenerateReport_Click(object sender, EventArgs e)
+        {
+            string reportType = cmbReportType.SelectedItem?.ToString() ?? "";
+            DateTime? start = (reportType == "Custom Range") ? dtpStart.Value : null;
+            DateTime? end = (reportType == "Custom Range") ? dtpEnd.Value : null;
+
+            // Get selected employee IDs
+            var selectedEmployees = lbEmployees.SelectedItems
+                .Cast<EmployeeItem>()
+                .Select(x => x.Id)
+                .ToList();
+
+            try
+            {
+                DataTable results = ReportService.GenerateReport(reportType, start, end, selectedEmployees);
+                dgvReportResults.DataSource = results;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error generating report: {ex.Message}");
+            }
+        }
+
+        private void btnExportCsv_Click(object sender, EventArgs e)
+        {
+            if (dgvReportResults.Rows.Count == 0)
+            {
+                MessageBox.Show("No data to export.");
+                return;
+            }
+
+            using (SaveFileDialog sfd = new SaveFileDialog())
+            {
+                sfd.Filter = "CSV files (*.csv)|*.csv";
+                sfd.FileName = $"Report_{DateTime.Now:yyyyMMdd}.csv";
+
+                if (sfd.ShowDialog() != DialogResult.OK) return;
+
+                try
+                {
+                    StringBuilder sb = new StringBuilder();
+
+                    // Header row
+                    var columnNames = dgvReportResults.Columns
+                                       .Cast<DataGridViewColumn>()
+                                       .Where(c => c.Visible)
+                                       .Select(c => c.HeaderText);
+                    sb.AppendLine(string.Join(",", columnNames));
+
+                    // Data rows
+                    foreach (DataGridViewRow row in dgvReportResults.Rows)
+                    {
+                        if (!row.IsNewRow)
+                        {
+                            var cells = row.Cells.Cast<DataGridViewCell>()
+                                           .Where(c => c.OwningColumn.Visible)
+                                           .Select(c => EscapeCsvValue(c.Value?.ToString() ?? ""));
+                            sb.AppendLine(string.Join(",", cells));
+                        }
+                    }
+
+                    System.IO.File.WriteAllText(sfd.FileName, sb.ToString());
+                    MessageBox.Show("CSV exported successfully!");
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error exporting CSV: {ex.Message}");
+                }
+            }
+        }
+
+
         // Events
         private void dgvEmployees_SelectionChanged(object sender, EventArgs e)
         {
@@ -763,140 +900,6 @@ namespace EmployeeTrainingTracker
                 .ToList();
         }
 
-
-        //Reports
-        private void btnGenerateReport_Click(object sender, EventArgs e)
-        {
-            string reportType = cmbReportType.SelectedItem?.ToString() ?? "";
-            DateTime? start = (reportType == "Custom Range") ? dtpStart.Value : null;
-            DateTime? end = (reportType == "Custom Range") ? dtpEnd.Value : null;
-
-            // Get selected employee IDs
-            var selectedEmployees = lbEmployees.SelectedItems
-                .Cast<EmployeeItem>()
-                .Select(x => x.Id)
-                .ToList();
-
-            try
-            {
-                DataTable results = ReportService.GenerateReport(reportType, start, end, selectedEmployees);
-                dgvReportResults.DataSource = results;
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error generating report: {ex.Message}");
-            }
-        }
-
-        private void btnExportCsv_Click(object sender, EventArgs e)
-        {
-            if (dgvReportResults.Rows.Count == 0)
-            {
-                MessageBox.Show("No data to export.");
-                return;
-            }
-
-            using (SaveFileDialog sfd = new SaveFileDialog())
-            {
-                sfd.Filter = "CSV files (*.csv)|*.csv";
-                sfd.FileName = $"Report_{DateTime.Now:yyyyMMdd}.csv";
-
-                if (sfd.ShowDialog() != DialogResult.OK) return;
-
-                try
-                {
-                    StringBuilder sb = new StringBuilder();
-
-                    // Header row
-                    var columnNames = dgvReportResults.Columns
-                                       .Cast<DataGridViewColumn>()
-                                       .Where(c => c.Visible)
-                                       .Select(c => c.HeaderText);
-                    sb.AppendLine(string.Join(",", columnNames));
-
-                    // Data rows
-                    foreach (DataGridViewRow row in dgvReportResults.Rows)
-                    {
-                        if (!row.IsNewRow)
-                        {
-                            var cells = row.Cells.Cast<DataGridViewCell>()
-                                           .Where(c => c.OwningColumn.Visible)
-                                           .Select(c => EscapeCsvValue(c.Value?.ToString() ?? ""));
-                            sb.AppendLine(string.Join(",", cells));
-                        }
-                    }
-
-                    System.IO.File.WriteAllText(sfd.FileName, sb.ToString());
-                    MessageBox.Show("CSV exported successfully!");
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Error exporting CSV: {ex.Message}");
-                }
-            }
-        }
-
-
-        //Planning
-        private void btnCompleteTraining_Click(object sender, EventArgs e)
-        {
-            if (dgvPlannedTraining.CurrentRow != null)
-            {
-                int sessionId = Convert.ToInt32(dgvPlannedTraining.CurrentRow.Cells["SessionID"].Value);
-                PlannedTrainingService.CompleteTrainingSession(sessionId);
-                LoadPlannedTraining(); // refresh grid
-            }
-        }
-
-        private void btnAddSession_Click(object sender, EventArgs e)
-        {
-            var selectedEmployeeIds = GetSelectedEmployees(); // List<int> from CheckedListBox
-            PlannedTrainingService.AddPlannedSession(
-                txtCertificateNamePlan.Text,
-                txtKeyPlan.Text,
-                double.TryParse(txtHrsPlan.Text, out double hrs) ? hrs : (double?)null,
-                txtProviderPlan.Text,
-                dtpPlannedDate.Value,
-                textNotesPlan.Text,
-                selectedEmployeeIds
-            );
-
-            LoadPlannedTraining(); // refresh DGV
-        }
-
-        private void btnEditSession_Click(object sender, EventArgs e)
-        {
-            if (dgvPlannedTraining.CurrentRow == null) return;
-
-            int sessionId = Convert.ToInt32(dgvPlannedTraining.CurrentRow.Cells["SessionID"].Value);
-            var selectedEmployeeIds = GetSelectedEmployees();
-
-            PlannedTrainingService.UpdatePlannedSession(
-                sessionId,
-                txtCertificateNamePlan.Text,
-                txtKeyPlan.Text,
-                double.TryParse(txtHrsPlan.Text, out double hrs) ? hrs : (double?)null,
-                txtProviderPlan.Text,
-                dtpPlannedDate.Value,
-                textNotesPlan.Text,
-                selectedEmployeeIds
-            );
-
-            LoadPlannedTraining();
-        }
-
-        private void btnDeleteSession_Click(object sender, EventArgs e)
-        {
-            if (dgvPlannedTraining.CurrentRow == null) return;
-
-            int sessionId = Convert.ToInt32(dgvPlannedTraining.CurrentRow.Cells["SessionID"].Value);
-
-            var confirm = MessageBox.Show("Are you sure you want to delete this session?", "Confirm", MessageBoxButtons.YesNo);
-            if (confirm == DialogResult.No) return;
-
-            PlannedTrainingService.DeletePlannedSession(sessionId);
-            LoadPlannedTraining();
-        }
 
     }
 
