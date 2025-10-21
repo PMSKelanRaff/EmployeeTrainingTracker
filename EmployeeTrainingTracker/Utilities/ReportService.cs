@@ -24,17 +24,34 @@ public static class ReportService
         var parameters = new List<SqliteParameter>();
 
         // 🔹 Report type filters
-        if (reportType == "Current Year")
+        if (reportType == "Current Year (Valid)")
         {
             query += " AND date(tc.IssueDate) <= date('now') AND date(tc.ExpiryDate) >= date('now')";
         }
-        else if (reportType == "Out Of Date")
+        else if (reportType == "Out Of Date (Invalid)")
         {
             query += " AND date(tc.ExpiryDate) < date('now')";
         }
-        else if (reportType == "Custom Range" && start.HasValue && end.HasValue)
+        else if (reportType == "Custom Range (Valid)" && start.HasValue && end.HasValue)
         {
-            query += " AND date(tc.ExpiryDate) BETWEEN @start AND @end";
+            // Certificates that were valid at some point within the selected date range
+            query += @"
+            AND (
+                (date(tc.IssueDate) <= date(@end)) 
+                AND (date(tc.ExpiryDate) >= date(@start))
+            )
+            AND date(tc.ExpiryDate) >= date('now')";
+
+            parameters.Add(new SqliteParameter("@start", start.Value.ToString("yyyy-MM-dd")));
+            parameters.Add(new SqliteParameter("@end", end.Value.ToString("yyyy-MM-dd")));
+        }
+        else if (reportType == "Custom Range (Invalid)" && start.HasValue && end.HasValue)
+        {
+            // Certificates that expired within the selected date range
+            query += @"
+            AND date(tc.ExpiryDate) BETWEEN date(@start) AND date(@end)
+            AND date(tc.ExpiryDate) < date('now')";
+
             parameters.Add(new SqliteParameter("@start", start.Value.ToString("yyyy-MM-dd")));
             parameters.Add(new SqliteParameter("@end", end.Value.ToString("yyyy-MM-dd")));
         }

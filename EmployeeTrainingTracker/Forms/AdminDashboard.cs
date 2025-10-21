@@ -24,9 +24,10 @@ namespace EmployeeTrainingTracker
             LoadEmployeeList();
             LoadPlannedTraining();
             tabCertificates.Enabled = false;
+            LoadReportSettings();
         }
 
-
+       
         // Load data for each tab
         private void LoadEmployees()
         {
@@ -585,8 +586,9 @@ namespace EmployeeTrainingTracker
         private void btnGenerateReport_Click(object sender, EventArgs e)
         {
             string reportType = cmbReportType.SelectedItem?.ToString() ?? "";
-            DateTime? start = (reportType == "Custom Range") ? dtpStart.Value : null;
-            DateTime? end = (reportType == "Custom Range") ? dtpEnd.Value : null;
+            bool isCustomRange = reportType.Contains("Custom Range");
+            DateTime? start = isCustomRange ? dtpStart.Value.Date : null;
+            DateTime? end = isCustomRange ? dtpEnd.Value.Date : null;
 
             // Get selected employee IDs
             var selectedEmployees = lbEmployees.SelectedItems
@@ -651,6 +653,30 @@ namespace EmployeeTrainingTracker
                     MessageBox.Show($"Error exporting CSV: {ex.Message}");
                 }
             }
+        }
+
+        private void cmbReportType_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            string reportType = cmbReportType.SelectedItem?.ToString() ?? "";
+            bool isCustomRange = reportType.Contains("Custom Range");
+
+            dtpStart.Enabled = isCustomRange;
+            dtpEnd.Enabled = isCustomRange;
+
+            // Optional: visually reset the pickers when disabled
+            if (!isCustomRange)
+            {
+                dtpStart.Value = DateTime.Today;
+                dtpEnd.Value = DateTime.Today;
+            }
+        }
+
+        private void LoadReportSettings()
+        {
+            dtpStart.Enabled = false;
+            dtpEnd.Enabled = false;
+            dtpStart.MinDate = new DateTime(2000, 1, 1);
+            dtpEnd.MaxDate = DateTime.Today;
         }
 
 

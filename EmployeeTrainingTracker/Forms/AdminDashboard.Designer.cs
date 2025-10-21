@@ -645,11 +645,12 @@ namespace EmployeeTrainingTracker
             // 
             cmbReportType.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             cmbReportType.FormattingEnabled = true;
-            cmbReportType.Items.AddRange(new object[] { "Current Year", "Out Of Date", "Custom Range" });
+            cmbReportType.Items.AddRange(new object[] { "Current Year (Valid)", "Custom Range (Valid)", "Out Of Date (Invalid)", "Custom Range (Invalid)" });
             cmbReportType.Location = new Point(649, 24);
             cmbReportType.Name = "cmbReportType";
             cmbReportType.Size = new Size(121, 23);
             cmbReportType.TabIndex = 0;
+            cmbReportType.SelectedIndexChanged += cmbReportType_SelectedIndexChanged;
             // 
             // tabPage1
             // 
