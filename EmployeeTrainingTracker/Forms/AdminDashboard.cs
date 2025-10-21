@@ -25,9 +25,16 @@ namespace EmployeeTrainingTracker
             LoadPlannedTraining();
             tabCertificates.Enabled = false;
             LoadReportSettings();
+
+            var plannedSessions = PlannedTrainingService.GetPlannedTraining();
+            if (plannedSessions.Rows.Count > 0)
+            {
+                int sessionId = Convert.ToInt32(plannedSessions.Rows[0]["SessionID"]);
+                LoadEmployeesForPlanning(sessionId);
+            }
         }
 
-       
+
         // Load data for each tab
         private void LoadEmployees()
         {
@@ -213,7 +220,6 @@ namespace EmployeeTrainingTracker
             if (dgvPlannedTraining.Columns.Contains("SessionID"))
                 dgvPlannedTraining.Columns["SessionID"].Visible = false;
         } //Planning
-
 
 
         // CRUD for certificates
@@ -807,50 +813,21 @@ namespace EmployeeTrainingTracker
 
         private void dgvPlannedTraining_SelectionChanged(object sender, EventArgs e)
         {
-            if (dgvPlannedTraining.CurrentRow == null || dgvPlannedTraining.CurrentRow.IsNewRow)
-            {
-                txtCertificateNamePlan.Text = "";
-                txtKeyPlan.Text = "";
-                txtHrsPlan.Text = "";
-                txtProviderPlan.Text = "";
-                dtpPlannedDate.Value = DateTime.Today;
-                textNotesPlan.Text = "";
-                textStatusPlan.Text = "";
-                clbEmployeesPlan.ClearSelected();
-                return;
-            }
-
-            if (dgvPlannedTraining.CurrentRow.DataBoundItem is not DataRowView rowView)
+            if (dgvPlannedTraining.CurrentRow?.DataBoundItem is not DataRowView rowView)
                 return;
 
+            // Fill textboxes with session info
             txtCertificateNamePlan.Text = rowView["CertificateName"]?.ToString() ?? "";
             txtKeyPlan.Text = rowView["Key"]?.ToString() ?? "";
             txtHrsPlan.Text = rowView["HRS"]?.ToString() ?? "";
             txtProviderPlan.Text = rowView["Provider"]?.ToString() ?? "";
             textNotesPlan.Text = rowView["Notes"]?.ToString() ?? "";
             textStatusPlan.Text = rowView["Status"]?.ToString() ?? "";
+            dtpPlannedDate.Value = DateTime.TryParse(rowView["PlannedDate"]?.ToString(), out var d) ? d : DateTime.Today;
 
-            if (DateTime.TryParse(rowView["PlannedDate"]?.ToString(), out var planned))
-                dtpPlannedDate.Value = planned;
-            else
-                dtpPlannedDate.Value = DateTime.Today;
-
-            // Populate participants CheckedListBox
-            clbEmployeesPlan.ClearSelected();
-            if (rowView["Participants"] != DBNull.Value)
-            {
-                string[] participants = rowView["Participants"].ToString().Split(',', StringSplitOptions.RemoveEmptyEntries);
-                for (int i = 0; i < clbEmployeesPlan.Items.Count; i++)
-                {
-                    if (clbEmployeesPlan.Items[i] is EmployeeItem emp)
-                    {
-                        if (participants.Any(p => p.Trim() == emp.Name))
-                            clbEmployeesPlan.SetItemChecked(i, true);
-                        else
-                            clbEmployeesPlan.SetItemChecked(i, false);
-                    }
-                }
-            }
+            // Populate CLB with participants
+            int sessionId = Convert.ToInt32(rowView["SessionID"]);
+            LoadEmployeesForPlanning(sessionId);
         }
 
         private void dgvCertificates_CellContentClick(object sender, DataGridViewCellEventArgs e)
@@ -926,7 +903,7 @@ namespace EmployeeTrainingTracker
             }
         }
 
-
+      
         // Helper Functions
         private string EscapeCsvValue(string value)
         {
@@ -938,13 +915,6 @@ namespace EmployeeTrainingTracker
             return value;
         }
 
-        private class EmployeeItem
-        {
-            public int Id { get; set; }
-            public string Name { get; set; }
-            public override string ToString() => Name;
-        }
-
         private List<int> GetSelectedEmployees() //For Planning tab - Employees CLB
         {
             return clbEmployeesPlan.CheckedItems
@@ -953,6 +923,19 @@ namespace EmployeeTrainingTracker
                 .ToList();
         }
 
+
+        private void LoadEmployeesForPlanning(int sessionId)
+        {
+            clbEmployeesPlan.Items.Clear();
+
+            var allEmployees = PlannedTrainingService.GetAllEmployees();
+            var participantIds = PlannedTrainingService.GetPlannedEmployeeIds(sessionId);
+
+            foreach (var emp in allEmployees)
+            {
+                clbEmployeesPlan.Items.Add(emp, participantIds.Contains(emp.Id)); // pre-check participants
+            }
+        }
 
     }
 

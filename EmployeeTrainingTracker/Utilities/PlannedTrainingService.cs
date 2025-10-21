@@ -218,8 +218,69 @@ namespace EmployeeTrainingTracker.Utilities
                 "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
+        public static List<EmployeeItem> GetAllEmployees()
+        {
+            var employees = new List<EmployeeItem>();
 
+            string query = "SELECT EmployeeID, FullName FROM Employees ORDER BY FullName";
 
+            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+            conn.Open();
+            using var cmd = new SqliteCommand(query, conn);
+            using var reader = cmd.ExecuteReader();
+
+            while (reader.Read())
+            {
+                employees.Add(new EmployeeItem
+                {
+                    Id = reader.GetInt32(0),
+                    Name = reader.GetString(1)
+                });
+            }
+
+            return employees;
+        }
+
+        public static List<int> GetPlannedEmployeeIds(int sessionId)
+        {
+            var ids = new List<int>();
+
+            string query = "SELECT EmployeeID FROM TrainingParticipants WHERE SessionID = @sid";
+
+            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+            conn.Open();
+            using var cmd = new SqliteCommand(query, conn);
+            cmd.Parameters.AddWithValue("@sid", sessionId);
+
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                ids.Add(reader.GetInt32(0));
+
+            return ids;
+        }
+
+        public static void UpdatePlannedSessionParticipants(int sessionId, List<int> employeeIds)
+        {
+            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+            conn.Open();
+            using var tx = conn.BeginTransaction();
+
+            // Remove old participants
+            var delCmd = new SqliteCommand("DELETE FROM TrainingParticipants WHERE SessionID=@sid", conn, tx);
+            delCmd.Parameters.AddWithValue("@sid", sessionId);
+            delCmd.ExecuteNonQuery();
+
+            // Add new participants
+            foreach (var empId in employeeIds)
+            {
+                var insertCmd = new SqliteCommand("INSERT INTO TrainingParticipants (SessionID, EmployeeID) VALUES (@sid, @eid)", conn, tx);
+                insertCmd.Parameters.AddWithValue("@sid", sessionId);
+                insertCmd.Parameters.AddWithValue("@eid", empId);
+                insertCmd.ExecuteNonQuery();
+            }
+
+            tx.Commit();
+        }
     }
 }
 
