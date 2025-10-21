@@ -69,6 +69,7 @@ namespace EmployeeTrainingTracker
             btnEdit = new Button();
             btnAdd = new Button();
             Reports = new TabPage();
+            label8 = new Label();
             lbEmployees = new ListBox();
             btnExportCsv = new Button();
             btnGenerateReport = new Button();
@@ -101,7 +102,6 @@ namespace EmployeeTrainingTracker
             btnEditSession = new Button();
             btnAddSession = new Button();
             dgvPlannedTraining = new DataGridView();
-            label8 = new Label();
             ((System.ComponentModel.ISupportInitialize)dgvEmployees).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvCertificates).BeginInit();
             tabControl.SuspendLayout();
@@ -543,6 +543,16 @@ namespace EmployeeTrainingTracker
             Reports.Text = "Reports";
             Reports.UseVisualStyleBackColor = true;
             // 
+            // label8
+            // 
+            label8.Anchor = AnchorStyles.Right;
+            label8.AutoSize = true;
+            label8.Location = new Point(649, 247);
+            label8.Name = "label8";
+            label8.Size = new Size(70, 15);
+            label8.TabIndex = 51;
+            label8.Text = "Employees :";
+            // 
             // lbEmployees
             // 
             lbEmployees.Anchor = AnchorStyles.Right;
@@ -674,6 +684,7 @@ namespace EmployeeTrainingTracker
             // 
             // textStatusPlan
             // 
+            textStatusPlan.Anchor = AnchorStyles.Right;
             textStatusPlan.FormattingEnabled = true;
             textStatusPlan.Items.AddRange(new object[] { "Planned", "Completed", "Cancelled" });
             textStatusPlan.Location = new Point(649, 203);
@@ -683,6 +694,7 @@ namespace EmployeeTrainingTracker
             // 
             // btnCompleteTraining
             // 
+            btnCompleteTraining.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             btnCompleteTraining.Location = new Point(563, 393);
             btnCompleteTraining.Name = "btnCompleteTraining";
             btnCompleteTraining.Size = new Size(80, 23);
@@ -872,16 +884,6 @@ namespace EmployeeTrainingTracker
             dgvPlannedTraining.Size = new Size(640, 381);
             dgvPlannedTraining.TabIndex = 3;
             dgvPlannedTraining.SelectionChanged += dgvPlannedTraining_SelectionChanged;
-            // 
-            // label8
-            // 
-            label8.Anchor = AnchorStyles.Right;
-            label8.AutoSize = true;
-            label8.Location = new Point(649, 247);
-            label8.Name = "label8";
-            label8.Size = new Size(70, 15);
-            label8.TabIndex = 51;
-            label8.Text = "Employees :";
             // 
             // AdminDashboard
             // 

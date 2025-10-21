@@ -222,9 +222,9 @@ namespace EmployeeTrainingTracker
 
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
             string name = txtCertName.Text.Trim();
-            string key = txtKeyPlan.Text.Trim();
-            string hrsText = txtHrsPlan.Text.Trim();
-            string provider = txtProviderPlan.Text.Trim();
+            string key = txtKeyCertsTab.Text.Trim();
+            string hrsText = txtHrsCertsTab.Text.Trim();
+            string provider = txtProviderCertsTab.Text.Trim();
             DateTime issue = dtpIssueDate.Value;
             DateTime expiry = dtpExpiryDate.Value;
             string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim()) ? null : txtFilePath.Text.Trim('"').Trim();
@@ -261,9 +261,9 @@ namespace EmployeeTrainingTracker
 
             int certId = Convert.ToInt32(dgvCertificates.CurrentRow.Cells["CertificateID"].Value);
             string name = txtCertName.Text.Trim();
-            string key = txtKeyPlan.Text.Trim();
-            string hrsText = txtHrsPlan.Text.Trim();
-            string provider = txtProviderPlan.Text.Trim();
+            string key = txtKeyCertsTab.Text.Trim();
+            string hrsText = txtHrsCertsTab.Text.Trim();
+            string provider = txtProviderCertsTab.Text.Trim();
             DateTime issue = dtpIssueDate.Value;
             DateTime expiry = dtpExpiryDate.Value;
             string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim())
@@ -717,11 +717,14 @@ namespace EmployeeTrainingTracker
                 dtpIssueDate.Value = DateTime.Today;
                 dtpExpiryDate.Value = DateTime.Today;
                 txtFilePath.Text = "";
+                chkAddToTrainingFolder.Checked = false; // reset when nothing selected
                 return;
             }
 
-            if (dgvCertificates.CurrentRow.DataBoundItem is not DataRowView rowView) return;
+            if (dgvCertificates.CurrentRow.DataBoundItem is not DataRowView rowView)
+                return;
 
+            // Existing population logic (unchanged)
             txtCertName.Text = rowView["CertificateName"]?.ToString() ?? "";
             txtKeyCertsTab.Text = rowView["Key"]?.ToString() ?? "";
             txtHrsCertsTab.Text = rowView["HRS"]?.ToString() ?? "";
@@ -738,6 +741,30 @@ namespace EmployeeTrainingTracker
                 dtpExpiryDate.Value = DateTime.Today;
 
             txtFilePath.Text = rowView["FilePath"]?.ToString() ?? "";
+
+            // NEW SECTION: check if the training record already exists in legacy Excel
+            try
+            {
+                // Make sure your DataTable contains EmployeeID or similar identifier
+                if (rowView.Row.Table.Columns.Contains("EmployeeID"))
+                {
+                    int employeeId = Convert.ToInt32(rowView["EmployeeID"]);
+                    string certName = txtCertName.Text;
+
+                    bool exists = LegacyExcelService.TrainingRecordExists(employeeId, certName);
+                    chkAddToTrainingFolder.Checked = exists;
+                }
+                else
+                {
+                    // If no EmployeeID in table, just default to unchecked
+                    chkAddToTrainingFolder.Checked = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                chkAddToTrainingFolder.Checked = false;
+                Console.WriteLine($"Error checking Excel: {ex.Message}");
+            }
         }
 
         private void cmbCurrentEmployee_SelectedIndexChanged(object sender, EventArgs e)

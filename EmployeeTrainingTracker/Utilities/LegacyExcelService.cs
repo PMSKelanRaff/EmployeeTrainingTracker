@@ -187,4 +187,50 @@ public static class LegacyExcelService
 
         return cmd.ExecuteScalar()?.ToString() ?? "";
     }
+
+    public static bool TrainingRecordExists(int employeeId, string certName)
+    {
+        string fullName = GetEmployeeName(employeeId);
+        if (string.IsNullOrEmpty(fullName))
+            return false;
+
+        string[] files = Directory.GetFiles(RootFolder, "*.xlsx", SearchOption.AllDirectories);
+        string normalizedFullName = fullName.ToLower().Replace("'", "").Trim();
+
+        string? filePath = files.FirstOrDefault(f =>
+        {
+            string nameOnly = Path.GetFileNameWithoutExtension(f).ToLower().Replace("'", "");
+            return nameOnly.Contains(normalizedFullName) && nameOnly.Contains("training acknowledgement record");
+        });
+
+        if (filePath == null)
+            return false;
+
+        using (var package = new ExcelPackage(new FileInfo(filePath)))
+        {
+            var ws = package.Workbook.Worksheets["Training Acknowledgement Record"]
+                     ?? package.Workbook.Worksheets.FirstOrDefault()
+                     ?? throw new Exception("Worksheet not found in Excel file.");
+
+            int lastRow = 7;
+            while (!string.IsNullOrWhiteSpace(ws.Cells[lastRow + 1, 1].Text))
+            {
+                lastRow++;
+            }
+
+            for (int row = 7; row <= lastRow; row++)
+            {
+                string existingCert = ws.Cells[row, 3].Text.Trim(); // column C
+                string cleanExisting = existingCert.Replace("(Edited)", "", StringComparison.OrdinalIgnoreCase).Trim();
+
+                if (string.Equals(cleanExisting, certName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true; // record already exists
+                }
+            }
+        }
+
+        return false;
+    }
+
 }
