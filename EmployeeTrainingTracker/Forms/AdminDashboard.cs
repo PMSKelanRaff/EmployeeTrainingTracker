@@ -25,6 +25,7 @@ namespace EmployeeTrainingTracker
             LoadPlannedTraining();
             tabCertificates.Enabled = false;
             LoadReportSettings();
+            StyleAllDGVs();
 
             var plannedSessions = PlannedTrainingService.GetPlannedTraining();
             if (plannedSessions.Rows.Count > 0)
@@ -164,7 +165,7 @@ namespace EmployeeTrainingTracker
 
         private void LoadEmployeeList()
         {
-            lbEmployees.Items.Clear();
+            clbEmployees.Items.Clear();
             using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
             {
                 conn.Open();
@@ -173,7 +174,7 @@ namespace EmployeeTrainingTracker
                 {
                     while (reader.Read())
                     {
-                        lbEmployees.Items.Add(new EmployeeItem
+                        clbEmployees.Items.Add(new EmployeeItem
                         {
                             Id = reader.GetInt32(0),
                             Name = reader.GetString(1)
@@ -216,6 +217,7 @@ namespace EmployeeTrainingTracker
 
             // Optional: nicer UI setup
             dgvPlannedTraining.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dgvPlannedTraining.CellFormatting += dgvPlannedTraining_CellFormatting;
 
             if (dgvPlannedTraining.Columns.Contains("SessionID"))
                 dgvPlannedTraining.Columns["SessionID"].Visible = false;
@@ -596,11 +598,20 @@ namespace EmployeeTrainingTracker
             DateTime? start = isCustomRange ? dtpStart.Value.Date : null;
             DateTime? end = isCustomRange ? dtpEnd.Value.Date : null;
 
-            // Get selected employee IDs
-            var selectedEmployees = lbEmployees.SelectedItems
+            // Get checked employees
+            var selectedEmployees = clbEmployees.CheckedItems
                 .Cast<EmployeeItem>()
                 .Select(x => x.Id)
                 .ToList();
+
+            // If none are selected, automatically include all employees
+            if (selectedEmployees.Count == 0)
+            {
+                selectedEmployees = clbEmployees.Items
+                    .Cast<EmployeeItem>()
+                    .Select(x => x.Id)
+                    .ToList();
+            }
 
             try
             {
@@ -669,7 +680,6 @@ namespace EmployeeTrainingTracker
             dtpStart.Enabled = isCustomRange;
             dtpEnd.Enabled = isCustomRange;
 
-            // Optional: visually reset the pickers when disabled
             if (!isCustomRange)
             {
                 dtpStart.Value = DateTime.Today;
@@ -903,7 +913,37 @@ namespace EmployeeTrainingTracker
             }
         }
 
-      
+        private void dgvPlannedTraining_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        {
+            if (dgvPlannedTraining.Columns[e.ColumnIndex].Name == "Status" && e.Value != null)
+            {
+                string status = e.Value.ToString()!.Trim().ToLower();
+
+                switch (status)
+                {
+                    case "completed":
+                        e.CellStyle.BackColor = Color.LightGreen;
+                        e.CellStyle.ForeColor = Color.Black;
+                        break;
+
+                    case "planned":
+                        e.CellStyle.BackColor = Color.Khaki;
+                        e.CellStyle.ForeColor = Color.Black;
+                        break;
+
+                    case "cancelled":
+                        e.CellStyle.BackColor = Color.LightCoral;
+                        e.CellStyle.ForeColor = Color.White;
+                        break;
+
+                    default:
+                        e.CellStyle.BackColor = dgvPlannedTraining.DefaultCellStyle.BackColor;
+                        e.CellStyle.ForeColor = dgvPlannedTraining.DefaultCellStyle.ForeColor;
+                        break;
+                }
+            }
+        }
+
         // Helper Functions
         private string EscapeCsvValue(string value)
         {
@@ -923,7 +963,6 @@ namespace EmployeeTrainingTracker
                 .ToList();
         }
 
-
         private void LoadEmployeesForPlanning(int sessionId)
         {
             clbEmployeesPlan.Items.Clear();
@@ -934,6 +973,77 @@ namespace EmployeeTrainingTracker
             foreach (var emp in allEmployees)
             {
                 clbEmployeesPlan.Items.Add(emp, participantIds.Contains(emp.Id)); // pre-check participants
+            }
+        }
+
+        private void StyleDataGridView(DataGridView dgv)
+        {
+            dgv.EnableHeadersVisualStyles = false;
+
+            // Header style
+            dgv.ColumnHeadersDefaultCellStyle.BackColor = Color.SteelBlue;
+            dgv.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+            dgv.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            dgv.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+
+            // Default cell style
+            dgv.DefaultCellStyle.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
+            dgv.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            dgv.DefaultCellStyle.Padding = new Padding(3, 2, 3, 2);
+            dgv.DefaultCellStyle.SelectionBackColor = Color.LightSteelBlue;
+            dgv.DefaultCellStyle.SelectionForeColor = Color.Black;
+
+            // Alternating rows for readability
+            dgv.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(245, 245, 245);
+            dgv.AlternatingRowsDefaultCellStyle.ForeColor = Color.Black;
+
+            // Layout and grid look
+            dgv.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dgv.BackgroundColor = Color.White;
+            dgv.GridColor = Color.LightGray;
+            dgv.BorderStyle = BorderStyle.None;
+            dgv.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+            dgv.RowHeadersVisible = false;
+        }
+
+        private void StyleAllDGVs()
+        {
+            // Apply styling to all DGVs
+            StyleDataGridView(dgvPlannedTraining);
+            StyleDataGridView(dgvCertificates);
+            StyleDataGridView(dgvEmployees);
+            StyleDataGridView(dgvReportResults);
+
+            RenameColumns(dgvPlannedTraining);
+            RenameColumns(dgvCertificates);
+            RenameColumns(dgvEmployees);
+            RenameColumns(dgvReportResults);
+
+            foreach (TabPage tab in tabControl.TabPages)
+            {
+                //tab.BackColor = Color.Gray; // or Color.Gainsboro / Color.WhiteSmoke / LightGray
+            }
+
+        }
+
+        private void RenameColumns(DataGridView dgv)
+        {
+            var renameMap = new Dictionary<string, string>
+        {
+            { "CertificateName", "Certificate Name" },
+            { "PlannedDate", "Planned Date" },
+            { "IssueDate", "Issue Date" },
+            { "ExpiryDate", "Expiry Date" },
+            { "EmployeeEmail", "Email" },
+            { "FullName", "Full Name" },
+            { "ManagerEmail", "Manager Email" },
+            { "JobTitle", "Job Title" }
+        };
+
+            foreach (var kvp in renameMap)
+            {
+                if (dgv.Columns.Contains(kvp.Key))
+                    dgv.Columns[kvp.Key].HeaderText = kvp.Value;
             }
         }
 

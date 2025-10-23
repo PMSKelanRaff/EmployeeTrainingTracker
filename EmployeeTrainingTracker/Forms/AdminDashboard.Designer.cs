@@ -69,8 +69,8 @@ namespace EmployeeTrainingTracker
             btnEdit = new Button();
             btnAdd = new Button();
             Reports = new TabPage();
+            clbEmployees = new CheckedListBox();
             label8 = new Label();
-            lbEmployees = new ListBox();
             btnExportCsv = new Button();
             btnGenerateReport = new Button();
             lblDtpEnd = new Label();
@@ -119,7 +119,7 @@ namespace EmployeeTrainingTracker
             dgvEmployees.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgvEmployees.Location = new Point(6, 6);
             dgvEmployees.Name = "dgvEmployees";
-            dgvEmployees.Size = new Size(619, 379);
+            dgvEmployees.Size = new Size(763, 410);
             dgvEmployees.TabIndex = 0;
             dgvEmployees.SelectionChanged += dgvEmployees_SelectionChanged;
             // 
@@ -128,7 +128,7 @@ namespace EmployeeTrainingTracker
             dgvCertificates.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgvCertificates.Location = new Point(6, 6);
             dgvCertificates.Name = "dgvCertificates";
-            dgvCertificates.Size = new Size(636, 408);
+            dgvCertificates.Size = new Size(780, 408);
             dgvCertificates.TabIndex = 1;
             dgvCertificates.CellContentClick += dgvCertificates_CellContentClick;
             dgvCertificates.SelectionChanged += dgvCertificates_SelectionChanged;
@@ -143,7 +143,7 @@ namespace EmployeeTrainingTracker
             tabControl.Location = new Point(0, 0);
             tabControl.Name = "tabControl";
             tabControl.SelectedIndex = 0;
-            tabControl.Size = new Size(875, 450);
+            tabControl.Size = new Size(1019, 483);
             tabControl.TabIndex = 2;
             // 
             // tabEmployees
@@ -165,7 +165,7 @@ namespace EmployeeTrainingTracker
             tabEmployees.Location = new Point(4, 24);
             tabEmployees.Name = "tabEmployees";
             tabEmployees.Padding = new Padding(3);
-            tabEmployees.Size = new Size(867, 422);
+            tabEmployees.Size = new Size(1011, 455);
             tabEmployees.TabIndex = 0;
             tabEmployees.Text = "Employees";
             tabEmployees.UseVisualStyleBackColor = true;
@@ -174,7 +174,7 @@ namespace EmployeeTrainingTracker
             // 
             lbl_JobTitle.Anchor = AnchorStyles.Right;
             lbl_JobTitle.AutoSize = true;
-            lbl_JobTitle.Location = new Point(631, 277);
+            lbl_JobTitle.Location = new Point(775, 293);
             lbl_JobTitle.Name = "lbl_JobTitle";
             lbl_JobTitle.Size = new Size(57, 15);
             lbl_JobTitle.TabIndex = 22;
@@ -183,7 +183,7 @@ namespace EmployeeTrainingTracker
             // txtJobTitle
             // 
             txtJobTitle.Anchor = AnchorStyles.Right;
-            txtJobTitle.Location = new Point(631, 295);
+            txtJobTitle.Location = new Point(775, 311);
             txtJobTitle.Name = "txtJobTitle";
             txtJobTitle.Size = new Size(228, 23);
             txtJobTitle.TabIndex = 21;
@@ -193,7 +193,7 @@ namespace EmployeeTrainingTracker
             cmbDept.Anchor = AnchorStyles.Right;
             cmbDept.FormattingEnabled = true;
             cmbDept.Items.AddRange(new object[] { "Administration", "Engineering", "IT", "Site" });
-            cmbDept.Location = new Point(631, 226);
+            cmbDept.Location = new Point(775, 242);
             cmbDept.Name = "cmbDept";
             cmbDept.Size = new Size(228, 23);
             cmbDept.TabIndex = 20;
@@ -202,7 +202,7 @@ namespace EmployeeTrainingTracker
             // 
             lbl_Department.Anchor = AnchorStyles.Right;
             lbl_Department.AutoSize = true;
-            lbl_Department.Location = new Point(631, 208);
+            lbl_Department.Location = new Point(775, 224);
             lbl_Department.Name = "lbl_Department";
             lbl_Department.Size = new Size(76, 15);
             lbl_Department.TabIndex = 19;
@@ -211,7 +211,7 @@ namespace EmployeeTrainingTracker
             // btnDeleteEmployee
             // 
             btnDeleteEmployee.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnDeleteEmployee.Location = new Point(580, 389);
+            btnDeleteEmployee.Location = new Point(724, 422);
             btnDeleteEmployee.Name = "btnDeleteEmployee";
             btnDeleteEmployee.Size = new Size(75, 23);
             btnDeleteEmployee.TabIndex = 17;
@@ -222,7 +222,7 @@ namespace EmployeeTrainingTracker
             // btnEditEmployee
             // 
             btnEditEmployee.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnEditEmployee.Location = new Point(703, 389);
+            btnEditEmployee.Location = new Point(847, 422);
             btnEditEmployee.Name = "btnEditEmployee";
             btnEditEmployee.Size = new Size(75, 23);
             btnEditEmployee.TabIndex = 16;
@@ -233,7 +233,7 @@ namespace EmployeeTrainingTracker
             // btnAddEmployee
             // 
             btnAddEmployee.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnAddEmployee.Location = new Point(784, 391);
+            btnAddEmployee.Location = new Point(928, 424);
             btnAddEmployee.Name = "btnAddEmployee";
             btnAddEmployee.Size = new Size(75, 23);
             btnAddEmployee.TabIndex = 15;
@@ -245,7 +245,7 @@ namespace EmployeeTrainingTracker
             // 
             lbl_Type.Anchor = AnchorStyles.Right;
             lbl_Type.AutoSize = true;
-            lbl_Type.Location = new Point(635, 164);
+            lbl_Type.Location = new Point(779, 180);
             lbl_Type.Name = "lbl_Type";
             lbl_Type.Size = new Size(38, 15);
             lbl_Type.TabIndex = 14;
@@ -255,7 +255,7 @@ namespace EmployeeTrainingTracker
             // 
             lbl_Password.Anchor = AnchorStyles.Right;
             lbl_Password.AutoSize = true;
-            lbl_Password.Location = new Point(631, 83);
+            lbl_Password.Location = new Point(775, 99);
             lbl_Password.Name = "lbl_Password";
             lbl_Password.Size = new Size(63, 15);
             lbl_Password.TabIndex = 13;
@@ -265,7 +265,7 @@ namespace EmployeeTrainingTracker
             // 
             lbl_Username.Anchor = AnchorStyles.Right;
             lbl_Username.AutoSize = true;
-            lbl_Username.Location = new Point(631, 39);
+            lbl_Username.Location = new Point(775, 55);
             lbl_Username.Name = "lbl_Username";
             lbl_Username.Size = new Size(42, 15);
             lbl_Username.TabIndex = 12;
@@ -276,7 +276,7 @@ namespace EmployeeTrainingTracker
             cmbRole.Anchor = AnchorStyles.Right;
             cmbRole.FormattingEnabled = true;
             cmbRole.Items.AddRange(new object[] { "Employee", "Admin" });
-            cmbRole.Location = new Point(631, 182);
+            cmbRole.Location = new Point(775, 198);
             cmbRole.Name = "cmbRole";
             cmbRole.Size = new Size(228, 23);
             cmbRole.TabIndex = 11;
@@ -284,7 +284,7 @@ namespace EmployeeTrainingTracker
             // txtPassword
             // 
             txtPassword.Anchor = AnchorStyles.Right;
-            txtPassword.Location = new Point(631, 101);
+            txtPassword.Location = new Point(775, 117);
             txtPassword.Name = "txtPassword";
             txtPassword.Size = new Size(228, 23);
             txtPassword.TabIndex = 10;
@@ -292,7 +292,7 @@ namespace EmployeeTrainingTracker
             // txtUsername
             // 
             txtUsername.Anchor = AnchorStyles.Right;
-            txtUsername.Location = new Point(631, 57);
+            txtUsername.Location = new Point(775, 73);
             txtUsername.Name = "txtUsername";
             txtUsername.Size = new Size(228, 23);
             txtUsername.TabIndex = 9;
@@ -323,7 +323,7 @@ namespace EmployeeTrainingTracker
             tabCertificates.Location = new Point(4, 24);
             tabCertificates.Name = "tabCertificates";
             tabCertificates.Padding = new Padding(3);
-            tabCertificates.Size = new Size(867, 422);
+            tabCertificates.Size = new Size(1011, 455);
             tabCertificates.TabIndex = 1;
             tabCertificates.Text = "Certificates";
             tabCertificates.UseVisualStyleBackColor = true;
@@ -332,7 +332,7 @@ namespace EmployeeTrainingTracker
             // 
             label10.Anchor = AnchorStyles.Right;
             label10.AutoSize = true;
-            label10.Location = new Point(648, 159);
+            label10.Location = new Point(792, 175);
             label10.Name = "label10";
             label10.Size = new Size(57, 15);
             label10.TabIndex = 50;
@@ -342,7 +342,7 @@ namespace EmployeeTrainingTracker
             // 
             label11.Anchor = AnchorStyles.Right;
             label11.AutoSize = true;
-            label11.Location = new Point(748, 110);
+            label11.Location = new Point(892, 126);
             label11.Name = "label11";
             label11.Size = new Size(45, 15);
             label11.TabIndex = 49;
@@ -352,7 +352,7 @@ namespace EmployeeTrainingTracker
             // 
             label12.Anchor = AnchorStyles.Right;
             label12.AutoSize = true;
-            label12.Location = new Point(648, 110);
+            label12.Location = new Point(792, 126);
             label12.Name = "label12";
             label12.Size = new Size(32, 15);
             label12.TabIndex = 48;
@@ -361,7 +361,7 @@ namespace EmployeeTrainingTracker
             // txtProviderCertsTab
             // 
             txtProviderCertsTab.Anchor = AnchorStyles.Right;
-            txtProviderCertsTab.Location = new Point(648, 177);
+            txtProviderCertsTab.Location = new Point(792, 193);
             txtProviderCertsTab.Name = "txtProviderCertsTab";
             txtProviderCertsTab.Size = new Size(200, 23);
             txtProviderCertsTab.TabIndex = 47;
@@ -369,7 +369,7 @@ namespace EmployeeTrainingTracker
             // txtHrsCertsTab
             // 
             txtHrsCertsTab.Anchor = AnchorStyles.Right;
-            txtHrsCertsTab.Location = new Point(748, 128);
+            txtHrsCertsTab.Location = new Point(892, 144);
             txtHrsCertsTab.Name = "txtHrsCertsTab";
             txtHrsCertsTab.Size = new Size(100, 23);
             txtHrsCertsTab.TabIndex = 46;
@@ -379,7 +379,7 @@ namespace EmployeeTrainingTracker
             txtKeyCertsTab.Anchor = AnchorStyles.Right;
             txtKeyCertsTab.FormattingEnabled = true;
             txtKeyCertsTab.Items.AddRange(new object[] { "T", "R", "P" });
-            txtKeyCertsTab.Location = new Point(648, 128);
+            txtKeyCertsTab.Location = new Point(792, 144);
             txtKeyCertsTab.Name = "txtKeyCertsTab";
             txtKeyCertsTab.Size = new Size(71, 23);
             txtKeyCertsTab.TabIndex = 45;
@@ -388,7 +388,7 @@ namespace EmployeeTrainingTracker
             // 
             label9.Anchor = AnchorStyles.Right;
             label9.AutoSize = true;
-            label9.Location = new Point(648, 322);
+            label9.Location = new Point(792, 338);
             label9.Name = "label9";
             label9.Size = new Size(58, 15);
             label9.TabIndex = 28;
@@ -400,7 +400,7 @@ namespace EmployeeTrainingTracker
             chkAddToTrainingFolder.AutoSize = true;
             chkAddToTrainingFolder.Checked = true;
             chkAddToTrainingFolder.CheckState = CheckState.Checked;
-            chkAddToTrainingFolder.Location = new Point(648, 369);
+            chkAddToTrainingFolder.Location = new Point(792, 402);
             chkAddToTrainingFolder.Name = "chkAddToTrainingFolder";
             chkAddToTrainingFolder.Size = new Size(140, 19);
             chkAddToTrainingFolder.TabIndex = 27;
@@ -412,7 +412,7 @@ namespace EmployeeTrainingTracker
             label1.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             label1.AutoSize = true;
             label1.Font = new Font("Segoe UI", 9.75F, FontStyle.Bold | FontStyle.Underline, GraphicsUnit.Point, 0);
-            label1.Location = new Point(681, 6);
+            label1.Location = new Point(825, 6);
             label1.Name = "label1";
             label1.Size = new Size(126, 17);
             label1.TabIndex = 26;
@@ -422,7 +422,7 @@ namespace EmployeeTrainingTracker
             // 
             cmbCurrentEmployee.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             cmbCurrentEmployee.FormattingEnabled = true;
-            cmbCurrentEmployee.Location = new Point(681, 26);
+            cmbCurrentEmployee.Location = new Point(825, 26);
             cmbCurrentEmployee.Name = "cmbCurrentEmployee";
             cmbCurrentEmployee.Size = new Size(126, 23);
             cmbCurrentEmployee.TabIndex = 25;
@@ -430,7 +430,7 @@ namespace EmployeeTrainingTracker
             // txtFilePath
             // 
             txtFilePath.Anchor = AnchorStyles.Right;
-            txtFilePath.Location = new Point(648, 340);
+            txtFilePath.Location = new Point(792, 356);
             txtFilePath.Name = "txtFilePath";
             txtFilePath.Size = new Size(200, 23);
             txtFilePath.TabIndex = 14;
@@ -439,7 +439,7 @@ namespace EmployeeTrainingTracker
             // 
             lbl_ExpiryDate.Anchor = AnchorStyles.Right;
             lbl_ExpiryDate.AutoSize = true;
-            lbl_ExpiryDate.Location = new Point(648, 267);
+            lbl_ExpiryDate.Location = new Point(792, 283);
             lbl_ExpiryDate.Name = "lbl_ExpiryDate";
             lbl_ExpiryDate.Size = new Size(71, 15);
             lbl_ExpiryDate.TabIndex = 13;
@@ -449,7 +449,7 @@ namespace EmployeeTrainingTracker
             // 
             lbl_IssueDate.Anchor = AnchorStyles.Right;
             lbl_IssueDate.AutoSize = true;
-            lbl_IssueDate.Location = new Point(648, 213);
+            lbl_IssueDate.Location = new Point(792, 229);
             lbl_IssueDate.Name = "lbl_IssueDate";
             lbl_IssueDate.Size = new Size(66, 15);
             lbl_IssueDate.TabIndex = 12;
@@ -459,7 +459,7 @@ namespace EmployeeTrainingTracker
             // 
             lbl_Certname.Anchor = AnchorStyles.Right;
             lbl_Certname.AutoSize = true;
-            lbl_Certname.Location = new Point(648, 62);
+            lbl_Certname.Location = new Point(792, 78);
             lbl_Certname.Name = "lbl_Certname";
             lbl_Certname.Size = new Size(105, 15);
             lbl_Certname.TabIndex = 11;
@@ -468,7 +468,7 @@ namespace EmployeeTrainingTracker
             // dtpExpiryDate
             // 
             dtpExpiryDate.Anchor = AnchorStyles.Right;
-            dtpExpiryDate.Location = new Point(648, 285);
+            dtpExpiryDate.Location = new Point(792, 301);
             dtpExpiryDate.Name = "dtpExpiryDate";
             dtpExpiryDate.Size = new Size(200, 23);
             dtpExpiryDate.TabIndex = 10;
@@ -476,7 +476,7 @@ namespace EmployeeTrainingTracker
             // dtpIssueDate
             // 
             dtpIssueDate.Anchor = AnchorStyles.Right;
-            dtpIssueDate.Location = new Point(648, 231);
+            dtpIssueDate.Location = new Point(792, 247);
             dtpIssueDate.Name = "dtpIssueDate";
             dtpIssueDate.Size = new Size(200, 23);
             dtpIssueDate.TabIndex = 9;
@@ -484,7 +484,7 @@ namespace EmployeeTrainingTracker
             // txtCertName
             // 
             txtCertName.Anchor = AnchorStyles.Right;
-            txtCertName.Location = new Point(648, 80);
+            txtCertName.Location = new Point(792, 96);
             txtCertName.Name = "txtCertName";
             txtCertName.Size = new Size(200, 23);
             txtCertName.TabIndex = 8;
@@ -492,7 +492,7 @@ namespace EmployeeTrainingTracker
             // btnDelete
             // 
             btnDelete.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnDelete.Location = new Point(648, 394);
+            btnDelete.Location = new Point(792, 427);
             btnDelete.Name = "btnDelete";
             btnDelete.Size = new Size(50, 23);
             btnDelete.TabIndex = 7;
@@ -503,7 +503,7 @@ namespace EmployeeTrainingTracker
             // btnEdit
             // 
             btnEdit.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnEdit.Location = new Point(760, 394);
+            btnEdit.Location = new Point(904, 427);
             btnEdit.Name = "btnEdit";
             btnEdit.Size = new Size(47, 23);
             btnEdit.TabIndex = 6;
@@ -514,7 +514,7 @@ namespace EmployeeTrainingTracker
             // btnAdd
             // 
             btnAdd.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnAdd.Location = new Point(813, 394);
+            btnAdd.Location = new Point(957, 427);
             btnAdd.Name = "btnAdd";
             btnAdd.Size = new Size(48, 23);
             btnAdd.TabIndex = 5;
@@ -524,8 +524,8 @@ namespace EmployeeTrainingTracker
             // 
             // Reports
             // 
+            Reports.Controls.Add(clbEmployees);
             Reports.Controls.Add(label8);
-            Reports.Controls.Add(lbEmployees);
             Reports.Controls.Add(btnExportCsv);
             Reports.Controls.Add(btnGenerateReport);
             Reports.Controls.Add(lblDtpEnd);
@@ -538,36 +538,35 @@ namespace EmployeeTrainingTracker
             Reports.Location = new Point(4, 24);
             Reports.Name = "Reports";
             Reports.Padding = new Padding(3);
-            Reports.Size = new Size(867, 422);
+            Reports.Size = new Size(1011, 455);
             Reports.TabIndex = 2;
             Reports.Text = "Reports";
             Reports.UseVisualStyleBackColor = true;
+            // 
+            // clbEmployees
+            // 
+            clbEmployees.Anchor = AnchorStyles.Right;
+            clbEmployees.CheckOnClick = true;
+            clbEmployees.FormattingEnabled = true;
+            clbEmployees.Location = new Point(794, 281);
+            clbEmployees.Name = "clbEmployees";
+            clbEmployees.Size = new Size(199, 94);
+            clbEmployees.TabIndex = 52;
             // 
             // label8
             // 
             label8.Anchor = AnchorStyles.Right;
             label8.AutoSize = true;
-            label8.Location = new Point(649, 247);
+            label8.Location = new Point(793, 263);
             label8.Name = "label8";
             label8.Size = new Size(70, 15);
             label8.TabIndex = 51;
             label8.Text = "Employees :";
             // 
-            // lbEmployees
-            // 
-            lbEmployees.Anchor = AnchorStyles.Right;
-            lbEmployees.FormattingEnabled = true;
-            lbEmployees.ItemHeight = 15;
-            lbEmployees.Location = new Point(649, 265);
-            lbEmployees.Name = "lbEmployees";
-            lbEmployees.SelectionMode = SelectionMode.MultiExtended;
-            lbEmployees.Size = new Size(200, 94);
-            lbEmployees.TabIndex = 10;
-            // 
             // btnExportCsv
             // 
             btnExportCsv.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnExportCsv.Location = new Point(774, 393);
+            btnExportCsv.Location = new Point(824, 424);
             btnExportCsv.Name = "btnExportCsv";
             btnExportCsv.Size = new Size(90, 23);
             btnExportCsv.TabIndex = 9;
@@ -578,7 +577,7 @@ namespace EmployeeTrainingTracker
             // btnGenerateReport
             // 
             btnGenerateReport.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnGenerateReport.Location = new Point(774, 365);
+            btnGenerateReport.Location = new Point(915, 424);
             btnGenerateReport.Name = "btnGenerateReport";
             btnGenerateReport.Size = new Size(90, 23);
             btnGenerateReport.TabIndex = 8;
@@ -590,7 +589,7 @@ namespace EmployeeTrainingTracker
             // 
             lblDtpEnd.Anchor = AnchorStyles.Right;
             lblDtpEnd.AutoSize = true;
-            lblDtpEnd.Location = new Point(649, 120);
+            lblDtpEnd.Location = new Point(793, 136);
             lblDtpEnd.Name = "lblDtpEnd";
             lblDtpEnd.Size = new Size(60, 15);
             lblDtpEnd.TabIndex = 7;
@@ -600,7 +599,7 @@ namespace EmployeeTrainingTracker
             // 
             lblDtpStart.Anchor = AnchorStyles.Right;
             lblDtpStart.AutoSize = true;
-            lblDtpStart.Location = new Point(649, 67);
+            lblDtpStart.Location = new Point(793, 83);
             lblDtpStart.Name = "lblDtpStart";
             lblDtpStart.Size = new Size(64, 15);
             lblDtpStart.TabIndex = 6;
@@ -609,7 +608,7 @@ namespace EmployeeTrainingTracker
             // dtpEnd
             // 
             dtpEnd.Anchor = AnchorStyles.Right;
-            dtpEnd.Location = new Point(649, 138);
+            dtpEnd.Location = new Point(793, 154);
             dtpEnd.Name = "dtpEnd";
             dtpEnd.Size = new Size(200, 23);
             dtpEnd.TabIndex = 5;
@@ -617,7 +616,7 @@ namespace EmployeeTrainingTracker
             // dtpStart
             // 
             dtpStart.Anchor = AnchorStyles.Right;
-            dtpStart.Location = new Point(649, 85);
+            dtpStart.Location = new Point(793, 101);
             dtpStart.Name = "dtpStart";
             dtpStart.Size = new Size(200, 23);
             dtpStart.TabIndex = 4;
@@ -626,7 +625,7 @@ namespace EmployeeTrainingTracker
             // 
             lblReportType.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             lblReportType.AutoSize = true;
-            lblReportType.Location = new Point(649, 6);
+            lblReportType.Location = new Point(793, 6);
             lblReportType.Name = "lblReportType";
             lblReportType.Size = new Size(76, 15);
             lblReportType.TabIndex = 3;
@@ -638,7 +637,7 @@ namespace EmployeeTrainingTracker
             dgvReportResults.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgvReportResults.Location = new Point(3, 6);
             dgvReportResults.Name = "dgvReportResults";
-            dgvReportResults.Size = new Size(640, 413);
+            dgvReportResults.Size = new Size(784, 413);
             dgvReportResults.TabIndex = 2;
             // 
             // cmbReportType
@@ -646,7 +645,7 @@ namespace EmployeeTrainingTracker
             cmbReportType.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             cmbReportType.FormattingEnabled = true;
             cmbReportType.Items.AddRange(new object[] { "Current Year (Valid)", "Custom Range (Valid)", "Out Of Date (Invalid)", "Custom Range (Invalid)" });
-            cmbReportType.Location = new Point(649, 24);
+            cmbReportType.Location = new Point(793, 24);
             cmbReportType.Name = "cmbReportType";
             cmbReportType.Size = new Size(121, 23);
             cmbReportType.TabIndex = 0;
@@ -678,7 +677,7 @@ namespace EmployeeTrainingTracker
             tabPage1.Location = new Point(4, 24);
             tabPage1.Name = "tabPage1";
             tabPage1.Padding = new Padding(3);
-            tabPage1.Size = new Size(867, 422);
+            tabPage1.Size = new Size(1011, 455);
             tabPage1.TabIndex = 3;
             tabPage1.Text = "Planning";
             tabPage1.UseVisualStyleBackColor = true;
@@ -688,7 +687,7 @@ namespace EmployeeTrainingTracker
             textStatusPlan.Anchor = AnchorStyles.Right;
             textStatusPlan.FormattingEnabled = true;
             textStatusPlan.Items.AddRange(new object[] { "Planned", "Completed", "Cancelled" });
-            textStatusPlan.Location = new Point(649, 203);
+            textStatusPlan.Location = new Point(793, 219);
             textStatusPlan.Name = "textStatusPlan";
             textStatusPlan.Size = new Size(200, 23);
             textStatusPlan.TabIndex = 52;
@@ -696,7 +695,7 @@ namespace EmployeeTrainingTracker
             // btnCompleteTraining
             // 
             btnCompleteTraining.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnCompleteTraining.Location = new Point(563, 393);
+            btnCompleteTraining.Location = new Point(707, 426);
             btnCompleteTraining.Name = "btnCompleteTraining";
             btnCompleteTraining.Size = new Size(80, 23);
             btnCompleteTraining.TabIndex = 51;
@@ -708,7 +707,7 @@ namespace EmployeeTrainingTracker
             // 
             label2.Anchor = AnchorStyles.Right;
             label2.AutoSize = true;
-            label2.Location = new Point(648, 275);
+            label2.Location = new Point(792, 291);
             label2.Name = "label2";
             label2.Size = new Size(75, 15);
             label2.TabIndex = 50;
@@ -717,7 +716,7 @@ namespace EmployeeTrainingTracker
             // textNotesPlan
             // 
             textNotesPlan.Anchor = AnchorStyles.Right;
-            textNotesPlan.Location = new Point(649, 247);
+            textNotesPlan.Location = new Point(793, 263);
             textNotesPlan.Name = "textNotesPlan";
             textNotesPlan.Size = new Size(200, 23);
             textNotesPlan.TabIndex = 49;
@@ -726,7 +725,7 @@ namespace EmployeeTrainingTracker
             // 
             label3.Anchor = AnchorStyles.Right;
             label3.AutoSize = true;
-            label3.Location = new Point(649, 229);
+            label3.Location = new Point(793, 245);
             label3.Name = "label3";
             label3.Size = new Size(44, 15);
             label3.TabIndex = 47;
@@ -736,7 +735,7 @@ namespace EmployeeTrainingTracker
             // 
             clbEmployeesPlan.Anchor = AnchorStyles.Right;
             clbEmployeesPlan.FormattingEnabled = true;
-            clbEmployeesPlan.Location = new Point(649, 293);
+            clbEmployeesPlan.Location = new Point(793, 309);
             clbEmployeesPlan.Name = "clbEmployeesPlan";
             clbEmployeesPlan.Size = new Size(200, 94);
             clbEmployeesPlan.TabIndex = 46;
@@ -745,7 +744,7 @@ namespace EmployeeTrainingTracker
             // 
             label7.Anchor = AnchorStyles.Right;
             label7.AutoSize = true;
-            label7.Location = new Point(649, 97);
+            label7.Location = new Point(793, 113);
             label7.Name = "label7";
             label7.Size = new Size(57, 15);
             label7.TabIndex = 44;
@@ -755,7 +754,7 @@ namespace EmployeeTrainingTracker
             // 
             label6.Anchor = AnchorStyles.Right;
             label6.AutoSize = true;
-            label6.Location = new Point(749, 53);
+            label6.Location = new Point(893, 69);
             label6.Name = "label6";
             label6.Size = new Size(45, 15);
             label6.TabIndex = 43;
@@ -765,7 +764,7 @@ namespace EmployeeTrainingTracker
             // 
             label5.Anchor = AnchorStyles.Right;
             label5.AutoSize = true;
-            label5.Location = new Point(649, 53);
+            label5.Location = new Point(793, 69);
             label5.Name = "label5";
             label5.Size = new Size(32, 15);
             label5.TabIndex = 42;
@@ -774,7 +773,7 @@ namespace EmployeeTrainingTracker
             // txtProviderPlan
             // 
             txtProviderPlan.Anchor = AnchorStyles.Right;
-            txtProviderPlan.Location = new Point(649, 115);
+            txtProviderPlan.Location = new Point(793, 131);
             txtProviderPlan.Name = "txtProviderPlan";
             txtProviderPlan.Size = new Size(200, 23);
             txtProviderPlan.TabIndex = 41;
@@ -782,7 +781,7 @@ namespace EmployeeTrainingTracker
             // txtHrsPlan
             // 
             txtHrsPlan.Anchor = AnchorStyles.Right;
-            txtHrsPlan.Location = new Point(749, 71);
+            txtHrsPlan.Location = new Point(893, 87);
             txtHrsPlan.Name = "txtHrsPlan";
             txtHrsPlan.Size = new Size(100, 23);
             txtHrsPlan.TabIndex = 40;
@@ -792,7 +791,7 @@ namespace EmployeeTrainingTracker
             txtKeyPlan.Anchor = AnchorStyles.Right;
             txtKeyPlan.FormattingEnabled = true;
             txtKeyPlan.Items.AddRange(new object[] { "T", "R", "P" });
-            txtKeyPlan.Location = new Point(649, 71);
+            txtKeyPlan.Location = new Point(793, 87);
             txtKeyPlan.Name = "txtKeyPlan";
             txtKeyPlan.Size = new Size(71, 23);
             txtKeyPlan.TabIndex = 39;
@@ -801,7 +800,7 @@ namespace EmployeeTrainingTracker
             // 
             statusTxt.Anchor = AnchorStyles.Right;
             statusTxt.AutoSize = true;
-            statusTxt.Location = new Point(649, 185);
+            statusTxt.Location = new Point(793, 201);
             statusTxt.Name = "statusTxt";
             statusTxt.Size = new Size(45, 15);
             statusTxt.TabIndex = 36;
@@ -811,7 +810,7 @@ namespace EmployeeTrainingTracker
             // 
             plannedDateTxt.Anchor = AnchorStyles.Right;
             plannedDateTxt.AutoSize = true;
-            plannedDateTxt.Location = new Point(649, 141);
+            plannedDateTxt.Location = new Point(793, 157);
             plannedDateTxt.Name = "plannedDateTxt";
             plannedDateTxt.Size = new Size(66, 15);
             plannedDateTxt.TabIndex = 35;
@@ -821,7 +820,7 @@ namespace EmployeeTrainingTracker
             // 
             label4.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             label4.AutoSize = true;
-            label4.Location = new Point(649, 9);
+            label4.Location = new Point(793, 9);
             label4.Name = "label4";
             label4.Size = new Size(105, 15);
             label4.TabIndex = 34;
@@ -830,7 +829,7 @@ namespace EmployeeTrainingTracker
             // dtpPlannedDate
             // 
             dtpPlannedDate.Anchor = AnchorStyles.Right;
-            dtpPlannedDate.Location = new Point(649, 159);
+            dtpPlannedDate.Location = new Point(793, 175);
             dtpPlannedDate.Name = "dtpPlannedDate";
             dtpPlannedDate.Size = new Size(200, 23);
             dtpPlannedDate.TabIndex = 32;
@@ -838,7 +837,7 @@ namespace EmployeeTrainingTracker
             // txtCertificateNamePlan
             // 
             txtCertificateNamePlan.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            txtCertificateNamePlan.Location = new Point(649, 27);
+            txtCertificateNamePlan.Location = new Point(793, 27);
             txtCertificateNamePlan.Name = "txtCertificateNamePlan";
             txtCertificateNamePlan.Size = new Size(200, 23);
             txtCertificateNamePlan.TabIndex = 31;
@@ -846,7 +845,7 @@ namespace EmployeeTrainingTracker
             // btnDeleteSession
             // 
             btnDeleteSession.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnDeleteSession.Location = new Point(649, 395);
+            btnDeleteSession.Location = new Point(793, 428);
             btnDeleteSession.Name = "btnDeleteSession";
             btnDeleteSession.Size = new Size(50, 23);
             btnDeleteSession.TabIndex = 30;
@@ -857,7 +856,7 @@ namespace EmployeeTrainingTracker
             // btnEditSession
             // 
             btnEditSession.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnEditSession.Location = new Point(761, 395);
+            btnEditSession.Location = new Point(905, 428);
             btnEditSession.Name = "btnEditSession";
             btnEditSession.Size = new Size(47, 23);
             btnEditSession.TabIndex = 29;
@@ -868,7 +867,7 @@ namespace EmployeeTrainingTracker
             // btnAddSession
             // 
             btnAddSession.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnAddSession.Location = new Point(814, 395);
+            btnAddSession.Location = new Point(958, 428);
             btnAddSession.Name = "btnAddSession";
             btnAddSession.Size = new Size(48, 23);
             btnAddSession.TabIndex = 28;
@@ -882,7 +881,7 @@ namespace EmployeeTrainingTracker
             dgvPlannedTraining.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgvPlannedTraining.Location = new Point(3, 6);
             dgvPlannedTraining.Name = "dgvPlannedTraining";
-            dgvPlannedTraining.Size = new Size(640, 381);
+            dgvPlannedTraining.Size = new Size(783, 397);
             dgvPlannedTraining.TabIndex = 3;
             dgvPlannedTraining.SelectionChanged += dgvPlannedTraining_SelectionChanged;
             // 
@@ -890,7 +889,7 @@ namespace EmployeeTrainingTracker
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(875, 450);
+            ClientSize = new Size(1019, 483);
             Controls.Add(tabControl);
             Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "AdminDashboard";
@@ -955,7 +954,6 @@ namespace EmployeeTrainingTracker
         private Button btnGenerateReport;
         private Button btnExportCsv;
         private CheckBox chkAddToTrainingFolder;
-        private ListBox lbEmployees;
         private TabPage tabPage1;
         private DataGridView dgvPlannedTraining;
         private Label statusTxt;
@@ -987,5 +985,7 @@ namespace EmployeeTrainingTracker
         private Button btnCompleteTraining;
         private ComboBox textStatusPlan;
         private Label label8;
+        private CheckedListBox checkedListBox1;
+        private CheckedListBox clbEmployees;
     }
 }
