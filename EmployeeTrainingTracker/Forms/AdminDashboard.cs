@@ -12,6 +12,8 @@ namespace EmployeeTrainingTracker
 
         private string currentEmployeeName = "None";
 
+        private bool _loadingManagerCombo = false;
+
         private void SetCurrentEmployeeName(string employeeName)
         {
             currentEmployeeName = employeeName;
@@ -26,6 +28,8 @@ namespace EmployeeTrainingTracker
             tabCertificates.Enabled = false;
             LoadReportSettings();
             StyleAllDGVs();
+            LoadManagers();
+            LoadGroups();
 
             var plannedSessions = PlannedTrainingService.GetPlannedTraining();
             if (plannedSessions.Rows.Count > 0)
@@ -222,6 +226,71 @@ namespace EmployeeTrainingTracker
             if (dgvPlannedTraining.Columns.Contains("SessionID"))
                 dgvPlannedTraining.Columns["SessionID"].Visible = false;
         } //Planning
+
+        private void LoadGroups()
+        {
+            // Fetch all groups
+            DataTable dtGroups = GroupHelper.GetAllGroups(DatabaseHelper.ConnectionString);
+
+            dgvGroups.AutoGenerateColumns = true;
+            dgvGroups.DataSource = dtGroups;
+
+            // Format DGV
+            dgvGroups.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            foreach (DataGridViewColumn col in dgvGroups.Columns)
+                col.ReadOnly = true;
+
+            // Hide internal IDs if you want
+            if (dgvGroups.Columns.Contains("GroupID"))
+                dgvGroups.Columns["GroupID"].Visible = false;
+            if (dgvGroups.Columns.Contains("ManagerID"))
+                dgvGroups.Columns["ManagerID"].Visible = false;
+
+            // Optional: pre-select first row if you want auto-population
+            if (dgvGroups.Rows.Count > 0)
+                dgvGroups.Rows[0].Selected = true;
+        }
+
+        private void LoadManagers()
+        {
+            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+            conn.Open();
+
+            string query = @"
+        SELECT EmployeeID, FullName 
+        FROM Employees
+        ORDER BY FullName;";
+
+            using var cmd = new SqliteCommand(query, conn);
+            using var reader = cmd.ExecuteReader();
+
+            DataTable dtManagers = new DataTable();
+            dtManagers.Load(reader);
+
+            cbManager.DataSource = dtManagers;
+            cbManager.DisplayMember = "FullName";
+            cbManager.ValueMember = "EmployeeID";
+
+            cbManager.SelectedIndex = -1; // no default selection
+        }
+
+        private void LoadGroupMembers(int groupId)
+        {
+            // Fetch members from DB
+            DataTable dtMembers = GroupHelper.GetMembersByGroup(DatabaseHelper.ConnectionString, groupId);
+
+            // Debug: confirm rows returned
+            Console.WriteLine($"GroupID {groupId} Members returned: {dtMembers.Rows.Count}");
+
+            // Bind to DGV
+            dgvGroupMembers.AutoGenerateColumns = true;
+            dgvGroupMembers.DataSource = dtMembers;
+            dgvGroupMembers.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+
+            foreach (DataGridViewColumn col in dgvGroupMembers.Columns)
+                col.ReadOnly = true;
+        }
+
 
 
         // CRUD for certificates
@@ -590,6 +659,49 @@ namespace EmployeeTrainingTracker
         }
 
 
+
+        //CRUD for Groups
+        private void btnAddGroup_Click(object sender, EventArgs e)
+        {
+            GroupHelper.AddGroup(
+                DatabaseHelper.ConnectionString,
+                txtGroupName.Text.Trim(),
+                txtDescription.Text.Trim(),
+                cbManager.SelectedValue as int?
+            );
+
+            LoadGroups();
+        }
+
+        private void btnEditGroup_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void btnDeleteGroup_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void btnAddMember_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void btnRemoveMember_Click(object sender, EventArgs e)
+        {
+            if (dgvGroupMembers.SelectedRows.Count == 0) return;
+
+            int groupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
+            int employeeId = Convert.ToInt32(dgvGroupMembers.SelectedRows[0].Cells["EmployeeID"].Value);
+
+            GroupHelper.RemoveMemberFromGroup(DatabaseHelper.ConnectionString, groupId, employeeId);
+
+            // Refresh the members grid
+            LoadGroupMembers(groupId);
+        }
+
+
         // Reporting and Exports
         private void btnGenerateReport_Click(object sender, EventArgs e)
         {
@@ -821,6 +933,39 @@ namespace EmployeeTrainingTracker
             }
         }
 
+        private void cbManager_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (_loadingManagerCombo) return; // skip if combo is still loading
+            if (dgvGroups.SelectedRows.Count == 0) return;
+            if (cbManager.SelectedValue == null) return;
+
+            int groupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
+            int newManagerId = Convert.ToInt32(cbManager.SelectedValue);
+
+            // Update DB
+            GroupHelper.UpdateGroup(
+                DatabaseHelper.ConnectionString,
+                groupId,
+                dgvGroups.SelectedRows[0].Cells["GroupName"].Value.ToString(),
+                dgvGroups.SelectedRows[0].Cells["Description"].Value.ToString(),
+                newManagerId
+            );
+
+            // Refresh main grid safely after update
+            LoadGroups();
+
+            // Re-select group after reload
+            foreach (DataGridViewRow row in dgvGroups.Rows)
+            {
+                if (Convert.ToInt32(row.Cells["GroupID"].Value) == groupId)
+                {
+                    row.Selected = true;
+                    break;
+                }
+            }
+        }
+
+
         private void dgvPlannedTraining_SelectionChanged(object sender, EventArgs e)
         {
             if (dgvPlannedTraining.CurrentRow?.DataBoundItem is not DataRowView rowView)
@@ -944,6 +1089,46 @@ namespace EmployeeTrainingTracker
             }
         }
 
+        private void dgvGroups_SelectionChanged(object sender, EventArgs e)
+        {
+            if (dgvGroups.SelectedRows.Count == 0) return;
+
+            int groupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
+
+            // Load members for the selected group
+            LoadGroupMembers(groupId);
+
+            // Populate group details
+            var row = dgvGroups.SelectedRows[0];
+            txtGroupName.Text = row.Cells["GroupName"].Value.ToString();
+            txtDescription.Text = row.Cells["Description"].Value.ToString();
+
+            // Populate manager ComboBox with current group members
+            PopulateManagerComboBox(groupId, row.Cells["ManagerID"].Value);
+        }
+
+        private void PopulateManagerComboBox(int groupId, object currentManagerId)
+        {
+
+            _loadingManagerCombo = true;
+            DataTable dtMembers = GroupHelper.GetMembersByGroup(DatabaseHelper.ConnectionString, groupId);
+
+            cbManager.DataSource = dtMembers;
+            cbManager.DisplayMember = "FullName";
+            cbManager.ValueMember = "EmployeeID";
+
+            // Set current manager if exists
+            if (currentManagerId != DBNull.Value)
+                cbManager.SelectedValue = Convert.ToInt32(currentManagerId);
+            else
+                cbManager.SelectedIndex = -1;
+
+            // Handle selection change event to update manager in DB
+            cbManager.SelectedIndexChanged -= cbManager_SelectedIndexChanged;
+            cbManager.SelectedIndexChanged += cbManager_SelectedIndexChanged;
+            _loadingManagerCombo = false;
+        }
+
         // Helper Functions
         private string EscapeCsvValue(string value)
         {
@@ -1013,11 +1198,15 @@ namespace EmployeeTrainingTracker
             StyleDataGridView(dgvCertificates);
             StyleDataGridView(dgvEmployees);
             StyleDataGridView(dgvReportResults);
+            StyleDataGridView(dgvGroups);
+            StyleDataGridView(dgvGroupMembers);
 
             RenameColumns(dgvPlannedTraining);
             RenameColumns(dgvCertificates);
             RenameColumns(dgvEmployees);
             RenameColumns(dgvReportResults);
+            RenameColumns(dgvGroups);
+            RenameColumns(dgvGroupMembers);
 
             foreach (TabPage tab in tabControl.TabPages)
             {

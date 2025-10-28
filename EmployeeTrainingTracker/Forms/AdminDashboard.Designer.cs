@@ -80,7 +80,7 @@ namespace EmployeeTrainingTracker
             lblReportType = new Label();
             dgvReportResults = new DataGridView();
             cmbReportType = new ComboBox();
-            tabPage1 = new TabPage();
+            Planning = new TabPage();
             textStatusPlan = new ComboBox();
             btnCompleteTraining = new Button();
             label2 = new Label();
@@ -102,6 +102,24 @@ namespace EmployeeTrainingTracker
             btnEditSession = new Button();
             btnAddSession = new Button();
             dgvPlannedTraining = new DataGridView();
+            Groups = new TabPage();
+            label14 = new Label();
+            label13 = new Label();
+            lblGroupName = new Label();
+            txtDescription = new TextBox();
+            txtGroupName = new TextBox();
+            lblMembers = new Label();
+            lblGroups = new Label();
+            btnSaveManager = new Button();
+            txtSearchGroups = new TextBox();
+            cbManager = new ComboBox();
+            btnRemoveMember = new Button();
+            btnAddMember = new Button();
+            dgvGroupMembers = new DataGridView();
+            btnDeleteGroup = new Button();
+            btnEditGroup = new Button();
+            btnAddGroup = new Button();
+            dgvGroups = new DataGridView();
             ((System.ComponentModel.ISupportInitialize)dgvEmployees).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvCertificates).BeginInit();
             tabControl.SuspendLayout();
@@ -109,8 +127,11 @@ namespace EmployeeTrainingTracker
             tabCertificates.SuspendLayout();
             Reports.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dgvReportResults).BeginInit();
-            tabPage1.SuspendLayout();
+            Planning.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dgvPlannedTraining).BeginInit();
+            Groups.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)dgvGroupMembers).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)dgvGroups).BeginInit();
             SuspendLayout();
             // 
             // dgvEmployees
@@ -138,7 +159,8 @@ namespace EmployeeTrainingTracker
             tabControl.Controls.Add(tabEmployees);
             tabControl.Controls.Add(tabCertificates);
             tabControl.Controls.Add(Reports);
-            tabControl.Controls.Add(tabPage1);
+            tabControl.Controls.Add(Planning);
+            tabControl.Controls.Add(Groups);
             tabControl.Dock = DockStyle.Fill;
             tabControl.Location = new Point(0, 0);
             tabControl.Name = "tabControl";
@@ -651,36 +673,36 @@ namespace EmployeeTrainingTracker
             cmbReportType.TabIndex = 0;
             cmbReportType.SelectedIndexChanged += cmbReportType_SelectedIndexChanged;
             // 
-            // tabPage1
+            // Planning
             // 
-            tabPage1.Controls.Add(textStatusPlan);
-            tabPage1.Controls.Add(btnCompleteTraining);
-            tabPage1.Controls.Add(label2);
-            tabPage1.Controls.Add(textNotesPlan);
-            tabPage1.Controls.Add(label3);
-            tabPage1.Controls.Add(clbEmployeesPlan);
-            tabPage1.Controls.Add(label7);
-            tabPage1.Controls.Add(label6);
-            tabPage1.Controls.Add(label5);
-            tabPage1.Controls.Add(txtProviderPlan);
-            tabPage1.Controls.Add(txtHrsPlan);
-            tabPage1.Controls.Add(txtKeyPlan);
-            tabPage1.Controls.Add(statusTxt);
-            tabPage1.Controls.Add(plannedDateTxt);
-            tabPage1.Controls.Add(label4);
-            tabPage1.Controls.Add(dtpPlannedDate);
-            tabPage1.Controls.Add(txtCertificateNamePlan);
-            tabPage1.Controls.Add(btnDeleteSession);
-            tabPage1.Controls.Add(btnEditSession);
-            tabPage1.Controls.Add(btnAddSession);
-            tabPage1.Controls.Add(dgvPlannedTraining);
-            tabPage1.Location = new Point(4, 24);
-            tabPage1.Name = "tabPage1";
-            tabPage1.Padding = new Padding(3);
-            tabPage1.Size = new Size(1011, 455);
-            tabPage1.TabIndex = 3;
-            tabPage1.Text = "Planning";
-            tabPage1.UseVisualStyleBackColor = true;
+            Planning.Controls.Add(textStatusPlan);
+            Planning.Controls.Add(btnCompleteTraining);
+            Planning.Controls.Add(label2);
+            Planning.Controls.Add(textNotesPlan);
+            Planning.Controls.Add(label3);
+            Planning.Controls.Add(clbEmployeesPlan);
+            Planning.Controls.Add(label7);
+            Planning.Controls.Add(label6);
+            Planning.Controls.Add(label5);
+            Planning.Controls.Add(txtProviderPlan);
+            Planning.Controls.Add(txtHrsPlan);
+            Planning.Controls.Add(txtKeyPlan);
+            Planning.Controls.Add(statusTxt);
+            Planning.Controls.Add(plannedDateTxt);
+            Planning.Controls.Add(label4);
+            Planning.Controls.Add(dtpPlannedDate);
+            Planning.Controls.Add(txtCertificateNamePlan);
+            Planning.Controls.Add(btnDeleteSession);
+            Planning.Controls.Add(btnEditSession);
+            Planning.Controls.Add(btnAddSession);
+            Planning.Controls.Add(dgvPlannedTraining);
+            Planning.Location = new Point(4, 24);
+            Planning.Name = "Planning";
+            Planning.Padding = new Padding(3);
+            Planning.Size = new Size(1011, 455);
+            Planning.TabIndex = 3;
+            Planning.Text = "Planning";
+            Planning.UseVisualStyleBackColor = true;
             // 
             // textStatusPlan
             // 
@@ -885,6 +907,192 @@ namespace EmployeeTrainingTracker
             dgvPlannedTraining.TabIndex = 3;
             dgvPlannedTraining.SelectionChanged += dgvPlannedTraining_SelectionChanged;
             // 
+            // Groups
+            // 
+            Groups.Controls.Add(label14);
+            Groups.Controls.Add(label13);
+            Groups.Controls.Add(lblGroupName);
+            Groups.Controls.Add(txtDescription);
+            Groups.Controls.Add(txtGroupName);
+            Groups.Controls.Add(lblMembers);
+            Groups.Controls.Add(lblGroups);
+            Groups.Controls.Add(btnSaveManager);
+            Groups.Controls.Add(txtSearchGroups);
+            Groups.Controls.Add(cbManager);
+            Groups.Controls.Add(btnRemoveMember);
+            Groups.Controls.Add(btnAddMember);
+            Groups.Controls.Add(dgvGroupMembers);
+            Groups.Controls.Add(btnDeleteGroup);
+            Groups.Controls.Add(btnEditGroup);
+            Groups.Controls.Add(btnAddGroup);
+            Groups.Controls.Add(dgvGroups);
+            Groups.Location = new Point(4, 24);
+            Groups.Name = "Groups";
+            Groups.Size = new Size(1011, 455);
+            Groups.TabIndex = 4;
+            Groups.Text = "Groups";
+            Groups.UseVisualStyleBackColor = true;
+            // 
+            // label14
+            // 
+            label14.AutoSize = true;
+            label14.Location = new Point(792, 122);
+            label14.Name = "label14";
+            label14.Size = new Size(60, 15);
+            label14.TabIndex = 46;
+            label14.Text = "Manager :";
+            // 
+            // label13
+            // 
+            label13.AutoSize = true;
+            label13.Location = new Point(792, 78);
+            label13.Name = "label13";
+            label13.Size = new Size(74, 15);
+            label13.TabIndex = 45;
+            label13.Text = "Group Desc :";
+            // 
+            // lblGroupName
+            // 
+            lblGroupName.AutoSize = true;
+            lblGroupName.Location = new Point(792, 34);
+            lblGroupName.Name = "lblGroupName";
+            lblGroupName.Size = new Size(81, 15);
+            lblGroupName.TabIndex = 44;
+            lblGroupName.Text = "Group Name :";
+            // 
+            // txtDescription
+            // 
+            txtDescription.Location = new Point(792, 96);
+            txtDescription.Name = "txtDescription";
+            txtDescription.Size = new Size(170, 23);
+            txtDescription.TabIndex = 43;
+            // 
+            // txtGroupName
+            // 
+            txtGroupName.Location = new Point(792, 52);
+            txtGroupName.Name = "txtGroupName";
+            txtGroupName.Size = new Size(170, 23);
+            txtGroupName.TabIndex = 42;
+            // 
+            // lblMembers
+            // 
+            lblMembers.AutoSize = true;
+            lblMembers.Font = new Font("Segoe UI", 12F, FontStyle.Bold | FontStyle.Underline, GraphicsUnit.Point, 0);
+            lblMembers.Location = new Point(856, 175);
+            lblMembers.Name = "lblMembers";
+            lblMembers.Size = new Size(89, 21);
+            lblMembers.TabIndex = 41;
+            lblMembers.Text = "Members :";
+            // 
+            // lblGroups
+            // 
+            lblGroups.AutoSize = true;
+            lblGroups.Font = new Font("Segoe UI", 12F, FontStyle.Bold | FontStyle.Underline, GraphicsUnit.Point, 0);
+            lblGroups.Location = new Point(856, 6);
+            lblGroups.Name = "lblGroups";
+            lblGroups.Size = new Size(72, 21);
+            lblGroups.TabIndex = 40;
+            lblGroups.Text = "Groups :";
+            // 
+            // btnSaveManager
+            // 
+            btnSaveManager.Location = new Point(928, 424);
+            btnSaveManager.Name = "btnSaveManager";
+            btnSaveManager.Size = new Size(75, 23);
+            btnSaveManager.TabIndex = 39;
+            btnSaveManager.Text = "Save";
+            btnSaveManager.UseVisualStyleBackColor = true;
+            // 
+            // txtSearchGroups
+            // 
+            txtSearchGroups.Location = new Point(903, 395);
+            txtSearchGroups.Name = "txtSearchGroups";
+            txtSearchGroups.Size = new Size(100, 23);
+            txtSearchGroups.TabIndex = 38;
+            // 
+            // cbManager
+            // 
+            cbManager.FormattingEnabled = true;
+            cbManager.Location = new Point(792, 140);
+            cbManager.Name = "cbManager";
+            cbManager.Size = new Size(170, 23);
+            cbManager.TabIndex = 37;
+            cbManager.SelectedIndexChanged += cbManager_SelectedIndexChanged;
+            // 
+            // btnRemoveMember
+            // 
+            btnRemoveMember.Location = new Point(669, 409);
+            btnRemoveMember.Name = "btnRemoveMember";
+            btnRemoveMember.Size = new Size(117, 23);
+            btnRemoveMember.TabIndex = 36;
+            btnRemoveMember.Text = "Remove Member";
+            btnRemoveMember.UseVisualStyleBackColor = true;
+            btnRemoveMember.Click += btnRemoveMember_Click;
+            // 
+            // btnAddMember
+            // 
+            btnAddMember.Location = new Point(561, 409);
+            btnAddMember.Name = "btnAddMember";
+            btnAddMember.Size = new Size(102, 23);
+            btnAddMember.TabIndex = 35;
+            btnAddMember.Text = "Add Member";
+            btnAddMember.UseVisualStyleBackColor = true;
+            btnAddMember.Click += btnAddMember_Click;
+            // 
+            // dgvGroupMembers
+            // 
+            dgvGroupMembers.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dgvGroupMembers.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dgvGroupMembers.Location = new Point(407, 6);
+            dgvGroupMembers.Name = "dgvGroupMembers";
+            dgvGroupMembers.Size = new Size(379, 397);
+            dgvGroupMembers.TabIndex = 34;
+            // 
+            // btnDeleteGroup
+            // 
+            btnDeleteGroup.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            btnDeleteGroup.Location = new Point(166, 409);
+            btnDeleteGroup.Name = "btnDeleteGroup";
+            btnDeleteGroup.Size = new Size(50, 23);
+            btnDeleteGroup.TabIndex = 33;
+            btnDeleteGroup.Text = "Delete";
+            btnDeleteGroup.UseVisualStyleBackColor = true;
+            btnDeleteGroup.Click += btnDeleteGroup_Click;
+            // 
+            // btnEditGroup
+            // 
+            btnEditGroup.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            btnEditGroup.Location = new Point(278, 409);
+            btnEditGroup.Name = "btnEditGroup";
+            btnEditGroup.Size = new Size(47, 23);
+            btnEditGroup.TabIndex = 32;
+            btnEditGroup.Text = "Edit";
+            btnEditGroup.UseVisualStyleBackColor = true;
+            btnEditGroup.Click += btnEditGroup_Click;
+            // 
+            // btnAddGroup
+            // 
+            btnAddGroup.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            btnAddGroup.Location = new Point(331, 409);
+            btnAddGroup.Name = "btnAddGroup";
+            btnAddGroup.Size = new Size(48, 23);
+            btnAddGroup.TabIndex = 31;
+            btnAddGroup.Text = "Add";
+            btnAddGroup.UseVisualStyleBackColor = true;
+            btnAddGroup.Click += btnAddGroup_Click;
+            // 
+            // dgvGroups
+            // 
+            dgvGroups.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dgvGroups.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dgvGroups.Location = new Point(0, 6);
+            dgvGroups.MultiSelect = false;
+            dgvGroups.Name = "dgvGroups";
+            dgvGroups.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dgvGroups.Size = new Size(379, 397);
+            dgvGroups.TabIndex = 4;
+            dgvGroups.SelectionChanged += dgvGroups_SelectionChanged;
+            // 
             // AdminDashboard
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -904,9 +1112,13 @@ namespace EmployeeTrainingTracker
             Reports.ResumeLayout(false);
             Reports.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)dgvReportResults).EndInit();
-            tabPage1.ResumeLayout(false);
-            tabPage1.PerformLayout();
+            Planning.ResumeLayout(false);
+            Planning.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)dgvPlannedTraining).EndInit();
+            Groups.ResumeLayout(false);
+            Groups.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)dgvGroupMembers).EndInit();
+            ((System.ComponentModel.ISupportInitialize)dgvGroups).EndInit();
             ResumeLayout(false);
         }
 
@@ -954,7 +1166,7 @@ namespace EmployeeTrainingTracker
         private Button btnGenerateReport;
         private Button btnExportCsv;
         private CheckBox chkAddToTrainingFolder;
-        private TabPage tabPage1;
+        private TabPage Planning;
         private DataGridView dgvPlannedTraining;
         private Label statusTxt;
         private Label plannedDateTxt;
@@ -975,7 +1187,7 @@ namespace EmployeeTrainingTracker
         private Label label11;
         private Label label12;
         private TextBox textNotesPlan;
-        private ComboBox comboBox1;
+        private ComboBox cbManager;
         private CheckedListBox clbEmployeesPlan;
         private ComboBox txtKeyCertsTab;
         private TextBox txtHrsCertsTab;
@@ -987,5 +1199,22 @@ namespace EmployeeTrainingTracker
         private Label label8;
         private CheckedListBox checkedListBox1;
         private CheckedListBox clbEmployees;
+        private TabPage Groups;
+        private DataGridView dgvGroups;
+        private Button btnDeleteGroup;
+        private Button btnEditGroup;
+        private Button btnAddGroup;
+        private DataGridView dgvGroupMembers;
+        private Button btnRemoveMember;
+        private Button btnAddMember;
+        private Button btnSaveManager;
+        private TextBox txtSearchGroups;
+        private Label lblGroups;
+        private Label lblMembers;
+        private Label lblGroupName;
+        private TextBox txtDescription;
+        private TextBox txtGroupName;
+        private Label label13;
+        private Label label14;
     }
 }

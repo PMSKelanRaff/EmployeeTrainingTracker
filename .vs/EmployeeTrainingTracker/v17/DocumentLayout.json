@@ -3,12 +3,16 @@
   "WorkspaceRootPath": "C:\\Users\\KelanRafferty\\source\\repos\\EmployeeTrainingTracker\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|c:\\users\\kelanrafferty\\source\\repos\\employeetrainingtracker\\employeetrainingtracker\\forms\\admindashboard.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form",
-      "RelativeMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|solutionrelative:employeetrainingtracker\\forms\\admindashboard.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|c:\\users\\kelanrafferty\\source\\repos\\employeetrainingtracker\\employeetrainingtracker\\forms\\admindashboard.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|solutionrelative:employeetrainingtracker\\forms\\admindashboard.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|c:\\users\\kelanrafferty\\source\\repos\\employeetrainingtracker\\employeetrainingtracker\\utilities\\groupservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|solutionrelative:employeetrainingtracker\\utilities\\groupservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|c:\\users\\kelanrafferty\\source\\repos\\employeetrainingtracker\\employeetrainingtracker\\forms\\admindashboard.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form",
+      "RelativeMoniker": "D:0:0:{B54803E6-65BC-4743-A48D-E06E228912F4}|EmployeeTrainingTracker\\EmployeeTrainingTracker.csproj|solutionrelative:employeetrainingtracker\\forms\\admindashboard.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form"
     }
   ],
   "DocumentGroupContainers": [
@@ -31,19 +35,32 @@
             {
               "$type": "Document",
               "DocumentIndex": 1,
+              "Title": "GroupService.cs",
+              "DocumentMoniker": "C:\\Users\\KelanRafferty\\source\\repos\\EmployeeTrainingTracker\\EmployeeTrainingTracker\\Utilities\\GroupService.cs",
+              "RelativeDocumentMoniker": "EmployeeTrainingTracker\\Utilities\\GroupService.cs",
+              "ToolTip": "C:\\Users\\KelanRafferty\\source\\repos\\EmployeeTrainingTracker\\EmployeeTrainingTracker\\Utilities\\GroupService.cs",
+              "RelativeToolTip": "EmployeeTrainingTracker\\Utilities\\GroupService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAD0AAAAMAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-10-28T09:11:32.567Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
               "Title": "AdminDashboard.cs",
               "DocumentMoniker": "C:\\Users\\KelanRafferty\\source\\repos\\EmployeeTrainingTracker\\EmployeeTrainingTracker\\Forms\\AdminDashboard.cs",
               "RelativeDocumentMoniker": "EmployeeTrainingTracker\\Forms\\AdminDashboard.cs",
               "ToolTip": "C:\\Users\\KelanRafferty\\source\\repos\\EmployeeTrainingTracker\\EmployeeTrainingTracker\\Forms\\AdminDashboard.cs",
               "RelativeToolTip": "EmployeeTrainingTracker\\Forms\\AdminDashboard.cs",
-              "ViewState": "AgIAALECAAAAAAAAAAA0wO4DAAAJAAAAAAAAAA==",
+              "ViewState": "AgIAACEDAAAAAAAAAADwv8YDAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-10-23T11:04:25.764Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 2,
               "Title": "AdminDashboard.cs [Design]",
               "DocumentMoniker": "C:\\Users\\KelanRafferty\\source\\repos\\EmployeeTrainingTracker\\EmployeeTrainingTracker\\Forms\\AdminDashboard.cs",
               "RelativeDocumentMoniker": "EmployeeTrainingTracker\\Forms\\AdminDashboard.cs",

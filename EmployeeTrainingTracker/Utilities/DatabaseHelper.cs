@@ -25,12 +25,6 @@ public static class DatabaseHelper
                 // Already using SQLite schema, ensure tables exist
                 EnsureSQLiteTablesExist(conn);
             }
-            else
-            {
-                // New database, create SQLite schema
-                CreateSQLiteSchema(conn);
-                SeedData(conn);
-            }
         }
     }
 
@@ -191,57 +185,6 @@ public static class DatabaseHelper
     private static void CreateSQLiteSchema(SqliteConnection conn)
     {
         EnsureSQLiteTablesExist(conn);
-    }
-
-    private static void SeedData(SqliteConnection conn)
-    {
-        using (var cmd = conn.CreateCommand())
-        {
-            // Only seed Employees if empty
-            cmd.CommandText = "SELECT COUNT(*) FROM Employees";
-            int empCount = Convert.ToInt32(cmd.ExecuteScalar());
-
-            if (empCount == 0)
-            {
-                cmd.CommandText = @"
-                    INSERT INTO Employees (FullName, Department, JobTitle) VALUES
-                        ('Alice Smith', 'HR', 'Manager'),
-                        ('Bob Jones', 'IT', 'Technician'),
-                        ('Kelan Rafferty', 'Operations', 'Employee'),
-                        ('Charlie Brown', 'Finance', 'Accountant');";
-                cmd.ExecuteNonQuery();
-            }
-
-            // Only seed Users if empty
-            cmd.CommandText = "SELECT COUNT(*) FROM Users";
-            int userCount = Convert.ToInt32(cmd.ExecuteScalar());
-
-            if (userCount == 0)
-            {
-                cmd.CommandText = @"
-                    INSERT INTO Users (Email, PasswordHash, Role, EmployeeID, WindowsUsername) VALUES
-                        ('alice@pms.ie','', 'Admin', 1, 'AliceS'),
-                        ('bob@pms.ie','', 'Employee', 2, 'BobJ'),
-                        ('kelan@pms.ie','', 'Employee', 3, 'KelanR'),
-                        ('charlie@pms.ie','', 'Employee', 4, 'CharlieB');";
-                cmd.ExecuteNonQuery();
-            }
-
-            // Only seed TrainingCertificates if empty
-            cmd.CommandText = "SELECT COUNT(*) FROM TrainingCertificates";
-            int certCount = Convert.ToInt32(cmd.ExecuteScalar());
-
-            if (certCount == 0)
-            {
-                cmd.CommandText = @"
-                    INSERT INTO TrainingCertificates (EmployeeID, CertificateName, IssueDate, ExpiryDate, FilePath) VALUES
-                        (3, 'Fire Warden', '2024-01-01', '2026-01-01', NULL),
-                        (3, 'Safe Pass', '2023-06-12', '2025-06-12', NULL),
-                        (4, 'First Aid', '2022-05-20', '2025-05-20', NULL),
-                        (4, 'Manual Handling', '2023-02-10', '2026-02-10', NULL);";
-                cmd.ExecuteNonQuery();
-            }
-        }
     }
 
 
