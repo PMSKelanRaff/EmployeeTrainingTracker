@@ -218,8 +218,6 @@ namespace EmployeeTrainingTracker.Utilities
                 "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-
-
         public static List<EmployeeItem> GetAllEmployees()
         {
             var employees = new List<EmployeeItem>();

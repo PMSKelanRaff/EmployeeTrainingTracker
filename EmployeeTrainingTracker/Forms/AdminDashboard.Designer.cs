@@ -108,10 +108,8 @@ namespace EmployeeTrainingTracker
             lblGroupName = new Label();
             txtDescription = new TextBox();
             txtGroupName = new TextBox();
-            lblMembers = new Label();
             lblGroups = new Label();
             btnSaveManager = new Button();
-            txtSearchGroups = new TextBox();
             cbManager = new ComboBox();
             btnRemoveMember = new Button();
             btnAddMember = new Button();
@@ -914,10 +912,8 @@ namespace EmployeeTrainingTracker
             Groups.Controls.Add(lblGroupName);
             Groups.Controls.Add(txtDescription);
             Groups.Controls.Add(txtGroupName);
-            Groups.Controls.Add(lblMembers);
             Groups.Controls.Add(lblGroups);
             Groups.Controls.Add(btnSaveManager);
-            Groups.Controls.Add(txtSearchGroups);
             Groups.Controls.Add(cbManager);
             Groups.Controls.Add(btnRemoveMember);
             Groups.Controls.Add(btnAddMember);
@@ -930,7 +926,7 @@ namespace EmployeeTrainingTracker
             Groups.Name = "Groups";
             Groups.Size = new Size(1011, 455);
             Groups.TabIndex = 4;
-            Groups.Text = "Groups";
+            Groups.Text = "Departments";
             Groups.UseVisualStyleBackColor = true;
             // 
             // label14
@@ -947,18 +943,18 @@ namespace EmployeeTrainingTracker
             label13.AutoSize = true;
             label13.Location = new Point(792, 78);
             label13.Name = "label13";
-            label13.Size = new Size(74, 15);
+            label13.Size = new Size(104, 15);
             label13.TabIndex = 45;
-            label13.Text = "Group Desc :";
+            label13.Text = "Department Desc :";
             // 
             // lblGroupName
             // 
             lblGroupName.AutoSize = true;
             lblGroupName.Location = new Point(792, 34);
             lblGroupName.Name = "lblGroupName";
-            lblGroupName.Size = new Size(81, 15);
+            lblGroupName.Size = new Size(111, 15);
             lblGroupName.TabIndex = 44;
-            lblGroupName.Text = "Group Name :";
+            lblGroupName.Text = "Department Name :";
             // 
             // txtDescription
             // 
@@ -974,25 +970,15 @@ namespace EmployeeTrainingTracker
             txtGroupName.Size = new Size(170, 23);
             txtGroupName.TabIndex = 42;
             // 
-            // lblMembers
-            // 
-            lblMembers.AutoSize = true;
-            lblMembers.Font = new Font("Segoe UI", 12F, FontStyle.Bold | FontStyle.Underline, GraphicsUnit.Point, 0);
-            lblMembers.Location = new Point(856, 175);
-            lblMembers.Name = "lblMembers";
-            lblMembers.Size = new Size(89, 21);
-            lblMembers.TabIndex = 41;
-            lblMembers.Text = "Members :";
-            // 
             // lblGroups
             // 
             lblGroups.AutoSize = true;
             lblGroups.Font = new Font("Segoe UI", 12F, FontStyle.Bold | FontStyle.Underline, GraphicsUnit.Point, 0);
-            lblGroups.Location = new Point(856, 6);
+            lblGroups.Location = new Point(839, 6);
             lblGroups.Name = "lblGroups";
-            lblGroups.Size = new Size(72, 21);
+            lblGroups.Size = new Size(117, 21);
             lblGroups.TabIndex = 40;
-            lblGroups.Text = "Groups :";
+            lblGroups.Text = "Departments :";
             // 
             // btnSaveManager
             // 
@@ -1002,13 +988,6 @@ namespace EmployeeTrainingTracker
             btnSaveManager.TabIndex = 39;
             btnSaveManager.Text = "Save";
             btnSaveManager.UseVisualStyleBackColor = true;
-            // 
-            // txtSearchGroups
-            // 
-            txtSearchGroups.Location = new Point(903, 395);
-            txtSearchGroups.Name = "txtSearchGroups";
-            txtSearchGroups.Size = new Size(100, 23);
-            txtSearchGroups.TabIndex = 38;
             // 
             // cbManager
             // 
@@ -1044,7 +1023,10 @@ namespace EmployeeTrainingTracker
             dgvGroupMembers.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             dgvGroupMembers.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgvGroupMembers.Location = new Point(407, 6);
+            dgvGroupMembers.MultiSelect = false;
             dgvGroupMembers.Name = "dgvGroupMembers";
+            dgvGroupMembers.ReadOnly = true;
+            dgvGroupMembers.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvGroupMembers.Size = new Size(379, 397);
             dgvGroupMembers.TabIndex = 34;
             // 
@@ -1210,7 +1192,6 @@ namespace EmployeeTrainingTracker
         private Button btnSaveManager;
         private TextBox txtSearchGroups;
         private Label lblGroups;
-        private Label lblMembers;
         private Label lblGroupName;
         private TextBox txtDescription;
         private TextBox txtGroupName;

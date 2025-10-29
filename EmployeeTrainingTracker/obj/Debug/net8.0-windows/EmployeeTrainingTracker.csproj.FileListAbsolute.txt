@@ -60,3 +60,4 @@ C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTrac
 C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\bin\Debug\net8.0-windows\System.Security.Cryptography.Pkcs.dll
 C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\bin\Debug\net8.0-windows\System.Security.Cryptography.Xml.dll
 C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\bin\Debug\net8.0-windows\runtimes\win\lib\net8.0\System.Security.Cryptography.Pkcs.dll
+C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\obj\Debug\net8.0-windows\EmployeeTrainingTracker.Utilities.AddMemberForm.resources

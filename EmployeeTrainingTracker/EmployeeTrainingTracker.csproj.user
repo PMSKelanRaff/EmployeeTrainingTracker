@@ -13,5 +13,8 @@
     <Compile Update="Forms\SignUpForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Update="Forms\AddMemberForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
   </ItemGroup>
 </Project>
