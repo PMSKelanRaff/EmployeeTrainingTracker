@@ -48,6 +48,7 @@ namespace EmployeeTrainingTracker
             txtPassword = new TextBox();
             txtUsername = new TextBox();
             tabCertificates = new TabPage();
+            btnBrowseFile = new Button();
             label10 = new Label();
             label11 = new Label();
             label12 = new Label();
@@ -69,6 +70,8 @@ namespace EmployeeTrainingTracker
             btnEdit = new Button();
             btnAdd = new Button();
             Reports = new TabPage();
+            label15 = new Label();
+            clbGroups = new CheckedListBox();
             clbEmployees = new CheckedListBox();
             label8 = new Label();
             btnExportCsv = new Button();
@@ -319,6 +322,7 @@ namespace EmployeeTrainingTracker
             // 
             // tabCertificates
             // 
+            tabCertificates.Controls.Add(btnBrowseFile);
             tabCertificates.Controls.Add(label10);
             tabCertificates.Controls.Add(label11);
             tabCertificates.Controls.Add(label12);
@@ -347,6 +351,16 @@ namespace EmployeeTrainingTracker
             tabCertificates.TabIndex = 1;
             tabCertificates.Text = "Certificates";
             tabCertificates.UseVisualStyleBackColor = true;
+            // 
+            // btnBrowseFile
+            // 
+            btnBrowseFile.Location = new Point(939, 376);
+            btnBrowseFile.Name = "btnBrowseFile";
+            btnBrowseFile.Size = new Size(53, 22);
+            btnBrowseFile.TabIndex = 51;
+            btnBrowseFile.Text = "Browse";
+            btnBrowseFile.UseVisualStyleBackColor = true;
+            btnBrowseFile.Click += btnBrowseFile_Click;
             // 
             // label10
             // 
@@ -408,7 +422,7 @@ namespace EmployeeTrainingTracker
             // 
             label9.Anchor = AnchorStyles.Right;
             label9.AutoSize = true;
-            label9.Location = new Point(792, 338);
+            label9.Location = new Point(792, 329);
             label9.Name = "label9";
             label9.Size = new Size(58, 15);
             label9.TabIndex = 28;
@@ -450,7 +464,7 @@ namespace EmployeeTrainingTracker
             // txtFilePath
             // 
             txtFilePath.Anchor = AnchorStyles.Right;
-            txtFilePath.Location = new Point(792, 356);
+            txtFilePath.Location = new Point(792, 347);
             txtFilePath.Name = "txtFilePath";
             txtFilePath.Size = new Size(200, 23);
             txtFilePath.TabIndex = 14;
@@ -459,7 +473,7 @@ namespace EmployeeTrainingTracker
             // 
             lbl_ExpiryDate.Anchor = AnchorStyles.Right;
             lbl_ExpiryDate.AutoSize = true;
-            lbl_ExpiryDate.Location = new Point(792, 283);
+            lbl_ExpiryDate.Location = new Point(792, 273);
             lbl_ExpiryDate.Name = "lbl_ExpiryDate";
             lbl_ExpiryDate.Size = new Size(71, 15);
             lbl_ExpiryDate.TabIndex = 13;
@@ -488,7 +502,7 @@ namespace EmployeeTrainingTracker
             // dtpExpiryDate
             // 
             dtpExpiryDate.Anchor = AnchorStyles.Right;
-            dtpExpiryDate.Location = new Point(792, 301);
+            dtpExpiryDate.Location = new Point(792, 291);
             dtpExpiryDate.Name = "dtpExpiryDate";
             dtpExpiryDate.Size = new Size(200, 23);
             dtpExpiryDate.TabIndex = 10;
@@ -544,6 +558,8 @@ namespace EmployeeTrainingTracker
             // 
             // Reports
             // 
+            Reports.Controls.Add(label15);
+            Reports.Controls.Add(clbGroups);
             Reports.Controls.Add(clbEmployees);
             Reports.Controls.Add(label8);
             Reports.Controls.Add(btnExportCsv);
@@ -563,12 +579,32 @@ namespace EmployeeTrainingTracker
             Reports.Text = "Reports";
             Reports.UseVisualStyleBackColor = true;
             // 
+            // label15
+            // 
+            label15.Anchor = AnchorStyles.Right;
+            label15.AutoSize = true;
+            label15.Location = new Point(793, 282);
+            label15.Name = "label15";
+            label15.Size = new Size(51, 15);
+            label15.TabIndex = 54;
+            label15.Text = "Groups :";
+            // 
+            // clbGroups
+            // 
+            clbGroups.Anchor = AnchorStyles.Right;
+            clbGroups.CheckOnClick = true;
+            clbGroups.FormattingEnabled = true;
+            clbGroups.Location = new Point(794, 300);
+            clbGroups.Name = "clbGroups";
+            clbGroups.Size = new Size(199, 94);
+            clbGroups.TabIndex = 53;
+            // 
             // clbEmployees
             // 
             clbEmployees.Anchor = AnchorStyles.Right;
             clbEmployees.CheckOnClick = true;
             clbEmployees.FormattingEnabled = true;
-            clbEmployees.Location = new Point(794, 281);
+            clbEmployees.Location = new Point(793, 183);
             clbEmployees.Name = "clbEmployees";
             clbEmployees.Size = new Size(199, 94);
             clbEmployees.TabIndex = 52;
@@ -577,7 +613,7 @@ namespace EmployeeTrainingTracker
             // 
             label8.Anchor = AnchorStyles.Right;
             label8.AutoSize = true;
-            label8.Location = new Point(793, 263);
+            label8.Location = new Point(793, 165);
             label8.Name = "label8";
             label8.Size = new Size(70, 15);
             label8.TabIndex = 51;
@@ -609,7 +645,7 @@ namespace EmployeeTrainingTracker
             // 
             lblDtpEnd.Anchor = AnchorStyles.Right;
             lblDtpEnd.AutoSize = true;
-            lblDtpEnd.Location = new Point(793, 136);
+            lblDtpEnd.Location = new Point(793, 110);
             lblDtpEnd.Name = "lblDtpEnd";
             lblDtpEnd.Size = new Size(60, 15);
             lblDtpEnd.TabIndex = 7;
@@ -619,7 +655,7 @@ namespace EmployeeTrainingTracker
             // 
             lblDtpStart.Anchor = AnchorStyles.Right;
             lblDtpStart.AutoSize = true;
-            lblDtpStart.Location = new Point(793, 83);
+            lblDtpStart.Location = new Point(793, 66);
             lblDtpStart.Name = "lblDtpStart";
             lblDtpStart.Size = new Size(64, 15);
             lblDtpStart.TabIndex = 6;
@@ -628,7 +664,7 @@ namespace EmployeeTrainingTracker
             // dtpEnd
             // 
             dtpEnd.Anchor = AnchorStyles.Right;
-            dtpEnd.Location = new Point(793, 154);
+            dtpEnd.Location = new Point(793, 128);
             dtpEnd.Name = "dtpEnd";
             dtpEnd.Size = new Size(200, 23);
             dtpEnd.TabIndex = 5;
@@ -636,7 +672,7 @@ namespace EmployeeTrainingTracker
             // dtpStart
             // 
             dtpStart.Anchor = AnchorStyles.Right;
-            dtpStart.Location = new Point(793, 101);
+            dtpStart.Location = new Point(793, 84);
             dtpStart.Name = "dtpStart";
             dtpStart.Size = new Size(200, 23);
             dtpStart.TabIndex = 4;
@@ -645,7 +681,7 @@ namespace EmployeeTrainingTracker
             // 
             lblReportType.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             lblReportType.AutoSize = true;
-            lblReportType.Location = new Point(793, 6);
+            lblReportType.Location = new Point(793, 22);
             lblReportType.Name = "lblReportType";
             lblReportType.Size = new Size(76, 15);
             lblReportType.TabIndex = 3;
@@ -665,7 +701,7 @@ namespace EmployeeTrainingTracker
             cmbReportType.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             cmbReportType.FormattingEnabled = true;
             cmbReportType.Items.AddRange(new object[] { "Current Year (Valid)", "Custom Range (Valid)", "Out Of Date (Invalid)", "Custom Range (Invalid)" });
-            cmbReportType.Location = new Point(793, 24);
+            cmbReportType.Location = new Point(793, 40);
             cmbReportType.Name = "cmbReportType";
             cmbReportType.Size = new Size(121, 23);
             cmbReportType.TabIndex = 0;
@@ -1197,5 +1233,8 @@ namespace EmployeeTrainingTracker
         private TextBox txtGroupName;
         private Label label13;
         private Label label14;
+        private Label label15;
+        private CheckedListBox clbGroups;
+        private Button btnBrowseFile;
     }
 }

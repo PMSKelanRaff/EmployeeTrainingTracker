@@ -14,11 +14,21 @@ namespace EmployeeTrainingTracker.Utilities
         public static DataTable GetPlannedTraining(int? employeeId = null)
         {
             string query = @"
-        SELECT ts.SessionID, ts.CertificateName, ts.Key, ts.HRS, ts.Provider,
-               ts.PlannedDate, ts.IssueDate, ts.ExpiryDate, ts.FilePath
-        FROM TrainingSessions ts
-        LEFT JOIN TrainingParticipants tp ON ts.SessionID = tp.SessionID
-        WHERE ts.Status = 'Planned'";
+            SELECT 
+                ts.SessionID,
+                ts.CertificateName,
+                ts.Key,
+                ts.HRS,
+                ts.Provider,
+                ts.PlannedDate,
+                ts.IssueDate,
+                ts.ExpiryDate,
+                ts.FilePath,
+                GROUP_CONCAT(e.FullName, ', ') AS Participants
+            FROM TrainingSessions ts
+            LEFT JOIN TrainingParticipants tp ON ts.SessionID = tp.SessionID
+            LEFT JOIN Employees e ON tp.EmployeeID = e.EmployeeID
+            WHERE ts.Status = 'Planned'";
 
             var parameters = new List<SqliteParameter>();
 
@@ -28,16 +38,19 @@ namespace EmployeeTrainingTracker.Utilities
                 parameters.Add(new SqliteParameter("@emp", employeeId.Value));
             }
 
-            query += " ORDER BY ts.PlannedDate";
+            query += " GROUP BY ts.SessionID ORDER BY ts.PlannedDate";
 
             using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
             conn.Open();
+
             using var cmd = new SqliteCommand(query, conn);
-            if (parameters.Any()) cmd.Parameters.AddRange(parameters.ToArray());
+            if (parameters.Any())
+                cmd.Parameters.AddRange(parameters.ToArray());
 
             using var reader = cmd.ExecuteReader();
             DataTable table = new DataTable();
             table.Load(reader);
+
             return table;
         }
 

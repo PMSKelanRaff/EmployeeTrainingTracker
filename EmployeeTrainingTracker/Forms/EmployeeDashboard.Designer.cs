@@ -46,6 +46,7 @@
             txtProvider = new TextBox();
             txtHrs = new TextBox();
             txtKey = new ComboBox();
+            btnBrowseFile = new Button();
             ((System.ComponentModel.ISupportInitialize)dataGridView1).BeginInit();
             SuspendLayout();
             // 
@@ -54,35 +55,35 @@
             dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dataGridView1.Location = new Point(8, 7);
             dataGridView1.Name = "dataGridView1";
-            dataGridView1.Size = new Size(574, 399);
+            dataGridView1.Size = new Size(786, 425);
             dataGridView1.TabIndex = 0;
             dataGridView1.CellContentClick += dataGridView1_CellContentClick;
             dataGridView1.SelectionChanged += dataGridView1_SelectionChanged;
             // 
             // txtCertName
             // 
-            txtCertName.Location = new Point(588, 43);
+            txtCertName.Location = new Point(800, 43);
             txtCertName.Name = "txtCertName";
             txtCertName.Size = new Size(200, 23);
             txtCertName.TabIndex = 1;
             // 
             // dtpIssueDate
             // 
-            dtpIssueDate.Location = new Point(588, 213);
+            dtpIssueDate.Location = new Point(800, 213);
             dtpIssueDate.Name = "dtpIssueDate";
             dtpIssueDate.Size = new Size(200, 23);
             dtpIssueDate.TabIndex = 2;
             // 
             // dtpExpiryDate
             // 
-            dtpExpiryDate.Location = new Point(588, 270);
+            dtpExpiryDate.Location = new Point(800, 270);
             dtpExpiryDate.Name = "dtpExpiryDate";
             dtpExpiryDate.Size = new Size(200, 23);
             dtpExpiryDate.TabIndex = 3;
             // 
             // btnAdd
             // 
-            btnAdd.Location = new Point(713, 415);
+            btnAdd.Location = new Point(934, 438);
             btnAdd.Name = "btnAdd";
             btnAdd.Size = new Size(75, 23);
             btnAdd.TabIndex = 4;
@@ -92,7 +93,7 @@
             // 
             // btnEdit
             // 
-            btnEdit.Location = new Point(632, 415);
+            btnEdit.Location = new Point(853, 438);
             btnEdit.Name = "btnEdit";
             btnEdit.Size = new Size(75, 23);
             btnEdit.TabIndex = 5;
@@ -102,7 +103,7 @@
             // 
             // btnDelete
             // 
-            btnDelete.Location = new Point(512, 415);
+            btnDelete.Location = new Point(733, 438);
             btnDelete.Name = "btnDelete";
             btnDelete.Size = new Size(75, 23);
             btnDelete.TabIndex = 6;
@@ -112,7 +113,7 @@
             // 
             // txtFilePath
             // 
-            txtFilePath.Location = new Point(588, 340);
+            txtFilePath.Location = new Point(800, 340);
             txtFilePath.Name = "txtFilePath";
             txtFilePath.Size = new Size(200, 23);
             txtFilePath.TabIndex = 7;
@@ -120,7 +121,7 @@
             // lbl_Certname
             // 
             lbl_Certname.AutoSize = true;
-            lbl_Certname.Location = new Point(588, 25);
+            lbl_Certname.Location = new Point(800, 25);
             lbl_Certname.Name = "lbl_Certname";
             lbl_Certname.Size = new Size(105, 15);
             lbl_Certname.TabIndex = 12;
@@ -129,7 +130,7 @@
             // lbl_IssueDate
             // 
             lbl_IssueDate.AutoSize = true;
-            lbl_IssueDate.Location = new Point(588, 195);
+            lbl_IssueDate.Location = new Point(800, 195);
             lbl_IssueDate.Name = "lbl_IssueDate";
             lbl_IssueDate.Size = new Size(66, 15);
             lbl_IssueDate.TabIndex = 13;
@@ -138,7 +139,7 @@
             // lbl_ExpiryDate
             // 
             lbl_ExpiryDate.AutoSize = true;
-            lbl_ExpiryDate.Location = new Point(588, 252);
+            lbl_ExpiryDate.Location = new Point(800, 252);
             lbl_ExpiryDate.Name = "lbl_ExpiryDate";
             lbl_ExpiryDate.Size = new Size(71, 15);
             lbl_ExpiryDate.TabIndex = 14;
@@ -147,7 +148,7 @@
             // label1
             // 
             label1.AutoSize = true;
-            label1.Location = new Point(588, 322);
+            label1.Location = new Point(800, 322);
             label1.Name = "label1";
             label1.Size = new Size(115, 15);
             label1.TabIndex = 16;
@@ -156,7 +157,7 @@
             // label7
             // 
             label7.AutoSize = true;
-            label7.Location = new Point(588, 132);
+            label7.Location = new Point(800, 132);
             label7.Name = "label7";
             label7.Size = new Size(57, 15);
             label7.TabIndex = 50;
@@ -165,7 +166,7 @@
             // label6
             // 
             label6.AutoSize = true;
-            label6.Location = new Point(688, 83);
+            label6.Location = new Point(900, 83);
             label6.Name = "label6";
             label6.Size = new Size(45, 15);
             label6.TabIndex = 49;
@@ -174,7 +175,7 @@
             // label5
             // 
             label5.AutoSize = true;
-            label5.Location = new Point(588, 83);
+            label5.Location = new Point(800, 83);
             label5.Name = "label5";
             label5.Size = new Size(32, 15);
             label5.TabIndex = 48;
@@ -182,14 +183,14 @@
             // 
             // txtProvider
             // 
-            txtProvider.Location = new Point(588, 150);
+            txtProvider.Location = new Point(800, 150);
             txtProvider.Name = "txtProvider";
             txtProvider.Size = new Size(200, 23);
             txtProvider.TabIndex = 47;
             // 
             // txtHrs
             // 
-            txtHrs.Location = new Point(688, 101);
+            txtHrs.Location = new Point(900, 101);
             txtHrs.Name = "txtHrs";
             txtHrs.Size = new Size(100, 23);
             txtHrs.TabIndex = 46;
@@ -198,16 +199,27 @@
             // 
             txtKey.FormattingEnabled = true;
             txtKey.Items.AddRange(new object[] { "T", "R", "P" });
-            txtKey.Location = new Point(588, 101);
+            txtKey.Location = new Point(800, 101);
             txtKey.Name = "txtKey";
             txtKey.Size = new Size(71, 23);
             txtKey.TabIndex = 45;
+            // 
+            // btnBrowseFile
+            // 
+            btnBrowseFile.Location = new Point(947, 369);
+            btnBrowseFile.Name = "btnBrowseFile";
+            btnBrowseFile.Size = new Size(53, 22);
+            btnBrowseFile.TabIndex = 52;
+            btnBrowseFile.Text = "Browse";
+            btnBrowseFile.UseVisualStyleBackColor = true;
+            btnBrowseFile.Click += btnBrowseFile_Click;
             // 
             // EmployeeDashboard
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(800, 450);
+            ClientSize = new Size(1019, 471);
+            Controls.Add(btnBrowseFile);
             Controls.Add(label7);
             Controls.Add(label6);
             Controls.Add(label5);
@@ -253,5 +265,6 @@
         private TextBox txtProvider;
         private TextBox txtHrs;
         private ComboBox txtKey;
+        private Button btnBrowseFile;
     }
 }

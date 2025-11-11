@@ -23,6 +23,7 @@ namespace EmployeeTrainingTracker
         {
             InitializeComponent();
             LoadEmployees();
+            LoadGroupsForReports();
             LoadEmployeeList();
             LoadPlannedTraining();
             tabCertificates.Enabled = false;
@@ -88,6 +89,14 @@ namespace EmployeeTrainingTracker
             dgvCertificates.Columns.Clear();
             dgvCertificates.AutoGenerateColumns = false;
 
+            // Hidden ID column (needed for editing/deleting)
+            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "CertificateID",
+                DataPropertyName = "CertificateID",
+                HeaderText = "ID",
+                Visible = false
+            });
             // Certificate Name
             dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
             {
@@ -283,6 +292,64 @@ namespace EmployeeTrainingTracker
                 col.ReadOnly = true;
         }
 
+        private void LoadEmployeesForPlanning(int sessionId)
+        {
+            clbEmployeesPlan.Items.Clear();
+
+            // Load all individual employees
+            var allEmployees = PlannedTrainingService.GetAllEmployees();
+            var participantIds = PlannedTrainingService.GetPlannedEmployeeIds(sessionId);
+
+            foreach (var emp in allEmployees)
+            {
+                clbEmployeesPlan.Items.Add(emp, participantIds.Contains(emp.Id)); // pre-check participants
+            }
+
+            // Load groups
+            var allGroups = GroupHelper.GetAllGroups(DatabaseHelper.ConnectionString);
+            foreach (DataRow row in allGroups.Rows)
+            {
+                int groupId = Convert.ToInt32((long)row["GroupID"]);
+                var groupItem = new EmployeeItem
+                {
+                    Id = groupId,
+                    Name = $"{row["GroupName"]} (Group)",
+
+                    IsGroup = true
+                };
+
+                // Get all member IDs for this group
+                var members = GroupHelper.GetMembersByGroup(DatabaseHelper.ConnectionString, groupId)
+                                         .AsEnumerable()
+                                         .Select(r => Convert.ToInt32((long)r["EmployeeID"]))
+                                         .ToList();
+
+                // Pre-check only if *all* group members are selected
+                bool isChecked = members.Count > 0 && members.All(m => participantIds.Contains(m));
+
+                clbEmployeesPlan.Items.Add(groupItem, isChecked);
+            }
+        }
+
+        private void LoadGroupsForReports()
+        {
+            clbGroups.Items.Clear();
+
+            var allGroups = GroupHelper.GetAllGroups(DatabaseHelper.ConnectionString);
+
+            foreach (DataRow row in allGroups.Rows)
+            {
+                var groupItem = new EmployeeItem
+                {
+                    Id = Convert.ToInt32((long)row["GroupID"]),
+                    Name = $"{row["GroupName"]} (Group)",
+                    IsGroup = true
+                };
+
+                clbGroups.Items.Add(groupItem);
+            }
+        }
+
 
         // CRUD for certificates
         private void btnAddCert_Click(object sender, EventArgs e)
@@ -387,6 +454,22 @@ namespace EmployeeTrainingTracker
             }
 
             LoadCertificates(empId);
+        }
+
+        private void btnBrowseFile_Click(object sender, EventArgs e)
+        {
+            using (OpenFileDialog ofd = new OpenFileDialog())
+            {
+                ofd.Title = "Select Report File";
+                ofd.Filter = "PDF Files (*.pdf)|*.pdf|Excel Files (*.xlsx;*.xls)|*.xlsx;*.xls|CSV Files (*.csv)|*.csv|All Files (*.*)|*.*";
+                ofd.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                ofd.RestoreDirectory = true;
+
+                if (ofd.ShowDialog() == DialogResult.OK)
+                {
+                    txtFilePath.Text = ofd.FileName;
+                }
+            }
         }
 
 
@@ -706,7 +789,6 @@ namespace EmployeeTrainingTracker
             MessageBox.Show("Group updated successfully.", "Edit Group", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-
         private void btnDeleteGroup_Click(object sender, EventArgs e)
         {
             if (dgvGroups.SelectedRows.Count == 0)
@@ -784,10 +866,28 @@ namespace EmployeeTrainingTracker
             DateTime? end = isCustomRange ? dtpEnd.Value.Date : null;
 
             // Get checked employees
+            // Collect individual employees
             var selectedEmployees = clbEmployees.CheckedItems
                 .Cast<EmployeeItem>()
                 .Select(x => x.Id)
                 .ToList();
+
+            // Include all employees from selected groups
+            foreach (EmployeeItem group in clbGroups.CheckedItems)
+            {
+                if (!group.IsGroup) continue;
+
+                var members = GroupHelper.GetMembersByGroup(DatabaseHelper.ConnectionString, group.Id)
+                                         .AsEnumerable()
+                                         .Select(r => Convert.ToInt32((long)r["EmployeeID"]))
+                                         .ToList();
+
+                foreach (var memberId in members)
+                {
+                    if (!selectedEmployees.Contains(memberId))
+                        selectedEmployees.Add(memberId);
+                }
+            }
 
             // If none are selected, automatically include all employees
             if (selectedEmployees.Count == 0)
@@ -804,10 +904,10 @@ namespace EmployeeTrainingTracker
                 dgvReportResults.DataSource = results;
 
                 // Style the DGV
-                StyleDataGridView(dgvReportResults);
+                UIHelpers.StyleDataGridView(dgvReportResults);
 
                 // Rename the columns after DataSource is assigned
-                RenameColumns(dgvReportResults);
+                UIHelpers.RenameColumns(dgvReportResults);
             }
             catch (Exception ex)
             {
@@ -1209,6 +1309,31 @@ namespace EmployeeTrainingTracker
 
 
         // Helper Functions
+
+        private void StyleAllDGVs()
+        {
+            // Apply styling to all DGVs
+            UIHelpers.StyleDataGridView(dgvPlannedTraining);
+            UIHelpers.StyleDataGridView(dgvCertificates);
+            UIHelpers.StyleDataGridView(dgvEmployees);
+            UIHelpers.StyleDataGridView(dgvReportResults);
+            UIHelpers.StyleDataGridView(dgvGroups);
+            UIHelpers.StyleDataGridView(dgvGroupMembers);
+
+            UIHelpers.RenameColumns(dgvPlannedTraining);
+            UIHelpers.RenameColumns(dgvCertificates);
+            UIHelpers.RenameColumns(dgvEmployees);
+            UIHelpers.RenameColumns(dgvReportResults);
+            UIHelpers.RenameColumns(dgvGroups);
+            UIHelpers.RenameColumns(dgvGroupMembers);
+
+            foreach (TabPage tab in tabControl.TabPages)
+            {
+                //tab.BackColor = Color.Gray; // or Color.Gainsboro / Color.WhiteSmoke / LightGray
+            }
+
+        }
+
         private string EscapeCsvValue(string value)
         {
             if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
@@ -1219,104 +1344,31 @@ namespace EmployeeTrainingTracker
             return value;
         }
 
-        private List<int> GetSelectedEmployees() //For Planning tab - Employees CLB
+        private List<int> GetSelectedEmployees()
         {
-            return clbEmployeesPlan.CheckedItems
-                .Cast<EmployeeItem>() // your EmployeeItem class with Id property
-                .Select(e => e.Id)
-                .ToList();
-        }
+            var selectedIds = new List<int>();
 
-        private void LoadEmployeesForPlanning(int sessionId)
-        {
-            clbEmployeesPlan.Items.Clear();
-
-            var allEmployees = PlannedTrainingService.GetAllEmployees();
-            var participantIds = PlannedTrainingService.GetPlannedEmployeeIds(sessionId);
-
-            foreach (var emp in allEmployees)
+            foreach (var item in clbEmployeesPlan.CheckedItems)
             {
-                clbEmployeesPlan.Items.Add(emp, participantIds.Contains(emp.Id)); // pre-check participants
-            }
-        }
-
-        private void StyleDataGridView(DataGridView dgv)
-        {
-            dgv.EnableHeadersVisualStyles = false;
-
-            // Header style
-            dgv.ColumnHeadersDefaultCellStyle.BackColor = Color.SteelBlue;
-            dgv.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            dgv.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
-            dgv.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
-
-            // Default cell style
-            dgv.DefaultCellStyle.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
-            dgv.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
-            dgv.DefaultCellStyle.Padding = new Padding(3, 2, 3, 2);
-            dgv.DefaultCellStyle.SelectionBackColor = Color.LightSteelBlue;
-            dgv.DefaultCellStyle.SelectionForeColor = Color.Black;
-
-            // Alternating rows for readability
-            dgv.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(245, 245, 245);
-            dgv.AlternatingRowsDefaultCellStyle.ForeColor = Color.Black;
-
-            // Layout and grid look
-            dgv.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            dgv.BackgroundColor = Color.White;
-            dgv.GridColor = Color.LightGray;
-            dgv.BorderStyle = BorderStyle.None;
-            dgv.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-            dgv.RowHeadersVisible = false;
-        }
-
-        private void StyleAllDGVs()
-        {
-            // Apply styling to all DGVs
-            StyleDataGridView(dgvPlannedTraining);
-            StyleDataGridView(dgvCertificates);
-            StyleDataGridView(dgvEmployees);
-            StyleDataGridView(dgvReportResults);
-            StyleDataGridView(dgvGroups);
-            StyleDataGridView(dgvGroupMembers);
-
-            RenameColumns(dgvPlannedTraining);
-            RenameColumns(dgvCertificates);
-            RenameColumns(dgvEmployees);
-            RenameColumns(dgvReportResults);
-            RenameColumns(dgvGroups);
-            RenameColumns(dgvGroupMembers);
-
-            foreach (TabPage tab in tabControl.TabPages)
-            {
-                //tab.BackColor = Color.Gray; // or Color.Gainsboro / Color.WhiteSmoke / LightGray
+                if (item is EmployeeItem empItem)
+                {
+                    if (empItem.IsGroup)
+                    {
+                        // Add all members of the group
+                        var members = GroupHelper.GetMembersByGroup(DatabaseHelper.ConnectionString, empItem.Id)
+                                                 .AsEnumerable()
+                                                 .Select(r => Convert.ToInt32((long)r["EmployeeID"]))
+                                                 .ToList();
+                        selectedIds.AddRange(members);
+                    }
+                    else
+                    {
+                        selectedIds.Add(empItem.Id);
+                    }
+                }
             }
 
-        }
-
-        private void RenameColumns(DataGridView dgv)
-        {
-            var renameMap = new Dictionary<string, string>
-        {
-            { "CertificateName", "Certificate Name" },
-             { "CertificateID", "Certificate ID" },
-            { "PlannedDate", "Planned Date" },
-            { "IssueDate", "Issue Date" },
-            { "ExpiryDate", "Expiry Date" },
-            { "EmployeeEmail", "Email" },
-            { "FullName", "Full Name" },
-            { "ManagerEmail", "Manager Email" },
-            { "JobTitle", "Job Title" },
-            { "GroupName", "Group Name" },
-            { "ManagerName", "Manager Name" },
-            { "EmployeeID", "Emp ID" }
-        };
-
-            foreach (var kvp in renameMap)
-            {
-                if (dgv.Columns.Contains(kvp.Key))
-                    dgv.Columns[kvp.Key].HeaderText = kvp.Value;
-            }
+            return selectedIds.Distinct().ToList(); // remove duplicates in case multiple groups overlap
         }
 
     }

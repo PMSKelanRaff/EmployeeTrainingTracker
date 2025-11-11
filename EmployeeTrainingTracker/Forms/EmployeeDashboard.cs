@@ -15,6 +15,12 @@ namespace EmployeeTrainingTracker
             InitializeComponent();
             employeeId = empId;
             LoadCertificates(employeeId);
+
+            // Style the DGV
+            UIHelpers.StyleDataGridView(dataGridView1);
+
+            // Rename the columns after DataSource is assigned
+            UIHelpers.RenameColumns(dataGridView1);
         }
 
         // Load certificates for the employee
@@ -22,25 +28,88 @@ namespace EmployeeTrainingTracker
         {
             DataTable table = CertificateService.GetCertificates(employeeId);
 
+            dataGridView1.Columns.Clear();
+            dataGridView1.AutoGenerateColumns = false;
+
+            // Hidden ID column (needed for editing/deleting)
+            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "CertificateID",
+                DataPropertyName = "CertificateID",
+                HeaderText = "ID",
+                Visible = false
+            });
+
+            // Certificate Name
+            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "CertificateName",
+                DataPropertyName = "CertificateName",
+                HeaderText = "Certificate Name"
+            });
+
+            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "Key",
+                DataPropertyName = "Key",
+                HeaderText = "Training Key"
+            });
+
+            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "HRS",
+                DataPropertyName = "HRS",
+                HeaderText = "CPD Hrs"
+            });
+
+            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "Provider",
+                DataPropertyName = "Provider",
+                HeaderText = "Provider"
+            });
+
+            // Issue Date
+            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "IssueDate",
+                DataPropertyName = "IssueDate",
+                HeaderText = "Issue Date"
+            });
+
+            // Expiry Date
+            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "ExpiryDate",
+                DataPropertyName = "ExpiryDate",
+                HeaderText = "Expiry Date"
+            });
+
+            // FileLink
+            dataGridView1.Columns.Add(new DataGridViewLinkColumn
+            {
+                Name = "FileLink",
+                DataPropertyName = "FilePath",
+                HeaderText = "Certificate File",
+                TrackVisitedState = true,
+                UseColumnTextForLinkValue = false,
+                Width = 200
+            });
+
+            // Last Notified
+            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "LastNotifiedDate",
+                DataPropertyName = "LastNotifiedDate",
+                HeaderText = "Last Notified"
+            });
+
+            // Bind DataSource last
             dataGridView1.DataSource = table;
 
-            if (dataGridView1.Columns.Contains("FilePath"))
-                dataGridView1.Columns["FilePath"].Visible = false;
-
-            // Add clickable link column if not already present
-            if (!dataGridView1.Columns.Contains("FileLink"))
-            {
-                var linkCol = new DataGridViewLinkColumn
-                {
-                    Name = "FileLink",
-                    HeaderText = "Certificate File",
-                    DataPropertyName = "FilePath", // bind to hidden FilePath
-                    TrackVisitedState = true,
-                    UseColumnTextForLinkValue = false
-                };
-                dataGridView1.Columns.Add(linkCol);
-            }
-        }
+            // Apply consistent styling
+            UIHelpers.StyleDataGridView(dataGridView1);
+        }  
 
         private void btnAdd_Click(object sender, EventArgs e)
         {
@@ -101,6 +170,22 @@ namespace EmployeeTrainingTracker
             CertificateService.DeleteCertificate(certId);
             LoadCertificates(employeeId);
             ClearInputs();
+        }
+
+        private void btnBrowseFile_Click(object sender, EventArgs e)
+        {
+            using (OpenFileDialog ofd = new OpenFileDialog())
+            {
+                ofd.Title = "Select Report File";
+                ofd.Filter = "PDF Files (*.pdf)|*.pdf|Excel Files (*.xlsx;*.xls)|*.xlsx;*.xls|CSV Files (*.csv)|*.csv|All Files (*.*)|*.*";
+                ofd.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                ofd.RestoreDirectory = true;
+
+                if (ofd.ShowDialog() == DialogResult.OK)
+                {
+                    txtFilePath.Text = ofd.FileName;
+                }
+            }
         }
 
         private void ClearInputs()
@@ -179,5 +264,6 @@ namespace EmployeeTrainingTracker
             txtFilePath.Text = rowView["FilePath"]?.ToString() ?? "";
         }
 
+        
     }
 }

@@ -4,12 +4,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace EmployeeTrainingTracker.Utilities
+public class EmployeeItem
 {
-    public class EmployeeItem
-    {
-        public int Id { get; set; }
-        public string Name { get; set; }
-        public override string ToString() => Name;
-    }
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public bool IsGroup { get; set; } = false;
+
+    public override string ToString() => Name; // what shows in CLB
 }
