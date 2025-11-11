@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Data;
-using Microsoft.Data.Sqlite;
+using Npgsql;
 using System.Windows.Forms;
 using EmployeeTrainingTracker.Utilities;
 
@@ -14,18 +14,34 @@ namespace EmployeeTrainingTracker
         {
             InitializeComponent();
             employeeId = empId;
-            LoadCertificates(employeeId);
+            
+        }
 
-            // Style the DGV
-            UIHelpers.StyleDataGridView(dataGridView1);
+        private void EmployeeDashboard_Load(object sender, EventArgs e)
+        {
+            try
+            {
+                LoadCertificates(employeeId);
 
-            // Rename the columns after DataSource is assigned
-            UIHelpers.RenameColumns(dataGridView1);
+                // Style the DGV
+                UIHelpers.StyleDataGridView(dataGridView1);
+
+                // Rename the columns after DataSource is assigned
+                UIHelpers.RenameColumns(dataGridView1);
+            }
+            catch (Exception ex)
+            {
+                // THIS WILL FINALLY SHOW YOU THE REAL ERROR!
+                MessageBox.Show($"A critical error occurred while loading your dashboard:\n\n{ex.Message}\n\n{ex.StackTrace}",
+                                "Load Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                this.Close(); // Close the form if it fails to load
+            }
         }
 
         // Load certificates for the employee
         private void LoadCertificates(int employeeId)
         {
+            // NO CHANGE NEEDED: Assumes CertificateService is refactored
             DataTable table = CertificateService.GetCertificates(employeeId);
 
             dataGridView1.Columns.Clear();
@@ -109,7 +125,7 @@ namespace EmployeeTrainingTracker
 
             // Apply consistent styling
             UIHelpers.StyleDataGridView(dataGridView1);
-        }  
+        }
 
         private void btnAdd_Click(object sender, EventArgs e)
         {
@@ -207,7 +223,9 @@ namespace EmployeeTrainingTracker
 
             if (dataGridView1.Columns[e.ColumnIndex].Name == "FileLink")
             {
-                string? path = dataGridView1.Rows[e.RowIndex].Cells["FilePath"].Value?.ToString();
+                // NOTE: You had "FilePath" here but the column name is "FileLink".
+                // I am assuming the DataPropertyName is FilePath, so this should work.
+                string? path = dataGridView1.Rows[e.RowIndex].Cells["FileLink"].Value?.ToString();
 
                 if (!string.IsNullOrEmpty(path))
                 {

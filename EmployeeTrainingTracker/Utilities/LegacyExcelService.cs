@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.Data.Sqlite;
+using EmployeeTrainingTracker;
+using Npgsql; // CHANGED: Replaced Microsoft.Data.Sqlite
 using OfficeOpenXml;
 
 public static class LegacyExcelService
@@ -11,6 +12,7 @@ public static class LegacyExcelService
 
     private static readonly string RootFolder = @"C:\Users\KelanRafferty\Desktop\Staff Training Certs";
 
+    // NO CHANGE NEEDED IN THIS METHOD
     public static void AppendTrainingRecord(int employeeId, string certName, DateTime issueDate)
     {
         // Get employee name from DB
@@ -62,6 +64,7 @@ public static class LegacyExcelService
 
     }
 
+
     public static void UpdateTrainingRecord(int employeeId, string certName, DateTime newIssueDate)
     {
         string fullName = GetEmployeeName(employeeId);
@@ -111,7 +114,7 @@ public static class LegacyExcelService
 
             if (!found)
             {
-                // fallback — append new entry if cert name not found
+
                 int newRow = lastRow + 1;
                 ws.Cells[newRow, 1].Value = newIssueDate.ToString("dd/MM/yyyy");
                 ws.Cells[newRow, 2].Value = "T";
@@ -124,6 +127,7 @@ public static class LegacyExcelService
             package.Save();
         }
     }
+
 
     public static void DeleteTrainingRecord(int employeeId, string certName)
     {
@@ -176,17 +180,6 @@ public static class LegacyExcelService
         }
     }
 
-    private static string GetEmployeeName(int employeeId)
-    {
-        using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
-        conn.Open();
-
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT FullName FROM Employees WHERE EmployeeID = @id";
-        cmd.Parameters.AddWithValue("@id", employeeId);
-
-        return cmd.ExecuteScalar()?.ToString() ?? "";
-    }
 
     public static bool TrainingRecordExists(int employeeId, string certName)
     {
@@ -233,4 +226,18 @@ public static class LegacyExcelService
         return false;
     }
 
+
+    private static string GetEmployeeName(int employeeId)
+    {
+
+        using var conn = DatabaseHelper.GetConnection();
+        conn.Open();
+
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT FullName FROM Employees WHERE EmployeeID = $1";
+        cmd.Parameters.AddWithValue(employeeId);
+
+        return cmd.ExecuteScalar()?.ToString() ?? "";
+    }
 }

@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Npgsql;
 
 namespace EmployeeTrainingTracker.Utilities
 {
@@ -23,7 +24,7 @@ namespace EmployeeTrainingTracker.Utilities
 
         private void LoadAvailableEmployees()
         {
-            DataTable dt = GroupHelper.GetAvailableEmployeesForGroup(DatabaseHelper.ConnectionString, _groupId);
+            DataTable dt = GroupService.GetAvailableEmployeesForGroup(_groupId);
             dgvAvailable.DataSource = dt;
 
             dgvAvailable.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
@@ -43,7 +44,8 @@ namespace EmployeeTrainingTracker.Utilities
             foreach (DataGridViewRow row in dgvAvailable.SelectedRows)
             {
                 int employeeId = Convert.ToInt32(row.Cells["EmployeeID"].Value);
-                GroupHelper.AddMemberToGroup(DatabaseHelper.ConnectionString, _groupId, employeeId);
+                // CHANGED: Removed DatabaseHelper.ConnectionString parameter
+                GroupService.AddMemberToGroup(_groupId, employeeId);
             }
 
             MessageBox.Show("Member(s) added successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);

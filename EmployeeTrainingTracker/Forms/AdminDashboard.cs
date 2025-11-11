@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Data;
-using Microsoft.Data.Sqlite;
+using Npgsql; // We will use this now
+// using Microsoft.Data.Sqlite; // This should be removed from all files
 using System.Windows.Forms;
 using System.Text;
 using EmployeeTrainingTracker.Utilities;
@@ -22,41 +23,62 @@ namespace EmployeeTrainingTracker
         public AdminDashboard()
         {
             InitializeComponent();
-            LoadEmployees();
-            LoadGroupsForReports();
-            LoadEmployeeList();
-            LoadPlannedTraining();
-            tabCertificates.Enabled = false;
-            LoadReportSettings();
-            StyleAllDGVs();
-            LoadManagers();
-            LoadGroups();
+            
+        }
 
-            var plannedSessions = PlannedTrainingService.GetPlannedTraining();
-            if (plannedSessions.Rows.Count > 0)
+        private void AdminDashboard_Load(object sender, EventArgs e)
+        {
+            try
             {
-                int sessionId = Convert.ToInt32(plannedSessions.Rows[0]["SessionID"]);
-                LoadEmployeesForPlanning(sessionId);
+                LoadEmployees();
+                LoadGroupsForReports();
+                LoadEmployeeList();
+                LoadPlannedTraining();
+                tabCertificates.Enabled = false;
+                LoadReportSettings();
+                StyleAllDGVs();
+                LoadManagers();
+                LoadGroups();
+
+                cbManager.SelectedIndexChanged += cbManager_SelectedIndexChanged;
+
+                var plannedSessions = PlannedTrainingService.GetPlannedTraining();
+                if (plannedSessions.Rows.Count > 0)
+                {
+                    int sessionId = Convert.ToInt32(plannedSessions.Rows[0]["SessionID"]);
+                    LoadEmployeesForPlanning(sessionId);
+                }
+            }
+            catch (Exception ex)
+            {
+                // This will show you the error if an Admin logs in and it fails
+                MessageBox.Show($"A critical error occurred while loading the admin dashboard:\n\n{ex.Message}\n\n{ex.StackTrace}",
+                                "Load Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                this.Close();
             }
         }
+
 
 
         // Load data for each tab
         private void LoadEmployees()
         {
-            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
+            // CHANGED: Using NpgsqlConnection and DatabaseHelper.GetConnection()
+            using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
 
-                using (var cmd = new SqliteCommand(@"
+                // CHANGED: Using NpgsqlCommand
+                // CHANGED: SQL syntax IFNULL replaced with COALESCE
+                using (var cmd = new NpgsqlCommand(@"
                 SELECT 
                     u.UserID,
                     u.Email AS Email,
                     u.Role,
                     e.EmployeeID,
-                    IFNULL(e.FullName, u.Email) AS FullName,
-                    IFNULL(e.Department, 'Unknown') AS Department,
-                    IFNULL(e.JobTitle, 'Unknown') AS JobTitle
+                    COALESCE(e.FullName, u.Email) AS FullName,
+                    COALESCE(e.Department, 'Unknown') AS Department,
+                    COALESCE(e.JobTitle, 'Unknown') AS JobTitle
                 FROM Users u
                 LEFT JOIN Employees e ON u.EmployeeID = e.EmployeeID", conn))
                 {
@@ -171,10 +193,10 @@ namespace EmployeeTrainingTracker
         private void LoadEmployeeList()
         {
             clbEmployees.Items.Clear();
-            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
+            using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
-                var cmd = new SqliteCommand("SELECT EmployeeID, FullName FROM Employees ORDER BY FullName", conn);
+                var cmd = new NpgsqlCommand("SELECT EmployeeID, FullName FROM Employees ORDER BY FullName", conn);
                 using (var reader = cmd.ExecuteReader())
                 {
                     while (reader.Read())
@@ -191,11 +213,10 @@ namespace EmployeeTrainingTracker
 
         private void LoadPlannedTraining()
         {
-            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+            using var conn = DatabaseHelper.GetConnection();
             conn.Open();
 
-            // No transaction needed for a simple SELECT
-            var cmd = new SqliteCommand(@"
+            var cmd = new NpgsqlCommand(@"
         SELECT 
             ts.SessionID,
             ts.CertificateName,
@@ -205,7 +226,7 @@ namespace EmployeeTrainingTracker
             ts.PlannedDate,
             ts.Status,
             ts.Notes,
-            GROUP_CONCAT(e.FullName, ', ') AS Participants
+            STRING_AGG(e.FullName, ', ') AS Participants
         FROM TrainingSessions ts
         LEFT JOIN TrainingParticipants tp ON ts.SessionID = tp.SessionID
         LEFT JOIN Employees e ON tp.EmployeeID = e.EmployeeID
@@ -231,7 +252,7 @@ namespace EmployeeTrainingTracker
         private void LoadGroups()
         {
             // Fetch all groups
-            DataTable dtGroups = GroupHelper.GetAllGroups(DatabaseHelper.ConnectionString);
+            DataTable dtGroups = GroupService.GetAllGroups();
 
             dgvGroups.AutoGenerateColumns = true;
             dgvGroups.DataSource = dtGroups;
@@ -254,7 +275,7 @@ namespace EmployeeTrainingTracker
 
         private void LoadManagers()
         {
-            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+            using var conn = DatabaseHelper.GetConnection();
             conn.Open();
 
             string query = @"
@@ -262,7 +283,7 @@ namespace EmployeeTrainingTracker
             FROM Employees
             ORDER BY FullName;";
 
-            using var cmd = new SqliteCommand(query, conn);
+            using var cmd = new NpgsqlCommand(query, conn);
             using var reader = cmd.ExecuteReader();
 
             DataTable dtManagers = new DataTable();
@@ -278,7 +299,7 @@ namespace EmployeeTrainingTracker
         private void LoadGroupMembers(int groupId)
         {
             // Fetch members from DB
-            DataTable dtMembers = GroupHelper.GetMembersByGroup(DatabaseHelper.ConnectionString, groupId);
+            DataTable dtMembers = GroupService.GetMembersByGroup(groupId);
 
             // Debug: confirm rows returned
             Console.WriteLine($"GroupID {groupId} Members returned: {dtMembers.Rows.Count}");
@@ -296,7 +317,6 @@ namespace EmployeeTrainingTracker
         {
             clbEmployeesPlan.Items.Clear();
 
-            // Load all individual employees
             var allEmployees = PlannedTrainingService.GetAllEmployees();
             var participantIds = PlannedTrainingService.GetPlannedEmployeeIds(sessionId);
 
@@ -306,7 +326,7 @@ namespace EmployeeTrainingTracker
             }
 
             // Load groups
-            var allGroups = GroupHelper.GetAllGroups(DatabaseHelper.ConnectionString);
+            var allGroups = GroupService.GetAllGroups();
             foreach (DataRow row in allGroups.Rows)
             {
                 int groupId = Convert.ToInt32((long)row["GroupID"]);
@@ -319,7 +339,7 @@ namespace EmployeeTrainingTracker
                 };
 
                 // Get all member IDs for this group
-                var members = GroupHelper.GetMembersByGroup(DatabaseHelper.ConnectionString, groupId)
+                var members = GroupService.GetMembersByGroup(groupId)
                                          .AsEnumerable()
                                          .Select(r => Convert.ToInt32((long)r["EmployeeID"]))
                                          .ToList();
@@ -335,7 +355,7 @@ namespace EmployeeTrainingTracker
         {
             clbGroups.Items.Clear();
 
-            var allGroups = GroupHelper.GetAllGroups(DatabaseHelper.ConnectionString);
+            var allGroups = GroupService.GetAllGroups();
 
             foreach (DataRow row in allGroups.Rows)
             {
@@ -490,27 +510,32 @@ namespace EmployeeTrainingTracker
             long newEmpId;
             long newUserId;
 
-            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
+            // CHANGED: Using NpgsqlConnection
+            using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
 
-                // Create Employee row
-                using (var cmdEmp = new SqliteCommand(
-                    "INSERT INTO Employees (FullName, Department, JobTitle) VALUES (@name, @dept, @title); SELECT last_insert_rowid();", conn))
+                // CHANGED: Using NpgsqlCommand
+                // CHANGED: SQL syntax to use $1, $2, $3 parameters and RETURNING EmployeeID
+                using (var cmdEmp = new NpgsqlCommand(
+                    "INSERT INTO Employees (FullName, Department, JobTitle) VALUES ($1, $2, $3) RETURNING EmployeeID;", conn))
                 {
-                    cmdEmp.Parameters.AddWithValue("@name", username);
-                    cmdEmp.Parameters.AddWithValue("@dept", department);
-                    cmdEmp.Parameters.AddWithValue("@title", jobTitle);
+                    // CHANGED: Using positional parameters
+                    cmdEmp.Parameters.AddWithValue(username);
+                    cmdEmp.Parameters.AddWithValue(department);
+                    cmdEmp.Parameters.AddWithValue(jobTitle);
                     newEmpId = (long)cmdEmp.ExecuteScalar();
                 }
 
-                // Create User row (no password)
-                using (var cmdUser = new SqliteCommand(
-                    "INSERT INTO Users (Email, Role, EmployeeID) VALUES (@u, @r, @eid); SELECT last_insert_rowid();", conn))
+                // CHANGED: Using NpgsqlCommand
+                // CHANGED: SQL syntax to use $1, $2, $3 parameters and RETURNING UserID
+                using (var cmdUser = new NpgsqlCommand(
+                    "INSERT INTO Users (Email, Role, EmployeeID) VALUES ($1, $2, $3) RETURNING UserID;", conn))
                 {
-                    cmdUser.Parameters.AddWithValue("@u", username);
-                    cmdUser.Parameters.AddWithValue("@r", role);
-                    cmdUser.Parameters.AddWithValue("@eid", newEmpId);
+                    // CHANGED: Using positional parameters
+                    cmdUser.Parameters.AddWithValue(username);
+                    cmdUser.Parameters.AddWithValue(role);
+                    cmdUser.Parameters.AddWithValue(newEmpId);
                     newUserId = (long)cmdUser.ExecuteScalar();
                 }
             }
@@ -521,10 +546,10 @@ namespace EmployeeTrainingTracker
             // Select the newly added user
             foreach (DataGridViewRow row in dgvEmployees.Rows)
             {
-                if (row.Cells["Username"].Value?.ToString() == username)
+                if (row.Cells["Email"].Value?.ToString() == username) // CHANGED: Was "Username"
                 {
                     row.Selected = true;
-                    dgvEmployees.CurrentCell = row.Cells["Username"];
+                    dgvEmployees.CurrentCell = row.Cells["Email"]; // CHANGED: Was "Username"
                     break;
                 }
             }
@@ -551,53 +576,62 @@ namespace EmployeeTrainingTracker
             string department = string.IsNullOrEmpty(cmbDept.Text.Trim()) ? "Unknown" : cmbDept.Text.Trim();
             string jobTitle = string.IsNullOrEmpty(txtJobTitle.Text.Trim()) ? "Unknown" : txtJobTitle.Text.Trim();
 
-            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
+            // CHANGED: Using NpgsqlConnection
+            using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
 
                 if (employeeId.HasValue)
                 {
                     // Update existing Employee
-                    using (var cmdEmp = new SqliteCommand(
-                        "UPDATE Employees SET FullName=@name, Department=@dept, JobTitle=@title WHERE EmployeeID=@id", conn))
+                    // CHANGED: Using NpgsqlCommand and $1, $2 parameters
+                    using (var cmdEmp = new NpgsqlCommand(
+                        "UPDATE Employees SET FullName=$1, Department=$2, JobTitle=$3 WHERE EmployeeID=$4", conn))
                     {
-                        cmdEmp.Parameters.AddWithValue("@name", username);
-                        cmdEmp.Parameters.AddWithValue("@dept", department);
-                        cmdEmp.Parameters.AddWithValue("@title", jobTitle);
-                        cmdEmp.Parameters.AddWithValue("@id", employeeId.Value);
+                        // CHANGED: Using positional parameters
+                        cmdEmp.Parameters.AddWithValue(username);
+                        cmdEmp.Parameters.AddWithValue(department);
+                        cmdEmp.Parameters.AddWithValue(jobTitle);
+                        cmdEmp.Parameters.AddWithValue(employeeId.Value);
                         cmdEmp.ExecuteNonQuery();
                     }
                 }
                 else
                 {
                     // Insert new Employee
-                    using (var cmdInsertEmp = new SqliteCommand(
-                        "INSERT INTO Employees (FullName, Department, JobTitle) VALUES (@name,@dept,@title); SELECT last_insert_rowid();", conn))
+                    // CHANGED: Using NpgsqlCommand, $1, $2 parameters, and RETURNING EmployeeID
+                    using (var cmdInsertEmp = new NpgsqlCommand(
+                        "INSERT INTO Employees (FullName, Department, JobTitle) VALUES ($1,$2,$3) RETURNING EmployeeID;", conn))
                     {
-                        cmdInsertEmp.Parameters.AddWithValue("@name", username);
-                        cmdInsertEmp.Parameters.AddWithValue("@dept", department);
-                        cmdInsertEmp.Parameters.AddWithValue("@title", jobTitle);
+                        // CHANGED: Using positional parameters
+                        cmdInsertEmp.Parameters.AddWithValue(username);
+                        cmdInsertEmp.Parameters.AddWithValue(department);
+                        cmdInsertEmp.Parameters.AddWithValue(jobTitle);
 
                         long newEmpId = (long)cmdInsertEmp.ExecuteScalar();
 
                         // Link back to Users
-                        using (var cmdUpdateUserEmp = new SqliteCommand(
-                            "UPDATE Users SET EmployeeID=@empId WHERE UserID=@uid", conn))
+                        // CHANGED: Using NpgsqlCommand and $1, $2 parameters
+                        using (var cmdUpdateUserEmp = new NpgsqlCommand(
+                            "UPDATE Users SET EmployeeID=$1 WHERE UserID=$2", conn))
                         {
-                            cmdUpdateUserEmp.Parameters.AddWithValue("@empId", newEmpId);
-                            cmdUpdateUserEmp.Parameters.AddWithValue("@uid", userId);
+                            // CHANGED: Using positional parameters
+                            cmdUpdateUserEmp.Parameters.AddWithValue(newEmpId);
+                            cmdUpdateUserEmp.Parameters.AddWithValue(userId);
                             cmdUpdateUserEmp.ExecuteNonQuery();
                         }
                     }
                 }
 
                 // Always update Users table (username + role)
-                using (var cmdUser = new SqliteCommand(
-                    "UPDATE Users SET Email=@u, Role=@r WHERE UserID=@uid", conn))
+                // CHANGED: Using NpgsqlCommand and $1, $2 parameters
+                using (var cmdUser = new NpgsqlCommand(
+                    "UPDATE Users SET Email=$1, Role=$2 WHERE UserID=$3", conn))
                 {
-                    cmdUser.Parameters.AddWithValue("@u", username);
-                    cmdUser.Parameters.AddWithValue("@r", role);
-                    cmdUser.Parameters.AddWithValue("@uid", userId);
+                    // CHANGED: Using positional parameters
+                    cmdUser.Parameters.AddWithValue(username);
+                    cmdUser.Parameters.AddWithValue(role);
+                    cmdUser.Parameters.AddWithValue(userId);
                     cmdUser.ExecuteNonQuery();
                 }
             }
@@ -617,28 +651,32 @@ namespace EmployeeTrainingTracker
             var confirm = MessageBox.Show("Delete this employee and all their certificates?", "Confirm", MessageBoxButtons.YesNo);
             if (confirm == DialogResult.No) return;
 
-            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
+            // CHANGED: Using NpgsqlConnection
+            using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
 
                 // Delete certificates first
-                using (var cmdCert = new SqliteCommand("DELETE FROM TrainingCertificates WHERE EmployeeID=@id", conn))
+                // CHANGED: Using NpgsqlCommand and $1 parameter
+                using (var cmdCert = new NpgsqlCommand("DELETE FROM TrainingCertificates WHERE EmployeeID=$1", conn))
                 {
-                    cmdCert.Parameters.AddWithValue("@id", empId.Value);
+                    cmdCert.Parameters.AddWithValue(empId.Value);
                     cmdCert.ExecuteNonQuery();
                 }
 
                 // Then delete user
-                using (var cmdUser = new SqliteCommand("DELETE FROM Users WHERE EmployeeID=@id", conn))
+                // CHANGED: Using NpgsqlCommand and $1 parameter
+                using (var cmdUser = new NpgsqlCommand("DELETE FROM Users WHERE EmployeeID=$1", conn))
                 {
-                    cmdUser.Parameters.AddWithValue("@id", empId.Value);
+                    cmdUser.Parameters.AddWithValue(empId.Value);
                     cmdUser.ExecuteNonQuery();
                 }
 
                 // Finally, delete the employee record
-                using (var cmdEmp = new SqliteCommand("DELETE FROM Employees WHERE EmployeeID=@id", conn))
+                // CHANGED: Using NpgsqlCommand and $1 parameter
+                using (var cmdEmp = new NpgsqlCommand("DELETE FROM Employees WHERE EmployeeID=$1", conn))
                 {
-                    cmdEmp.Parameters.AddWithValue("@id", empId.Value);
+                    cmdEmp.Parameters.AddWithValue(empId.Value);
                     cmdEmp.ExecuteNonQuery();
                 }
             }
@@ -672,6 +710,7 @@ namespace EmployeeTrainingTracker
 
 
         //CRUD for Planning
+        // NO CHANGES NEEDED HERE (assumes PlannedTrainingService is refactored)
         private void btnAddSession_Click(object sender, EventArgs e)
         {
             var selectedEmployeeIds = GetSelectedEmployees(); // List<int> from CheckedListBox
@@ -734,10 +773,10 @@ namespace EmployeeTrainingTracker
 
 
         //CRUD for Groups
+        // NO CHANGES NEEDED HERE (assumes GroupHelper is refactored)
         private void btnAddGroup_Click(object sender, EventArgs e)
         {
-            GroupHelper.AddGroup(
-                DatabaseHelper.ConnectionString,
+            GroupService.AddGroup(
                 txtGroupName.Text.Trim(),
                 txtDescription.Text.Trim(),
                 cbManager.SelectedValue as int?
@@ -764,8 +803,7 @@ namespace EmployeeTrainingTracker
                 managerId = Convert.ToInt32(cbManager.SelectedValue);
 
             // Update the group
-            GroupHelper.UpdateGroup(
-                DatabaseHelper.ConnectionString,
+            GroupService.UpdateGroup(
                 groupId,
                 groupName,
                 description,
@@ -808,7 +846,7 @@ namespace EmployeeTrainingTracker
 
             if (confirm == DialogResult.Yes)
             {
-                GroupHelper.DeleteGroup(DatabaseHelper.ConnectionString, groupId);
+                GroupService.DeleteGroup(groupId);
                 LoadGroups();
                 dgvGroupMembers.DataSource = null; // clear members grid
             }
@@ -851,7 +889,7 @@ namespace EmployeeTrainingTracker
 
             if (confirm == DialogResult.Yes)
             {
-                GroupHelper.RemoveMemberFromGroup(DatabaseHelper.ConnectionString, groupId, employeeId);
+                GroupService.RemoveMemberFromGroup(groupId, employeeId);
                 LoadGroupMembers(groupId); // refresh members DGV
             }
         }
@@ -877,7 +915,8 @@ namespace EmployeeTrainingTracker
             {
                 if (!group.IsGroup) continue;
 
-                var members = GroupHelper.GetMembersByGroup(DatabaseHelper.ConnectionString, group.Id)
+                // CHANGED: Assumes GroupHelper is refactored
+                var members = GroupService.GetMembersByGroup(group.Id)
                                          .AsEnumerable()
                                          .Select(r => Convert.ToInt32((long)r["EmployeeID"]))
                                          .ToList();
@@ -900,6 +939,7 @@ namespace EmployeeTrainingTracker
 
             try
             {
+                // CHANGED: Assumes ReportService is refactored
                 DataTable results = ReportService.GenerateReport(reportType, start, end, selectedEmployees);
                 dgvReportResults.DataSource = results;
 
@@ -915,6 +955,7 @@ namespace EmployeeTrainingTracker
             }
         }
 
+        // NO CHANGES NEEDED for CSV export
         private void btnExportCsv_Click(object sender, EventArgs e)
         {
             if (dgvReportResults.Rows.Count == 0)
@@ -988,6 +1029,7 @@ namespace EmployeeTrainingTracker
 
 
         // Events
+        // NO CHANGES NEEDED HERE (assumes services are refactored)
         private void dgvEmployees_SelectionChanged(object sender, EventArgs e)
         {
             if (dgvEmployees.CurrentRow != null)
@@ -1075,7 +1117,6 @@ namespace EmployeeTrainingTracker
 
             txtFilePath.Text = rowView["FilePath"]?.ToString() ?? "";
 
-            // NEW SECTION: check if the training record already exists in legacy Excel
             try
             {
                 // Make sure your DataTable contains EmployeeID or similar identifier
@@ -1122,8 +1163,7 @@ namespace EmployeeTrainingTracker
             int newManagerId = Convert.ToInt32(cbManager.SelectedValue);
 
             // Update DB
-            GroupHelper.UpdateGroup(
-                DatabaseHelper.ConnectionString,
+            GroupService.UpdateGroup(
                 groupId,
                 dgvGroups.SelectedRows[0].Cells["GroupName"].Value.ToString(),
                 dgvGroups.SelectedRows[0].Cells["Description"].Value.ToString(),
@@ -1269,27 +1309,34 @@ namespace EmployeeTrainingTracker
 
         private void dgvGroups_SelectionChanged(object sender, EventArgs e)
         {
-            if (dgvGroups.SelectedRows.Count == 0) return;
+            try
+            {
+                if (dgvGroups.SelectedRows.Count == 0) return;
 
-            int groupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
+                int groupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
 
-            // Load members for the selected group
-            LoadGroupMembers(groupId);
+                LoadGroupMembers(groupId); // Your log message
 
-            // Populate group details
-            var row = dgvGroups.SelectedRows[0];
-            txtGroupName.Text = row.Cells["GroupName"].Value.ToString();
-            txtDescription.Text = row.Cells["Description"].Value.ToString();
+                var row = dgvGroups.SelectedRows[0];
+                txtGroupName.Text = row.Cells["GroupName"].Value.ToString();
+                txtDescription.Text = row.Cells["Description"].Value.ToString();
 
-            // Populate manager ComboBox with current group members
-            PopulateManagerComboBox(groupId, row.Cells["ManagerID"].Value);
+                // --- APPLY THIS CHANGE ---
+                _loadingManagerCombo = true; // Set flag HIGH before the call
+                PopulateManagerComboBox(groupId, row.Cells["ManagerID"].Value);
+                _loadingManagerCombo = false; // Set flag LOW after the call
+                                              // -------------------------
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"An error occurred while selecting the group:\n\n{ex.Message}\n\n{ex.StackTrace}",
+                                "Event Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void PopulateManagerComboBox(int groupId, object currentManagerId)
         {
-
-            _loadingManagerCombo = true;
-            DataTable dtMembers = GroupHelper.GetMembersByGroup(DatabaseHelper.ConnectionString, groupId);
+            DataTable dtMembers = GroupService.GetMembersByGroup(groupId);
 
             cbManager.DataSource = dtMembers;
             cbManager.DisplayMember = "FullName";
@@ -1300,11 +1347,6 @@ namespace EmployeeTrainingTracker
                 cbManager.SelectedValue = Convert.ToInt32(currentManagerId);
             else
                 cbManager.SelectedIndex = -1;
-
-            // Handle selection change event to update manager in DB
-            cbManager.SelectedIndexChanged -= cbManager_SelectedIndexChanged;
-            cbManager.SelectedIndexChanged += cbManager_SelectedIndexChanged;
-            _loadingManagerCombo = false;
         }
 
 
@@ -1355,7 +1397,7 @@ namespace EmployeeTrainingTracker
                     if (empItem.IsGroup)
                     {
                         // Add all members of the group
-                        var members = GroupHelper.GetMembersByGroup(DatabaseHelper.ConnectionString, empItem.Id)
+                        var members = GroupService.GetMembersByGroup(empItem.Id)
                                                  .AsEnumerable()
                                                  .Select(r => Convert.ToInt32((long)r["EmployeeID"]))
                                                  .ToList();
@@ -1370,7 +1412,6 @@ namespace EmployeeTrainingTracker
 
             return selectedIds.Distinct().ToList(); // remove duplicates in case multiple groups overlap
         }
-
     }
 
 }

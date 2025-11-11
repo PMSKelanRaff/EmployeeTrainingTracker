@@ -4,7 +4,7 @@ using System.Data;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.Data.Sqlite;
+using Npgsql; 
 
 namespace EmployeeTrainingTracker.Utilities
 {
@@ -12,15 +12,15 @@ namespace EmployeeTrainingTracker.Utilities
     {
         public static DataTable GetCertificates(int employeeId)
         {
-            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+            using var conn = DatabaseHelper.GetConnection();
             conn.Open();
 
-            using var cmd = new SqliteCommand(@"
+            using var cmd = new NpgsqlCommand(@"
                   SELECT CertificateID, CertificateName, Key, HRS, Provider, IssueDate, ExpiryDate, FilePath, LastNotifiedDate
                     FROM TrainingCertificates
-                    WHERE EmployeeID = @id", conn);
+                    WHERE EmployeeID = $1", conn);
 
-            cmd.Parameters.AddWithValue("@id", employeeId);
+            cmd.Parameters.AddWithValue(employeeId);
 
             using var reader = cmd.ExecuteReader();
             DataTable table = new DataTable();
@@ -30,63 +30,68 @@ namespace EmployeeTrainingTracker.Utilities
 
         public static void AddCertificate(int employeeId, string certName, string key, double cpdHrs, string provider, DateTime issueDate, DateTime expiryDate, string? filePath = null)
         {
-            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+            using var conn = DatabaseHelper.GetConnection();
             conn.Open();
 
-            using var cmd = new SqliteCommand(@"
+            using var cmd = new NpgsqlCommand(@"
         INSERT INTO TrainingCertificates (EmployeeID, CertificateName, Key, HRS, Provider, IssueDate, ExpiryDate, FilePath)
-        VALUES (@eid, @name, @key, @hrs, @provider, @issue, @expiry, @file)", conn);
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)", conn);
 
-            cmd.Parameters.AddWithValue("@eid", employeeId);
-            cmd.Parameters.AddWithValue("@name", certName);
-            cmd.Parameters.AddWithValue("@key", string.IsNullOrEmpty(key) ? DBNull.Value : key);
-            cmd.Parameters.AddWithValue("@hrs", cpdHrs);
-            cmd.Parameters.AddWithValue("@provider", string.IsNullOrEmpty(provider) ? DBNull.Value : provider);
-            cmd.Parameters.AddWithValue("@issue", issueDate.ToString("yyyy-MM-dd"));
-            cmd.Parameters.AddWithValue("@expiry", expiryDate.ToString("yyyy-MM-dd"));
-            cmd.Parameters.AddWithValue("@file", string.IsNullOrEmpty(filePath) ? DBNull.Value : filePath);
+            // Positional parameters in order
+            cmd.Parameters.AddWithValue(employeeId);
+            cmd.Parameters.AddWithValue(certName);
+            cmd.Parameters.AddWithValue(string.IsNullOrEmpty(key) ? DBNull.Value : key);
+            cmd.Parameters.AddWithValue(cpdHrs); // Assumes 0 if not provided
+            cmd.Parameters.AddWithValue(string.IsNullOrEmpty(provider) ? DBNull.Value : provider);
+            cmd.Parameters.AddWithValue(issueDate.Date); // Pass as DateTime
+            cmd.Parameters.AddWithValue(expiryDate.Date); // Pass as DateTime
+            cmd.Parameters.AddWithValue(string.IsNullOrEmpty(filePath) ? DBNull.Value : filePath);
 
             cmd.ExecuteNonQuery();
         }
 
+        // No more connection string
         public static void UpdateCertificate(int certId, string name, string key, double cpdHrs, string provider, DateTime issue, DateTime expiry, string? filePath)
         {
-            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+            // Uses new DatabaseHelper.GetConnection()
+            using var conn = DatabaseHelper.GetConnection();
             conn.Open();
 
+            // Using NpgsqlCommand and positional parameters ($1, $2, etc.)
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
         UPDATE TrainingCertificates
-        SET CertificateName = @name,
-            Key = @key,
-            HRS = @hrs,
-            Provider = @provider,
-            IssueDate = @issue,
-            ExpiryDate = @expiry,
-            FilePath = @file
-        WHERE CertificateID = @id";
+        SET CertificateName = $1,
+            Key = $2,
+            HRS = $3,
+            Provider = $4,
+            IssueDate = $5,
+            ExpiryDate = $6,
+            FilePath = $7
+        WHERE CertificateID = $8";
 
-            cmd.Parameters.AddWithValue("@name", name);
-            cmd.Parameters.AddWithValue("@key", string.IsNullOrEmpty(key) ? DBNull.Value : key);
-            cmd.Parameters.AddWithValue("@hrs", cpdHrs);
-            cmd.Parameters.AddWithValue("@provider", string.IsNullOrEmpty(provider) ? DBNull.Value : provider);
-            cmd.Parameters.AddWithValue("@issue", issue.Date.ToString("yyyy-MM-dd"));
-            cmd.Parameters.AddWithValue("@expiry", expiry.Date.ToString("yyyy-MM-dd"));
-            cmd.Parameters.AddWithValue("@file", (object?)filePath ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@id", certId);
+            cmd.Parameters.AddWithValue(name);
+            cmd.Parameters.AddWithValue(string.IsNullOrEmpty(key) ? DBNull.Value : key);
+            cmd.Parameters.AddWithValue(cpdHrs);
+            cmd.Parameters.AddWithValue(string.IsNullOrEmpty(provider) ? DBNull.Value : provider);
+            cmd.Parameters.AddWithValue(issue.Date); // Pass as DateTime
+            cmd.Parameters.AddWithValue(expiry.Date); // Pass as DateTime
+            cmd.Parameters.AddWithValue((object?)filePath ?? DBNull.Value);
+            cmd.Parameters.AddWithValue(certId);
 
             cmd.ExecuteNonQuery();
         }
 
+
         public static void DeleteCertificate(int certId)
         {
-            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
+            using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
-                using (var cmd = new SqliteCommand(
-                    "DELETE FROM TrainingCertificates WHERE CertificateID=@id", conn))
+                using (var cmd = new NpgsqlCommand(
+                    "DELETE FROM TrainingCertificates WHERE CertificateID=$1", conn))
                 {
-                    cmd.Parameters.AddWithValue("@id", certId);
+                    cmd.Parameters.AddWithValue(certId);
                     cmd.ExecuteNonQuery();
                 }
             }

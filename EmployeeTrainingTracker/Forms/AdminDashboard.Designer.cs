@@ -311,6 +311,7 @@ namespace EmployeeTrainingTracker
             txtPassword.Name = "txtPassword";
             txtPassword.Size = new Size(228, 23);
             txtPassword.TabIndex = 10;
+            txtPassword.UseSystemPasswordChar = true;
             // 
             // txtUsername
             // 
@@ -1120,6 +1121,7 @@ namespace EmployeeTrainingTracker
             Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "AdminDashboard";
             Text = "Admin Dashboard";
+            Load += AdminDashboard_Load;
             ((System.ComponentModel.ISupportInitialize)dgvEmployees).EndInit();
             ((System.ComponentModel.ISupportInitialize)dgvCertificates).EndInit();
             tabControl.ResumeLayout(false);

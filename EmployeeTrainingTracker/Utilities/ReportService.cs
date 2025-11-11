@@ -1,9 +1,12 @@
-﻿using Microsoft.Data.Sqlite;
+﻿using EmployeeTrainingTracker;
+using Npgsql;
+using System;
+using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 
 public static class ReportService
 {
-
     public static DataTable GenerateReport(string reportType, DateTime? start, DateTime? end, List<int> employeeIds)
     {
         string query = @"
@@ -21,52 +24,47 @@ public static class ReportService
         LEFT JOIN Managers m ON e.Department = m.Department
         WHERE 1=1";
 
-        var parameters = new List<SqliteParameter>();
+        var parameters = new List<NpgsqlParameter>();
+        int paramCounter = 1;
 
         // 🔹 Report type filters
         if (reportType == "Current Year (Valid)")
         {
-            query += " AND date(tc.IssueDate) <= date('now') AND date(tc.ExpiryDate) >= date('now')";
+            query += " AND tc.IssueDate::date <= CURRENT_DATE AND tc.ExpiryDate::date >= CURRENT_DATE";
         }
         else if (reportType == "Out Of Date (Invalid)")
         {
-            query += " AND date(tc.ExpiryDate) < date('now')";
+            query += " AND tc.ExpiryDate::date < CURRENT_DATE";
         }
         else if (reportType == "Custom Range (Valid)" && start.HasValue && end.HasValue)
         {
-            // Certificates that were valid at some point within the selected date range
-            query += @"
+            query += $@"
             AND (
-                (date(tc.IssueDate) <= date(@end)) 
-                AND (date(tc.ExpiryDate) >= date(@start))
+                (tc.IssueDate::date <= ${paramCounter++}) 
+                AND (tc.ExpiryDate::date >= ${paramCounter++})
             )
-            AND date(tc.ExpiryDate) >= date('now')";
+            AND tc.ExpiryDate::date >= CURRENT_DATE";
 
-            parameters.Add(new SqliteParameter("@start", start.Value.ToString("yyyy-MM-dd")));
-            parameters.Add(new SqliteParameter("@end", end.Value.ToString("yyyy-MM-dd")));
+            parameters.Add(new NpgsqlParameter(null, end.Value.Date));
+            parameters.Add(new NpgsqlParameter(null, start.Value.Date));
         }
         else if (reportType == "Custom Range (Invalid)" && start.HasValue && end.HasValue)
         {
-            // Certificates that expired within the selected date range
-            query += @"
-            AND date(tc.ExpiryDate) BETWEEN date(@start) AND date(@end)
-            AND date(tc.ExpiryDate) < date('now')";
+            query += $@"
+            AND tc.ExpiryDate::date BETWEEN ${paramCounter++} AND ${paramCounter++}
+            AND tc.ExpiryDate::date < CURRENT_DATE";
 
-            parameters.Add(new SqliteParameter("@start", start.Value.ToString("yyyy-MM-dd")));
-            parameters.Add(new SqliteParameter("@end", end.Value.ToString("yyyy-MM-dd")));
+            parameters.Add(new NpgsqlParameter(null, start.Value.Date));
+            parameters.Add(new NpgsqlParameter(null, end.Value.Date));
         }
 
         // 🔹 Employee filter
         if (employeeIds?.Any() == true)
         {
-            var idParams = string.Join(",", employeeIds.Select((_, i) => $"@emp{i}"));
-            query += $" AND e.EmployeeID IN ({idParams})";
-
-            for (int i = 0; i < employeeIds.Count; i++)
-                parameters.Add(new SqliteParameter($"@emp{i}", employeeIds[i]));
+            query += $" AND e.EmployeeID = ANY(${paramCounter++})";
+            parameters.Add(new NpgsqlParameter(null, employeeIds.ToArray()));
         }
 
-        // No MIN() needed, grouping only if necessary
         query += @"
         GROUP BY 
             tc.CertificateID, 
@@ -77,9 +75,9 @@ public static class ReportService
             e.FullName,
             m.Email";
 
-        using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+        using var conn = DatabaseHelper.GetConnection();
         conn.Open();
-        using var cmd = new SqliteCommand(query, conn);
+        using var cmd = new NpgsqlCommand(query, conn);
         if (parameters.Any())
             cmd.Parameters.AddRange(parameters.ToArray());
 

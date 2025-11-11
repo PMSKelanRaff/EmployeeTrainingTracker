@@ -2,7 +2,7 @@
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using Microsoft.Data.Sqlite;
+using Npgsql;
 using System.Security.Cryptography;
 
 namespace EmployeeTrainingTracker
@@ -19,7 +19,7 @@ namespace EmployeeTrainingTracker
             string username = txtUsername.Text.Trim();
             string password = txtPassword.Text.Trim();
             string fullName = txtFullName.Text.Trim();
-            string department = txtDepartment.Text.Trim();   // <-- use textbox instead of label
+            string department = txtDepartment.Text.Trim();
             string jobTitle = txtJobTitle.Text.Trim();
 
             string? windowsUser = chkLinkWindows.Checked
@@ -32,9 +32,11 @@ namespace EmployeeTrainingTracker
                 return;
             }
 
-            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
+            // Using new DatabaseHelper
+            using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
+                // This will now be an NpgsqlTransaction
                 using (var tran = conn.BeginTransaction())
                 {
                     try
@@ -44,33 +46,42 @@ namespace EmployeeTrainingTracker
                         // Insert into Employees if we got details
                         if (!string.IsNullOrWhiteSpace(fullName))
                         {
-                            using (var cmd = conn.CreateCommand())
+                            // Using NpgsqlCommand
+                            using (var cmd = new NpgsqlCommand())
                             {
+                                cmd.Connection = conn;
                                 cmd.Transaction = tran;
+                                // SQL syntax for PostgreSQL (RETURNING and positional parameters)
                                 cmd.CommandText = @"
                                     INSERT INTO Employees (FullName, Department, JobTitle)
-                                    VALUES (@fn, @dep, @jt);
-                                    SELECT last_insert_rowid();";
-                                cmd.Parameters.AddWithValue("@fn", fullName);
-                                cmd.Parameters.AddWithValue("@dep", department);
-                                cmd.Parameters.AddWithValue("@jt", jobTitle);
+                                    VALUES ($1, $2, $3)
+                                    RETURNING EmployeeID;";
+
+                                //  Positional parameters in order
+                                cmd.Parameters.AddWithValue(fullName);
+                                cmd.Parameters.AddWithValue(department);
+                                cmd.Parameters.AddWithValue(jobTitle);
                                 employeeId = Convert.ToInt32(cmd.ExecuteScalar());
                             }
                         }
 
                         // Insert into Users (always Role = Employee)
-                        using (var cmd = conn.CreateCommand())
+                        using (var cmd = new NpgsqlCommand())
                         {
+                            cmd.Connection = conn;
                             cmd.Transaction = tran;
+                            // SQL syntax for PostgreSQL (positional parameters)
                             cmd.CommandText = @"
                                 INSERT INTO Users 
                                 (Email, PasswordHash, Role, EmployeeID, WindowsUsername)
-                                VALUES (@u, @p, @r, @emp, @wu)";
-                            cmd.Parameters.AddWithValue("@u", username);
-                            cmd.Parameters.AddWithValue("@p", HashPassword(password)); // hashed
-                            cmd.Parameters.AddWithValue("@r", "Employee");             // default role
-                            cmd.Parameters.AddWithValue("@emp", (object?)employeeId ?? DBNull.Value);
-                            cmd.Parameters.AddWithValue("@wu", (object?)windowsUser ?? DBNull.Value);
+                                VALUES ($1, $2, $3, $4, $5)";
+
+                            // Positional parameters in order
+                            cmd.Parameters.AddWithValue(username);
+                            cmd.Parameters.AddWithValue(HashPassword(password)); // hashed
+                            cmd.Parameters.AddWithValue("Employee");            // default role
+                            cmd.Parameters.AddWithValue((object?)employeeId ?? DBNull.Value);
+                            cmd.Parameters.AddWithValue((object?)windowsUser ?? DBNull.Value);
                             cmd.ExecuteNonQuery();
                         }
 
@@ -81,7 +92,15 @@ namespace EmployeeTrainingTracker
                     catch (Exception ex)
                     {
                         tran.Rollback();
-                        MessageBox.Show("Error creating user: " + ex.Message);
+                        // Better error message for unique username violation
+                        if (ex.Message.Contains("duplicate key value violates unique constraint"))
+                        {
+                            MessageBox.Show("Error: This username (email) already exists.");
+                        }
+                        else
+                        {
+                            MessageBox.Show("Error creating user: " + ex.Message);
+                        }
                     }
                 }
             }
@@ -96,8 +115,5 @@ namespace EmployeeTrainingTracker
                 return BitConverter.ToString(hash).Replace("-", "").ToLower();
             }
         }
-
-
     }
 }
-

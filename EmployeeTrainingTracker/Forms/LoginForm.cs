@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Data;
 using System.Windows.Forms;
-using Microsoft.Data.Sqlite;
+using Npgsql;
 using System.Security.Principal; // for WindowsIdentity if needed
 using System.Security.Cryptography;
 using System.Text;
@@ -10,6 +10,8 @@ namespace EmployeeTrainingTracker
 {
     public partial class LoginForm : Form
     {
+        public Form MainFormToRun { get; private set; }
+
         public LoginForm()
         {
             InitializeComponent();
@@ -28,70 +30,66 @@ namespace EmployeeTrainingTracker
 
             string hashed = HashPassword(password);
 
-            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
+            // Using NpgsqlConnection
+            using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
 
                 // 1) Try hashed password first
-                using (var cmd = conn.CreateCommand())
+                // Using NpgsqlCommand and positional parameters ($1, $2)
+                using (var cmd = new NpgsqlCommand("SELECT Role, EmployeeID FROM Users WHERE Email = $1 AND PasswordHash = $2", conn))
                 {
-                    cmd.CommandText = "SELECT Role, EmployeeID FROM Users WHERE Email = @u AND PasswordHash = @p";
-                    cmd.Parameters.AddWithValue("@u", username);
-                    cmd.Parameters.AddWithValue("@p", hashed);
+                    cmd.Parameters.AddWithValue(username);
+                    cmd.Parameters.AddWithValue(hashed);
 
                     using (var reader = cmd.ExecuteReader())
                     {
                         if (reader.Read())
                         {
-                            // matched with hashed password -> reuse existing handler
-                            // To reuse existing HandleLogin which expects a SqliteCommand,
-                            // we can create a new command and call HandleLogin, but simpler:
-                            // create a small command returning Role & EmployeeID again and pass it
-                            reader.Close();
-                            using (var cmd2 = conn.CreateCommand())
-                            {
-                                cmd2.CommandText = "SELECT Role, EmployeeID FROM Users WHERE Email = @u";
-                                cmd2.Parameters.AddWithValue("@u", username);
-                                HandleLogin(cmd2);
-                                return;
-                            }
-                        }
-                    }
-                }
+                            // Success! Get data and pass to our new HandleLogin method
+                            string role = reader["Role"].ToString();
+                            object empIdObj = reader["EmployeeID"];
+                            int? employeeId = empIdObj == DBNull.Value ? null : Convert.ToInt32(empIdObj);
 
-                // 2) Fallback - try raw/plaintext (for legacy accounts)
-                using (var cmdPlain = conn.CreateCommand())
-                {
-                    cmdPlain.CommandText = "SELECT UserID FROM Users WHERE Email = @u AND PasswordHash = @pPlain";
-                    cmdPlain.Parameters.AddWithValue("@u", username);
-                    cmdPlain.Parameters.AddWithValue("@pPlain", password);
-
-                    object objUserId = cmdPlain.ExecuteScalar();
-                    if (objUserId != null)
-                    {
-                        // Legacy plaintext match -> upgrade to hashed password
-                        long userId = Convert.ToInt64(objUserId);
-
-                        using (var update = conn.CreateCommand())
-                        {
-                            update.CommandText = "UPDATE Users SET PasswordHash = @newHash WHERE UserID = @id";
-                            update.Parameters.AddWithValue("@newHash", hashed);
-                            update.Parameters.AddWithValue("@id", userId);
-                            update.ExecuteNonQuery();
-                        }
-
-                        // Now login the user using the normal path
-                        using (var cmd3 = conn.CreateCommand())
-                        {
-                            cmd3.CommandText = "SELECT Role, EmployeeID FROM Users WHERE UserID = @id";
-                            cmd3.Parameters.AddWithValue("@id", userId);
-                            HandleLogin(cmd3);
+                            HandleLogin(role, employeeId);
                             return;
                         }
                     }
                 }
 
-                // 3) Nothing matched
+                // 2) Fallback - try raw/plaintext (for legacy accounts)
+                using (var cmdPlain = new NpgsqlCommand("SELECT UserID, Role, EmployeeID FROM Users WHERE Email = $1 AND PasswordHash = $2", conn))
+                {
+                    cmdPlain.Parameters.AddWithValue(username);
+                    cmdPlain.Parameters.AddWithValue(password); // Using raw password
+
+                    using (var readerPlain = cmdPlain.ExecuteReader())
+                    {
+                        if (readerPlain.Read())
+                        {
+
+                            long userId = Convert.ToInt64(readerPlain["UserID"]);
+                            string role = readerPlain["Role"].ToString();
+                            object empIdObj = readerPlain["EmployeeID"];
+                            int? employeeId = empIdObj == DBNull.Value ? null : Convert.ToInt32(empIdObj);
+
+
+                            readerPlain.Close();
+
+                            using (var update = new NpgsqlCommand("UPDATE Users SET PasswordHash = $1 WHERE UserID = $2", conn))
+                            {
+                                update.Parameters.AddWithValue(hashed);
+                                update.Parameters.AddWithValue(userId);
+                                update.ExecuteNonQuery();
+                            }
+
+                            // Now login the user
+                            HandleLogin(role, employeeId);
+                            return;
+                        }
+                    }
+                }
+
                 MessageBox.Show("Invalid login.");
             }
         }
@@ -100,58 +98,63 @@ namespace EmployeeTrainingTracker
         {
             string windowsUser = (Environment.UserDomainName + "\\" + Environment.UserName).ToLower();
 
-            MessageBox.Show($"Detected Windows user: {windowsUser}");
-
-            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
+            
+            using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
-                using (var cmd = conn.CreateCommand())
+                using (var cmd = new NpgsqlCommand("SELECT Role, EmployeeID FROM Users WHERE lower(WindowsUsername) = $1", conn))
                 {
-                    cmd.CommandText = "SELECT Role, EmployeeID FROM Users WHERE lower(WindowsUsername) = @wu";
-                    cmd.Parameters.AddWithValue("@wu", windowsUser);
+                    cmd.Parameters.AddWithValue(windowsUser);
 
-                    HandleLogin(cmd);
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            string role = reader["Role"].ToString();
+                            object empIdObj = reader["EmployeeID"];
+                            int? employeeId = empIdObj == DBNull.Value ? null : Convert.ToInt32(empIdObj);
+
+                            HandleLogin(role, employeeId);
+                        }
+                        else
+                        {
+                            MessageBox.Show("Invalid login.");
+                        }
+                    }
                 }
             }
         }
 
-        private void HandleLogin(SqliteCommand cmd)
+
+        private void HandleLogin(string role, int? employeeId)
         {
-            using (var reader = cmd.ExecuteReader())
+            if (string.IsNullOrEmpty(role))
             {
-                if (!reader.Read())
-                {
-                    MessageBox.Show("Invalid login.");
-                    return;
-                }
-
-                object roleObj = reader["Role"];
-                if (roleObj == DBNull.Value)
-                {
-                    MessageBox.Show("Role is missing for this user!");
-                    return;
-                }
-                string role = roleObj.ToString()!;
-
-                object empIdObj = reader["EmployeeID"];
-                int? employeeId = empIdObj == DBNull.Value ? null : Convert.ToInt32(empIdObj);
-
-                if (role == "Admin")
-                {
-                    new AdminDashboard().Show();
-                }
-                else if (role == "Employee" && employeeId.HasValue)
-                {
-                    new EmployeeDashboard(employeeId.Value).Show();
-                }
-                else
-                {
-                    MessageBox.Show("This account is not linked to an employee.");
-                    return;
-                }
-
-                this.Hide();
+                MessageBox.Show("Role is missing for this user!");
+                return;
             }
+
+            if (role == "Admin")
+            {
+                // 1. Assign the form to the property
+                this.MainFormToRun = new AdminDashboard();
+            }
+            else if (role == "Employee" && employeeId.HasValue)
+            {
+                // 1. Assign the form to the property
+                this.MainFormToRun = new EmployeeDashboard(employeeId.Value);
+            }
+            else
+            {
+                MessageBox.Show("This account is not linked to an employee.");
+                return;
+            }
+
+            // 2. Set the DialogResult to OK. This tells Program.cs it was successful.
+            this.DialogResult = DialogResult.OK;
+
+            // 3. Close the login form. This will resume the code in Program.cs.
+            this.Close();
         }
 
         private void SignUp_btn_Click(object sender, EventArgs e)
@@ -159,6 +162,7 @@ namespace EmployeeTrainingTracker
             var signupForm = new SignUpForm();
             signupForm.ShowDialog(); // modal
         }
+
 
         private static string HashPassword(string password)
         {
