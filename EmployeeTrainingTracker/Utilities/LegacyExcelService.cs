@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using EmployeeTrainingTracker;
-using Npgsql; // CHANGED: Replaced Microsoft.Data.Sqlite
+using Npgsql;
 using OfficeOpenXml;
 
 public static class LegacyExcelService
@@ -12,7 +12,6 @@ public static class LegacyExcelService
 
     private static readonly string RootFolder = @"C:\Users\KelanRafferty\Desktop\Staff Training Certs";
 
-    // NO CHANGE NEEDED IN THIS METHOD
     public static void AppendTrainingRecord(int employeeId, string certName, DateTime issueDate)
     {
         // Get employee name from DB

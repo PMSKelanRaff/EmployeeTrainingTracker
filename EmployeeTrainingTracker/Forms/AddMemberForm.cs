@@ -44,7 +44,6 @@ namespace EmployeeTrainingTracker.Utilities
             foreach (DataGridViewRow row in dgvAvailable.SelectedRows)
             {
                 int employeeId = Convert.ToInt32(row.Cells["EmployeeID"].Value);
-                // CHANGED: Removed DatabaseHelper.ConnectionString parameter
                 GroupService.AddMemberToGroup(_groupId, employeeId);
             }
 

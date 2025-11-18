@@ -11,7 +11,7 @@ namespace EmployeeTrainingTracker
             "Port=5432;" +
             "Database=postgres;" +
             "Username=postgres;" +
-            "Password=Open1234;" + // <-- PUT YOUR REAL PASSWORD HERE
+            "Password=Open1234;" +
             "SslMode=Require;" +
             "Trust Server Certificate=true";
 
@@ -21,7 +21,7 @@ namespace EmployeeTrainingTracker
             return new NpgsqlConnection(_connectionString);
         }
 
-        // 3. (OPTIONAL) A test method to see if it works
+        // 3.  A test method to see if it works
         public static bool TestConnection()
         {
             using (var conn = GetConnection())

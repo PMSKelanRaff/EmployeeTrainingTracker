@@ -28,13 +28,13 @@
         /// </summary>
         private void InitializeComponent()
         {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(EmployeeDashboard));
             dataGridView1 = new DataGridView();
             txtCertName = new TextBox();
             dtpIssueDate = new DateTimePicker();
             dtpExpiryDate = new DateTimePicker();
             btnAdd = new Button();
             btnEdit = new Button();
-            btnDelete = new Button();
             txtFilePath = new TextBox();
             lbl_Certname = new Label();
             lbl_IssueDate = new Label();
@@ -100,16 +100,6 @@
             btnEdit.Text = "Edit";
             btnEdit.UseVisualStyleBackColor = true;
             btnEdit.Click += btnEdit_Click;
-            // 
-            // btnDelete
-            // 
-            btnDelete.Location = new Point(733, 438);
-            btnDelete.Name = "btnDelete";
-            btnDelete.Size = new Size(75, 23);
-            btnDelete.TabIndex = 6;
-            btnDelete.Text = "Delete";
-            btnDelete.UseVisualStyleBackColor = true;
-            btnDelete.Click += btnDelete_Click;
             // 
             // txtFilePath
             // 
@@ -231,13 +221,13 @@
             Controls.Add(lbl_IssueDate);
             Controls.Add(lbl_Certname);
             Controls.Add(txtFilePath);
-            Controls.Add(btnDelete);
             Controls.Add(btnEdit);
             Controls.Add(btnAdd);
             Controls.Add(dtpExpiryDate);
             Controls.Add(dtpIssueDate);
             Controls.Add(txtCertName);
             Controls.Add(dataGridView1);
+            Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "EmployeeDashboard";
             Text = "EmployeeDashboard";
             Load += EmployeeDashboard_Load;
@@ -254,7 +244,6 @@
         private DateTimePicker dtpExpiryDate;
         private Button btnAdd;
         private Button btnEdit;
-        private Button btnDelete;
         private TextBox txtFilePath;
         private Label lbl_Certname;
         private Label lbl_IssueDate;

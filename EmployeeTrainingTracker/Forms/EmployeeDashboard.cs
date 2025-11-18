@@ -22,32 +22,25 @@ namespace EmployeeTrainingTracker
             try
             {
                 LoadCertificates(employeeId);
-
-                // Style the DGV
                 UIHelpers.StyleDataGridView(dataGridView1);
-
-                // Rename the columns after DataSource is assigned
                 UIHelpers.RenameColumns(dataGridView1);
             }
             catch (Exception ex)
             {
-                // THIS WILL FINALLY SHOW YOU THE REAL ERROR!
                 MessageBox.Show($"A critical error occurred while loading your dashboard:\n\n{ex.Message}\n\n{ex.StackTrace}",
                                 "Load Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                this.Close(); // Close the form if it fails to load
+                this.Close(); 
             }
         }
 
         // Load certificates for the employee
         private void LoadCertificates(int employeeId)
         {
-            // NO CHANGE NEEDED: Assumes CertificateService is refactored
             DataTable table = CertificateService.GetCertificates(employeeId);
 
             dataGridView1.Columns.Clear();
             dataGridView1.AutoGenerateColumns = false;
 
-            // Hidden ID column (needed for editing/deleting)
             dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "CertificateID",
@@ -170,23 +163,23 @@ namespace EmployeeTrainingTracker
             ClearInputs();
         }
 
-        private void btnDelete_Click(object sender, EventArgs e)
-        {
-            if (dataGridView1.CurrentRow == null)
-            {
-                MessageBox.Show("Please select a certificate to delete.");
-                return;
-            }
+        //private void btnDelete_Click(object sender, EventArgs e)
+        //{
+        //    if (dataGridView1.CurrentRow == null)
+        //    {
+        //        MessageBox.Show("Please select a certificate to delete.");
+        //        return;
+        //    }
 
-            int certId = Convert.ToInt32(dataGridView1.CurrentRow.Cells["CertificateID"].Value);
+        //    int certId = Convert.ToInt32(dataGridView1.CurrentRow.Cells["CertificateID"].Value);
 
-            var confirm = MessageBox.Show("Are you sure you want to delete this certificate?", "Confirm", MessageBoxButtons.YesNo);
-            if (confirm == DialogResult.No) return;
+        //    var confirm = MessageBox.Show("Are you sure you want to delete this certificate?", "Confirm", MessageBoxButtons.YesNo);
+        //    if (confirm == DialogResult.No) return;
 
-            CertificateService.DeleteCertificate(certId);
-            LoadCertificates(employeeId);
-            ClearInputs();
-        }
+        //    CertificateService.DeleteCertificate(certId);
+        //    LoadCertificates(employeeId);
+        //    ClearInputs();
+        //}
 
         private void btnBrowseFile_Click(object sender, EventArgs e)
         {
@@ -223,13 +216,10 @@ namespace EmployeeTrainingTracker
 
             if (dataGridView1.Columns[e.ColumnIndex].Name == "FileLink")
             {
-                // NOTE: You had "FilePath" here but the column name is "FileLink".
-                // I am assuming the DataPropertyName is FilePath, so this should work.
                 string? path = dataGridView1.Rows[e.RowIndex].Cells["FileLink"].Value?.ToString();
 
                 if (!string.IsNullOrEmpty(path))
                 {
-                    // Remove any surrounding quotes
                     path = path.Trim('"');
 
                     if (System.IO.File.Exists(path))

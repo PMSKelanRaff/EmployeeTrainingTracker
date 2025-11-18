@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Data;
-using Npgsql; // We will use this now
-// using Microsoft.Data.Sqlite; // This should be removed from all files
+using Npgsql; 
 using System.Windows.Forms;
 using System.Text;
 using EmployeeTrainingTracker.Utilities;
@@ -63,13 +62,10 @@ namespace EmployeeTrainingTracker
         // Load data for each tab
         private void LoadEmployees()
         {
-            // CHANGED: Using NpgsqlConnection and DatabaseHelper.GetConnection()
             using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
 
-                // CHANGED: Using NpgsqlCommand
-                // CHANGED: SQL syntax IFNULL replaced with COALESCE
                 using (var cmd = new NpgsqlCommand(@"
                 SELECT 
                     u.UserID,
@@ -241,7 +237,6 @@ namespace EmployeeTrainingTracker
 
             dgvPlannedTraining.DataSource = table;
 
-            // Optional: nicer UI setup
             dgvPlannedTraining.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             dgvPlannedTraining.CellFormatting += dgvPlannedTraining_CellFormatting;
 
@@ -510,29 +505,26 @@ namespace EmployeeTrainingTracker
             long newEmpId;
             long newUserId;
 
-            // CHANGED: Using NpgsqlConnection
+
             using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
 
-                // CHANGED: Using NpgsqlCommand
-                // CHANGED: SQL syntax to use $1, $2, $3 parameters and RETURNING EmployeeID
                 using (var cmdEmp = new NpgsqlCommand(
                     "INSERT INTO Employees (FullName, Department, JobTitle) VALUES ($1, $2, $3) RETURNING EmployeeID;", conn))
                 {
-                    // CHANGED: Using positional parameters
+
                     cmdEmp.Parameters.AddWithValue(username);
                     cmdEmp.Parameters.AddWithValue(department);
                     cmdEmp.Parameters.AddWithValue(jobTitle);
                     newEmpId = (long)cmdEmp.ExecuteScalar();
                 }
 
-                // CHANGED: Using NpgsqlCommand
-                // CHANGED: SQL syntax to use $1, $2, $3 parameters and RETURNING UserID
+
                 using (var cmdUser = new NpgsqlCommand(
                     "INSERT INTO Users (Email, Role, EmployeeID) VALUES ($1, $2, $3) RETURNING UserID;", conn))
                 {
-                    // CHANGED: Using positional parameters
+
                     cmdUser.Parameters.AddWithValue(username);
                     cmdUser.Parameters.AddWithValue(role);
                     cmdUser.Parameters.AddWithValue(newEmpId);
@@ -546,10 +538,10 @@ namespace EmployeeTrainingTracker
             // Select the newly added user
             foreach (DataGridViewRow row in dgvEmployees.Rows)
             {
-                if (row.Cells["Email"].Value?.ToString() == username) // CHANGED: Was "Username"
+                if (row.Cells["Email"].Value?.ToString() == username) 
                 {
                     row.Selected = true;
-                    dgvEmployees.CurrentCell = row.Cells["Email"]; // CHANGED: Was "Username"
+                    dgvEmployees.CurrentCell = row.Cells["Email"]; 
                     break;
                 }
             }
@@ -576,19 +568,15 @@ namespace EmployeeTrainingTracker
             string department = string.IsNullOrEmpty(cmbDept.Text.Trim()) ? "Unknown" : cmbDept.Text.Trim();
             string jobTitle = string.IsNullOrEmpty(txtJobTitle.Text.Trim()) ? "Unknown" : txtJobTitle.Text.Trim();
 
-            // CHANGED: Using NpgsqlConnection
             using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
 
                 if (employeeId.HasValue)
                 {
-                    // Update existing Employee
-                    // CHANGED: Using NpgsqlCommand and $1, $2 parameters
                     using (var cmdEmp = new NpgsqlCommand(
                         "UPDATE Employees SET FullName=$1, Department=$2, JobTitle=$3 WHERE EmployeeID=$4", conn))
                     {
-                        // CHANGED: Using positional parameters
                         cmdEmp.Parameters.AddWithValue(username);
                         cmdEmp.Parameters.AddWithValue(department);
                         cmdEmp.Parameters.AddWithValue(jobTitle);
@@ -599,11 +587,9 @@ namespace EmployeeTrainingTracker
                 else
                 {
                     // Insert new Employee
-                    // CHANGED: Using NpgsqlCommand, $1, $2 parameters, and RETURNING EmployeeID
                     using (var cmdInsertEmp = new NpgsqlCommand(
                         "INSERT INTO Employees (FullName, Department, JobTitle) VALUES ($1,$2,$3) RETURNING EmployeeID;", conn))
                     {
-                        // CHANGED: Using positional parameters
                         cmdInsertEmp.Parameters.AddWithValue(username);
                         cmdInsertEmp.Parameters.AddWithValue(department);
                         cmdInsertEmp.Parameters.AddWithValue(jobTitle);
@@ -611,11 +597,9 @@ namespace EmployeeTrainingTracker
                         long newEmpId = (long)cmdInsertEmp.ExecuteScalar();
 
                         // Link back to Users
-                        // CHANGED: Using NpgsqlCommand and $1, $2 parameters
                         using (var cmdUpdateUserEmp = new NpgsqlCommand(
                             "UPDATE Users SET EmployeeID=$1 WHERE UserID=$2", conn))
                         {
-                            // CHANGED: Using positional parameters
                             cmdUpdateUserEmp.Parameters.AddWithValue(newEmpId);
                             cmdUpdateUserEmp.Parameters.AddWithValue(userId);
                             cmdUpdateUserEmp.ExecuteNonQuery();
@@ -624,7 +608,6 @@ namespace EmployeeTrainingTracker
                 }
 
                 // Always update Users table (username + role)
-                // CHANGED: Using NpgsqlCommand and $1, $2 parameters
                 using (var cmdUser = new NpgsqlCommand(
                     "UPDATE Users SET Email=$1, Role=$2 WHERE UserID=$3", conn))
                 {
@@ -651,13 +634,11 @@ namespace EmployeeTrainingTracker
             var confirm = MessageBox.Show("Delete this employee and all their certificates?", "Confirm", MessageBoxButtons.YesNo);
             if (confirm == DialogResult.No) return;
 
-            // CHANGED: Using NpgsqlConnection
             using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
 
                 // Delete certificates first
-                // CHANGED: Using NpgsqlCommand and $1 parameter
                 using (var cmdCert = new NpgsqlCommand("DELETE FROM TrainingCertificates WHERE EmployeeID=$1", conn))
                 {
                     cmdCert.Parameters.AddWithValue(empId.Value);
@@ -665,7 +646,6 @@ namespace EmployeeTrainingTracker
                 }
 
                 // Then delete user
-                // CHANGED: Using NpgsqlCommand and $1 parameter
                 using (var cmdUser = new NpgsqlCommand("DELETE FROM Users WHERE EmployeeID=$1", conn))
                 {
                     cmdUser.Parameters.AddWithValue(empId.Value);
@@ -673,7 +653,6 @@ namespace EmployeeTrainingTracker
                 }
 
                 // Finally, delete the employee record
-                // CHANGED: Using NpgsqlCommand and $1 parameter
                 using (var cmdEmp = new NpgsqlCommand("DELETE FROM Employees WHERE EmployeeID=$1", conn))
                 {
                     cmdEmp.Parameters.AddWithValue(empId.Value);
@@ -710,7 +689,6 @@ namespace EmployeeTrainingTracker
 
 
         //CRUD for Planning
-        // NO CHANGES NEEDED HERE (assumes PlannedTrainingService is refactored)
         private void btnAddSession_Click(object sender, EventArgs e)
         {
             var selectedEmployeeIds = GetSelectedEmployees(); // List<int> from CheckedListBox
@@ -773,7 +751,6 @@ namespace EmployeeTrainingTracker
 
 
         //CRUD for Groups
-        // NO CHANGES NEEDED HERE (assumes GroupHelper is refactored)
         private void btnAddGroup_Click(object sender, EventArgs e)
         {
             GroupService.AddGroup(
@@ -955,7 +932,6 @@ namespace EmployeeTrainingTracker
             }
         }
 
-        // NO CHANGES NEEDED for CSV export
         private void btnExportCsv_Click(object sender, EventArgs e)
         {
             if (dgvReportResults.Rows.Count == 0)
@@ -1029,7 +1005,6 @@ namespace EmployeeTrainingTracker
 
 
         // Events
-        // NO CHANGES NEEDED HERE (assumes services are refactored)
         private void dgvEmployees_SelectionChanged(object sender, EventArgs e)
         {
             if (dgvEmployees.CurrentRow != null)
@@ -1322,10 +1297,9 @@ namespace EmployeeTrainingTracker
                 txtDescription.Text = row.Cells["Description"].Value.ToString();
 
                 // --- APPLY THIS CHANGE ---
-                _loadingManagerCombo = true; // Set flag HIGH before the call
+                _loadingManagerCombo = true; 
                 PopulateManagerComboBox(groupId, row.Cells["ManagerID"].Value);
-                _loadingManagerCombo = false; // Set flag LOW after the call
-                                              // -------------------------
+                _loadingManagerCombo = false; 
             }
             catch (Exception ex)
             {
