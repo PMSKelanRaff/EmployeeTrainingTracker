@@ -298,7 +298,7 @@ namespace EmployeeTrainingTracker
             // 
             cmbRole.Anchor = AnchorStyles.Right;
             cmbRole.FormattingEnabled = true;
-            cmbRole.Items.AddRange(new object[] { "Employee", "Admin" });
+            cmbRole.Items.AddRange(new object[] { "Employee", "Manager", "Admin" });
             cmbRole.Location = new Point(775, 198);
             cmbRole.Name = "cmbRole";
             cmbRole.Size = new Size(228, 23);

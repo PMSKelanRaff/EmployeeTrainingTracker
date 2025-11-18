@@ -39,3 +39,4 @@ C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTrac
 C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\bin\Debug\net8.0-windows\Microsoft.Extensions.DependencyInjection.Abstractions.dll
 C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\bin\Debug\net8.0-windows\Microsoft.Extensions.Logging.Abstractions.dll
 C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\bin\Debug\net8.0-windows\Npgsql.dll
+C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\obj\Debug\net8.0-windows\EmployeeTrainingTracker.ManagerDashboard.resources

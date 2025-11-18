@@ -12,7 +12,7 @@ namespace EmployeeTrainingTracker.Utilities
     internal class PlannedTrainingService
     {
         // Load all planned training sessions
-        public static DataTable GetPlannedTraining(int? employeeId = null)
+        public static DataTable GetPlannedTraining(int? employeeId = null, string department = null)
         {
             string query = @"
             SELECT 
@@ -25,21 +25,48 @@ namespace EmployeeTrainingTracker.Utilities
                 ts.IssueDate,
                 ts.ExpiryDate,
                 ts.FilePath,
+                ts.Status,
+                ts.Notes,
                 STRING_AGG(e.FullName, ', ') AS Participants
             FROM TrainingSessions ts
             LEFT JOIN TrainingParticipants tp ON ts.SessionID = tp.SessionID
             LEFT JOIN Employees e ON tp.EmployeeID = e.EmployeeID
-            WHERE ts.Status = 'Planned'";
+            WHERE 1=1 "; // Use 1=1 to make appending AND clauses easier
 
             var parameters = new List<NpgsqlParameter>();
 
+            if (!string.IsNullOrEmpty(department))
+            {
+                // Filter: Only show sessions where at least one participant is in the department
+                // OR checks if the session is intended for that department context
+                query += " AND e.Department = $1";
+                parameters.Add(new NpgsqlParameter(null, department));
+            }
+
+            // If looking for specific employee (Admin/Profile view)
             if (employeeId.HasValue)
             {
-                query += " AND tp.EmployeeID = $1";
+                query += " AND tp.EmployeeID = $2"; // Note: Index might need adjustment based on if department is present
                 parameters.Add(new NpgsqlParameter(null, employeeId.Value));
             }
 
-            query += " GROUP BY ts.SessionID ORDER BY ts.PlannedDate";
+            
+            query += " AND (ts.Status = 'Planned' OR ts.Status = 'Completed')";
+
+            query += " GROUP BY ts.SessionID, ts.PlannedDate, ts.CertificateName, ts.Key, ts.HRS, ts.Provider, ts.IssueDate, ts.ExpiryDate, ts.FilePath, ts.Status, ts.Notes ORDER BY ts.PlannedDate";
+
+
+            int paramIndex = 1;
+            if (!string.IsNullOrEmpty(department))
+            {
+                query = query.Replace("$1", $"${paramIndex++}");
+                if (employeeId.HasValue) query = query.Replace("$2", $"${paramIndex++}");
+            }
+            else if (employeeId.HasValue)
+            {
+                query = query.Replace("$2", $"${paramIndex++}"); // In case $1 wasn't used
+            }
+
 
             using var conn = DatabaseHelper.GetConnection();
             conn.Open();
@@ -297,6 +324,28 @@ namespace EmployeeTrainingTracker.Utilities
             }
 
             tx.Commit();
+        }
+
+        public static List<EmployeeItem> GetEmployeesByDepartment(string department)
+        {
+            var employees = new List<EmployeeItem>();
+            string query = "SELECT EmployeeID, FullName FROM Employees WHERE Department = $1 ORDER BY FullName";
+
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+            using var cmd = new NpgsqlCommand(query, conn);
+            cmd.Parameters.AddWithValue(department);
+
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                employees.Add(new EmployeeItem
+                {
+                    Id = reader.GetInt32(0),
+                    Name = reader.GetString(1)
+                });
+            }
+            return employees;
         }
     }
 }

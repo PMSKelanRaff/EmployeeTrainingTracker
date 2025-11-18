@@ -144,6 +144,11 @@ namespace EmployeeTrainingTracker
                 // 1. Assign the form to the property
                 this.MainFormToRun = new EmployeeDashboard(employeeId.Value);
             }
+            // Case 3: Manager (THIS WAS MISSING)
+            else if (role == "Manager" && employeeId.HasValue)
+            {
+                this.MainFormToRun = new ManagerDashboard(employeeId.Value);
+            }
             else
             {
                 MessageBox.Show("This account is not linked to an employee.");
