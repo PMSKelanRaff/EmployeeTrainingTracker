@@ -638,12 +638,13 @@ namespace EmployeeTrainingTracker
             {
                 conn.Open();
 
-                // Delete certificates first
-                using (var cmdCert = new NpgsqlCommand("DELETE FROM TrainingCertificates WHERE EmployeeID=$1", conn))
-                {
-                    cmdCert.Parameters.AddWithValue(empId.Value);
-                    cmdCert.ExecuteNonQuery();
-                }
+                // REMOVED: Explicit DELETE from TrainingCertificates
+                //// Delete certificates first
+                //using (var cmdCert = new NpgsqlCommand("DELETE FROM TrainingCertificates WHERE EmployeeID=$1", conn))
+                //{
+                //    cmdCert.Parameters.AddWithValue(empId.Value);
+                //    cmdCert.ExecuteNonQuery();
+                //}
 
                 // Then delete user
                 using (var cmdUser = new NpgsqlCommand("DELETE FROM Users WHERE EmployeeID=$1", conn))

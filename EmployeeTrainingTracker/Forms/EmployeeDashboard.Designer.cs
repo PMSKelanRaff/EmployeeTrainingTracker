@@ -29,232 +29,286 @@
         private void InitializeComponent()
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(EmployeeDashboard));
-            dataGridView1 = new DataGridView();
-            txtCertName = new TextBox();
-            dtpIssueDate = new DateTimePicker();
-            dtpExpiryDate = new DateTimePicker();
-            btnAdd = new Button();
-            btnEdit = new Button();
-            txtFilePath = new TextBox();
-            lbl_Certname = new Label();
-            lbl_IssueDate = new Label();
-            lbl_ExpiryDate = new Label();
-            label1 = new Label();
+            tabControl = new TabControl();
+            tabPage1 = new TabPage();
+            btnBrowseFile = new Button();
             label7 = new Label();
             label6 = new Label();
             label5 = new Label();
             txtProvider = new TextBox();
             txtHrs = new TextBox();
             txtKey = new ComboBox();
-            btnBrowseFile = new Button();
+            label1 = new Label();
+            lbl_ExpiryDate = new Label();
+            lbl_IssueDate = new Label();
+            lbl_Certname = new Label();
+            txtFilePath = new TextBox();
+            btnEdit = new Button();
+            btnAdd = new Button();
+            dtpExpiryDate = new DateTimePicker();
+            dtpIssueDate = new DateTimePicker();
+            txtCertName = new TextBox();
+            dataGridView1 = new DataGridView();
+            tabPage2 = new TabPage();
+            dgvPlannedTraining = new DataGridView();
+            tabControl.SuspendLayout();
+            tabPage1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dataGridView1).BeginInit();
+            tabPage2.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)dgvPlannedTraining).BeginInit();
             SuspendLayout();
             // 
-            // dataGridView1
+            // tabControl
             // 
-            dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dataGridView1.Location = new Point(8, 7);
-            dataGridView1.Name = "dataGridView1";
-            dataGridView1.Size = new Size(786, 425);
-            dataGridView1.TabIndex = 0;
-            dataGridView1.CellContentClick += dataGridView1_CellContentClick;
-            dataGridView1.SelectionChanged += dataGridView1_SelectionChanged;
+            tabControl.Controls.Add(tabPage1);
+            tabControl.Controls.Add(tabPage2);
+            tabControl.Location = new Point(3, -1);
+            tabControl.Name = "tabControl";
+            tabControl.SelectedIndex = 0;
+            tabControl.Size = new Size(1019, 473);
+            tabControl.TabIndex = 0;
             // 
-            // txtCertName
+            // tabPage1
             // 
-            txtCertName.Location = new Point(800, 43);
-            txtCertName.Name = "txtCertName";
-            txtCertName.Size = new Size(200, 23);
-            txtCertName.TabIndex = 1;
+            tabPage1.Controls.Add(btnBrowseFile);
+            tabPage1.Controls.Add(label7);
+            tabPage1.Controls.Add(label6);
+            tabPage1.Controls.Add(label5);
+            tabPage1.Controls.Add(txtProvider);
+            tabPage1.Controls.Add(txtHrs);
+            tabPage1.Controls.Add(txtKey);
+            tabPage1.Controls.Add(label1);
+            tabPage1.Controls.Add(lbl_ExpiryDate);
+            tabPage1.Controls.Add(lbl_IssueDate);
+            tabPage1.Controls.Add(lbl_Certname);
+            tabPage1.Controls.Add(txtFilePath);
+            tabPage1.Controls.Add(btnEdit);
+            tabPage1.Controls.Add(btnAdd);
+            tabPage1.Controls.Add(dtpExpiryDate);
+            tabPage1.Controls.Add(dtpIssueDate);
+            tabPage1.Controls.Add(txtCertName);
+            tabPage1.Controls.Add(dataGridView1);
+            tabPage1.Location = new Point(4, 24);
+            tabPage1.Name = "tabPage1";
+            tabPage1.Padding = new Padding(3);
+            tabPage1.Size = new Size(1011, 445);
+            tabPage1.TabIndex = 0;
+            tabPage1.Text = "Certificates";
+            tabPage1.UseVisualStyleBackColor = true;
             // 
-            // dtpIssueDate
+            // btnBrowseFile
             // 
-            dtpIssueDate.Location = new Point(800, 213);
-            dtpIssueDate.Name = "dtpIssueDate";
-            dtpIssueDate.Size = new Size(200, 23);
-            dtpIssueDate.TabIndex = 2;
-            // 
-            // dtpExpiryDate
-            // 
-            dtpExpiryDate.Location = new Point(800, 270);
-            dtpExpiryDate.Name = "dtpExpiryDate";
-            dtpExpiryDate.Size = new Size(200, 23);
-            dtpExpiryDate.TabIndex = 3;
-            // 
-            // btnAdd
-            // 
-            btnAdd.Location = new Point(934, 438);
-            btnAdd.Name = "btnAdd";
-            btnAdd.Size = new Size(75, 23);
-            btnAdd.TabIndex = 4;
-            btnAdd.Text = "Add";
-            btnAdd.UseVisualStyleBackColor = true;
-            btnAdd.Click += btnAdd_Click;
-            // 
-            // btnEdit
-            // 
-            btnEdit.Location = new Point(853, 438);
-            btnEdit.Name = "btnEdit";
-            btnEdit.Size = new Size(75, 23);
-            btnEdit.TabIndex = 5;
-            btnEdit.Text = "Edit";
-            btnEdit.UseVisualStyleBackColor = true;
-            btnEdit.Click += btnEdit_Click;
-            // 
-            // txtFilePath
-            // 
-            txtFilePath.Location = new Point(800, 340);
-            txtFilePath.Name = "txtFilePath";
-            txtFilePath.Size = new Size(200, 23);
-            txtFilePath.TabIndex = 7;
-            // 
-            // lbl_Certname
-            // 
-            lbl_Certname.AutoSize = true;
-            lbl_Certname.Location = new Point(800, 25);
-            lbl_Certname.Name = "lbl_Certname";
-            lbl_Certname.Size = new Size(105, 15);
-            lbl_Certname.TabIndex = 12;
-            lbl_Certname.Text = "Certificate Name : ";
-            // 
-            // lbl_IssueDate
-            // 
-            lbl_IssueDate.AutoSize = true;
-            lbl_IssueDate.Location = new Point(800, 195);
-            lbl_IssueDate.Name = "lbl_IssueDate";
-            lbl_IssueDate.Size = new Size(66, 15);
-            lbl_IssueDate.TabIndex = 13;
-            lbl_IssueDate.Text = "Issue Date :";
-            // 
-            // lbl_ExpiryDate
-            // 
-            lbl_ExpiryDate.AutoSize = true;
-            lbl_ExpiryDate.Location = new Point(800, 252);
-            lbl_ExpiryDate.Name = "lbl_ExpiryDate";
-            lbl_ExpiryDate.Size = new Size(71, 15);
-            lbl_ExpiryDate.TabIndex = 14;
-            lbl_ExpiryDate.Text = "Expiry Date :";
-            // 
-            // label1
-            // 
-            label1.AutoSize = true;
-            label1.Location = new Point(800, 322);
-            label1.Name = "label1";
-            label1.Size = new Size(115, 15);
-            label1.TabIndex = 16;
-            label1.Text = "Certificate File path :";
+            btnBrowseFile.Location = new Point(944, 348);
+            btnBrowseFile.Name = "btnBrowseFile";
+            btnBrowseFile.Size = new Size(53, 22);
+            btnBrowseFile.TabIndex = 70;
+            btnBrowseFile.Text = "Browse";
+            btnBrowseFile.UseVisualStyleBackColor = true;
             // 
             // label7
             // 
             label7.AutoSize = true;
-            label7.Location = new Point(800, 132);
+            label7.Location = new Point(797, 111);
             label7.Name = "label7";
             label7.Size = new Size(57, 15);
-            label7.TabIndex = 50;
+            label7.TabIndex = 69;
             label7.Text = "Provider :";
             // 
             // label6
             // 
             label6.AutoSize = true;
-            label6.Location = new Point(900, 83);
+            label6.Location = new Point(897, 62);
             label6.Name = "label6";
             label6.Size = new Size(45, 15);
-            label6.TabIndex = 49;
+            label6.TabIndex = 68;
             label6.Text = "Hours :";
             // 
             // label5
             // 
             label5.AutoSize = true;
-            label5.Location = new Point(800, 83);
+            label5.Location = new Point(797, 62);
             label5.Name = "label5";
             label5.Size = new Size(32, 15);
-            label5.TabIndex = 48;
+            label5.TabIndex = 67;
             label5.Text = "Key :";
             // 
             // txtProvider
             // 
-            txtProvider.Location = new Point(800, 150);
+            txtProvider.Location = new Point(797, 129);
             txtProvider.Name = "txtProvider";
             txtProvider.Size = new Size(200, 23);
-            txtProvider.TabIndex = 47;
+            txtProvider.TabIndex = 66;
             // 
             // txtHrs
             // 
-            txtHrs.Location = new Point(900, 101);
+            txtHrs.Location = new Point(897, 80);
             txtHrs.Name = "txtHrs";
             txtHrs.Size = new Size(100, 23);
-            txtHrs.TabIndex = 46;
+            txtHrs.TabIndex = 65;
             // 
             // txtKey
             // 
             txtKey.FormattingEnabled = true;
             txtKey.Items.AddRange(new object[] { "T", "R", "P" });
-            txtKey.Location = new Point(800, 101);
+            txtKey.Location = new Point(797, 80);
             txtKey.Name = "txtKey";
             txtKey.Size = new Size(71, 23);
-            txtKey.TabIndex = 45;
+            txtKey.TabIndex = 64;
             // 
-            // btnBrowseFile
+            // label1
             // 
-            btnBrowseFile.Location = new Point(947, 369);
-            btnBrowseFile.Name = "btnBrowseFile";
-            btnBrowseFile.Size = new Size(53, 22);
-            btnBrowseFile.TabIndex = 52;
-            btnBrowseFile.Text = "Browse";
-            btnBrowseFile.UseVisualStyleBackColor = true;
-            btnBrowseFile.Click += btnBrowseFile_Click;
+            label1.AutoSize = true;
+            label1.Location = new Point(797, 301);
+            label1.Name = "label1";
+            label1.Size = new Size(115, 15);
+            label1.TabIndex = 63;
+            label1.Text = "Certificate File path :";
+            // 
+            // lbl_ExpiryDate
+            // 
+            lbl_ExpiryDate.AutoSize = true;
+            lbl_ExpiryDate.Location = new Point(797, 231);
+            lbl_ExpiryDate.Name = "lbl_ExpiryDate";
+            lbl_ExpiryDate.Size = new Size(71, 15);
+            lbl_ExpiryDate.TabIndex = 62;
+            lbl_ExpiryDate.Text = "Expiry Date :";
+            // 
+            // lbl_IssueDate
+            // 
+            lbl_IssueDate.AutoSize = true;
+            lbl_IssueDate.Location = new Point(797, 174);
+            lbl_IssueDate.Name = "lbl_IssueDate";
+            lbl_IssueDate.Size = new Size(66, 15);
+            lbl_IssueDate.TabIndex = 61;
+            lbl_IssueDate.Text = "Issue Date :";
+            // 
+            // lbl_Certname
+            // 
+            lbl_Certname.AutoSize = true;
+            lbl_Certname.Location = new Point(797, 4);
+            lbl_Certname.Name = "lbl_Certname";
+            lbl_Certname.Size = new Size(105, 15);
+            lbl_Certname.TabIndex = 60;
+            lbl_Certname.Text = "Certificate Name : ";
+            // 
+            // txtFilePath
+            // 
+            txtFilePath.Location = new Point(797, 319);
+            txtFilePath.Name = "txtFilePath";
+            txtFilePath.Size = new Size(200, 23);
+            txtFilePath.TabIndex = 59;
+            // 
+            // btnEdit
+            // 
+            btnEdit.Location = new Point(850, 417);
+            btnEdit.Name = "btnEdit";
+            btnEdit.Size = new Size(75, 23);
+            btnEdit.TabIndex = 58;
+            btnEdit.Text = "Edit";
+            btnEdit.UseVisualStyleBackColor = true;
+            // 
+            // btnAdd
+            // 
+            btnAdd.Location = new Point(931, 417);
+            btnAdd.Name = "btnAdd";
+            btnAdd.Size = new Size(75, 23);
+            btnAdd.TabIndex = 57;
+            btnAdd.Text = "Add";
+            btnAdd.UseVisualStyleBackColor = true;
+            // 
+            // dtpExpiryDate
+            // 
+            dtpExpiryDate.Location = new Point(797, 249);
+            dtpExpiryDate.Name = "dtpExpiryDate";
+            dtpExpiryDate.Size = new Size(200, 23);
+            dtpExpiryDate.TabIndex = 56;
+            // 
+            // dtpIssueDate
+            // 
+            dtpIssueDate.Location = new Point(797, 192);
+            dtpIssueDate.Name = "dtpIssueDate";
+            dtpIssueDate.Size = new Size(200, 23);
+            dtpIssueDate.TabIndex = 55;
+            // 
+            // txtCertName
+            // 
+            txtCertName.Location = new Point(797, 22);
+            txtCertName.Name = "txtCertName";
+            txtCertName.Size = new Size(200, 23);
+            txtCertName.TabIndex = 54;
+            // 
+            // dataGridView1
+            // 
+            dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dataGridView1.Location = new Point(5, 4);
+            dataGridView1.Name = "dataGridView1";
+            dataGridView1.Size = new Size(786, 407);
+            dataGridView1.TabIndex = 53;
+            dataGridView1.CellContentClick += dataGridView1_CellContentClick;
+            dataGridView1.SelectionChanged += dataGridView1_SelectionChanged;
+            // 
+            // tabPage2
+            // 
+            tabPage2.Controls.Add(dgvPlannedTraining);
+            tabPage2.Location = new Point(4, 24);
+            tabPage2.Name = "tabPage2";
+            tabPage2.Padding = new Padding(3);
+            tabPage2.Size = new Size(1011, 445);
+            tabPage2.TabIndex = 1;
+            tabPage2.Text = "Training";
+            tabPage2.UseVisualStyleBackColor = true;
+            // 
+            // dgvPlannedTraining
+            // 
+            dgvPlannedTraining.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dgvPlannedTraining.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dgvPlannedTraining.Location = new Point(6, 6);
+            dgvPlannedTraining.Name = "dgvPlannedTraining";
+            dgvPlannedTraining.Size = new Size(994, 430);
+            dgvPlannedTraining.TabIndex = 4;
             // 
             // EmployeeDashboard
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1019, 471);
-            Controls.Add(btnBrowseFile);
-            Controls.Add(label7);
-            Controls.Add(label6);
-            Controls.Add(label5);
-            Controls.Add(txtProvider);
-            Controls.Add(txtHrs);
-            Controls.Add(txtKey);
-            Controls.Add(label1);
-            Controls.Add(lbl_ExpiryDate);
-            Controls.Add(lbl_IssueDate);
-            Controls.Add(lbl_Certname);
-            Controls.Add(txtFilePath);
-            Controls.Add(btnEdit);
-            Controls.Add(btnAdd);
-            Controls.Add(dtpExpiryDate);
-            Controls.Add(dtpIssueDate);
-            Controls.Add(txtCertName);
-            Controls.Add(dataGridView1);
+            Controls.Add(tabControl);
             Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "EmployeeDashboard";
-            Text = "EmployeeDashboard";
+            Text = "Employee Dashboard";
             Load += EmployeeDashboard_Load;
+            tabControl.ResumeLayout(false);
+            tabPage1.ResumeLayout(false);
+            tabPage1.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)dataGridView1).EndInit();
+            tabPage2.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)dgvPlannedTraining).EndInit();
             ResumeLayout(false);
-            PerformLayout();
         }
 
         #endregion
 
-        private DataGridView dataGridView1;
-        private TextBox txtCertName;
-        private DateTimePicker dtpIssueDate;
-        private DateTimePicker dtpExpiryDate;
-        private Button btnAdd;
-        private Button btnEdit;
-        private TextBox txtFilePath;
-        private Label lbl_Certname;
-        private Label lbl_IssueDate;
-        private Label lbl_ExpiryDate;
-        private Label label1;
+        private TabControl tabControl;
+        private TabPage tabPage1;
+        private TabPage tabPage2;
+        private Button btnBrowseFile;
         private Label label7;
         private Label label6;
         private Label label5;
         private TextBox txtProvider;
         private TextBox txtHrs;
         private ComboBox txtKey;
-        private Button btnBrowseFile;
+        private Label label1;
+        private Label lbl_ExpiryDate;
+        private Label lbl_IssueDate;
+        private Label lbl_Certname;
+        private TextBox txtFilePath;
+        private Button btnEdit;
+        private Button btnAdd;
+        private DateTimePicker dtpExpiryDate;
+        private DateTimePicker dtpIssueDate;
+        private TextBox txtCertName;
+        private DataGridView dataGridView1;
+        private DataGridView dgvPlannedTraining;
     }
 }

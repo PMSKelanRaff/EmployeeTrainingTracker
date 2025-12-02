@@ -22,8 +22,12 @@ namespace EmployeeTrainingTracker
             try
             {
                 LoadCertificates(employeeId);
+                LoadPlannedTraining(employeeId);
+
                 UIHelpers.StyleDataGridView(dataGridView1);
                 UIHelpers.RenameColumns(dataGridView1);
+                UIHelpers.StyleDataGridView(dgvPlannedTraining);
+                UIHelpers.RenameColumns(dgvPlannedTraining);
             }
             catch (Exception ex)
             {
@@ -118,6 +122,68 @@ namespace EmployeeTrainingTracker
 
             // Apply consistent styling
             UIHelpers.StyleDataGridView(dataGridView1);
+        }
+
+        private void LoadPlannedTraining(int employeeId)
+        {
+            // 1. Define the SQL Query
+            // We join TrainingSessions to TrainingParticipants and filter by the employeeId.
+            string sql = @"
+        SELECT
+            ts.SessionID,
+            ts.CertificateName,
+            ts.HRS,
+            ts.Provider,
+            ts.PlannedDate,
+            ts.Status,
+            ts.Notes
+        FROM public.TrainingSessions ts
+        INNER JOIN public.TrainingParticipants tp ON ts.SessionID = tp.SessionID
+        WHERE tp.EmployeeID = @EmployeeID
+        ORDER BY ts.PlannedDate;";
+
+            DataTable table = new DataTable();
+
+            try
+            {
+                // 2. Execute the Query
+                using (var conn = DatabaseHelper.GetConnection())
+                {
+                    conn.Open();
+                    using (var cmd = new NpgsqlCommand(sql, conn))
+                    {
+                        // Add the parameter for the logged-in employee ID
+                        cmd.Parameters.AddWithValue("EmployeeID", employeeId);
+
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            table.Load(reader);
+                        }
+                    }
+                }
+
+                // 3. Configure the DataGridView
+                dgvPlannedTraining.Columns.Clear();
+                dgvPlannedTraining.AutoGenerateColumns = false;
+                dgvPlannedTraining.DataSource = table;
+
+                // Add Columns (Match the SELECT statement aliases)
+                dgvPlannedTraining.Columns.Add(new DataGridViewTextBoxColumn { Name = "SessionID", DataPropertyName = "SessionID", HeaderText = "ID", Visible = false });
+                dgvPlannedTraining.Columns.Add(new DataGridViewTextBoxColumn { Name = "CertificateName", DataPropertyName = "CertificateName", HeaderText = "Training Name", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
+                dgvPlannedTraining.Columns.Add(new DataGridViewTextBoxColumn { Name = "HRS", DataPropertyName = "HRS", HeaderText = "CPD Hrs" });
+                dgvPlannedTraining.Columns.Add(new DataGridViewTextBoxColumn { Name = "Provider", DataPropertyName = "Provider", HeaderText = "Provider" });
+                dgvPlannedTraining.Columns.Add(new DataGridViewTextBoxColumn { Name = "PlannedDate", DataPropertyName = "PlannedDate", HeaderText = "Planned Date" });
+                dgvPlannedTraining.Columns.Add(new DataGridViewTextBoxColumn { Name = "Status", DataPropertyName = "Status", HeaderText = "Status" });
+                dgvPlannedTraining.Columns.Add(new DataGridViewTextBoxColumn { Name = "Notes", DataPropertyName = "Notes", HeaderText = "Notes", Visible = false });
+
+                // Apply consistent styling (assuming UIHelpers.StyleDataGridView exists)
+                UIHelpers.StyleDataGridView(dgvPlannedTraining);
+                UIHelpers.RenameColumns(dgvPlannedTraining); // If you still want to run your renaming utility
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading planned training sessions:\n{ex.Message}", "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void btnAdd_Click(object sender, EventArgs e)

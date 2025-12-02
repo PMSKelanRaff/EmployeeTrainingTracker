@@ -37,6 +37,11 @@ namespace EmployeeTrainingTracker.Utilities
             using var conn = DatabaseHelper.GetConnection();
             conn.Open();
 
+            if (managerId.HasValue)
+            {
+                PromoteToManager(managerId.Value, conn);
+            }
+
             string sql = @"INSERT INTO Groups (GroupName, Description, ManagerID)
                            VALUES ($1, $2, $3)";
 
@@ -54,13 +59,18 @@ namespace EmployeeTrainingTracker.Utilities
             using var conn = DatabaseHelper.GetConnection();
             conn.Open();
 
+            // 1. Auto-Promote the user to "Manager" role if they are assigned
+            if (managerId.HasValue)
+            {
+                PromoteToManager(managerId.Value, conn);
+            }
 
+            // 2. Update the group (Existing Logic)
             string sql = @"UPDATE Groups 
-                           SET GroupName=$1, Description=$2, ManagerID=$3 
-                           WHERE GroupID=$4";
+                       SET GroupName=$1, Description=$2, ManagerID=$3 
+                       WHERE GroupID=$4";
 
             using var cmd = new NpgsqlCommand(sql, conn);
-
             cmd.Parameters.AddWithValue(groupName);
             cmd.Parameters.AddWithValue((object?)description ?? DBNull.Value);
             cmd.Parameters.AddWithValue(managerId.HasValue ? (object)managerId.Value : DBNull.Value);
@@ -161,6 +171,28 @@ namespace EmployeeTrainingTracker.Utilities
             using var reader = cmd.ExecuteReader();
             dt.Load(reader);
             return dt;
+        }
+
+        private static void PromoteToManager(int employeeId, NpgsqlConnection conn)
+        {
+            // Check if they are currently just an "Employee"
+            // We don't want to downgrade an Admin, so only update if Role is 'Employee'
+            string checkSql = "SELECT Role FROM Users WHERE EmployeeID = $1";
+            using (var checkCmd = new NpgsqlCommand(checkSql, conn))
+            {
+                checkCmd.Parameters.AddWithValue(employeeId);
+                var currentRole = checkCmd.ExecuteScalar()?.ToString();
+
+                if (currentRole == "Employee")
+                {
+                    string updateSql = "UPDATE Users SET Role = 'Manager' WHERE EmployeeID = $1";
+                    using (var updateCmd = new NpgsqlCommand(updateSql, conn))
+                    {
+                        updateCmd.Parameters.AddWithValue(employeeId);
+                        updateCmd.ExecuteNonQuery();
+                    }
+                }
+            }
         }
     }
 }

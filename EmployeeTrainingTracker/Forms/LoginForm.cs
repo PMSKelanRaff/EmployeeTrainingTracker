@@ -175,7 +175,7 @@ namespace EmployeeTrainingTracker
             {
                 byte[] bytes = Encoding.UTF8.GetBytes(password ?? "");
                 byte[] hash = sha.ComputeHash(bytes);
-                return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+                return BitConverter.ToString(hash).Replace("-", "").ToLower();
             }
         }
     }

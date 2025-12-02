@@ -40,23 +40,24 @@ namespace EmployeeTrainingTracker
                     return;
                 }
 
+                // -----------------------------------------------------------
+                // LOCK SENSITIVE CONTROLS
+                // -----------------------------------------------------------
+                cmbRole.Enabled = false; // Manager cannot change roles
+                cmbDept.Enabled = false; // Manager cannot change departments
+                                         // -----------------------------------------------------------
+
                 // 2. Load Data restricted by Department
                 LoadDepartmentEmployees();
                 LoadEmployeeListForReports();
                 LoadPlannedTraining();
-                LoadGroups(); // Managers usually see groups they manage
 
                 // UI Setup
                 tabCertificates.Enabled = false;
                 LoadReportSettings();
                 StyleAllDGVs();
 
-                // Managers can't usually change the "Manager" of a group to someone else, 
-                // so we might hide cbManager or lock it to themselves.
-                // For now, we will load managers from their department only.
-                LoadManagers();
-
-                cbManager.SelectedIndexChanged += cbManager_SelectedIndexChanged;
+               
             }
             catch (Exception ex)
             {
@@ -153,7 +154,7 @@ namespace EmployeeTrainingTracker
             cmbCurrentEmployee.ValueMember = "EmployeeID";
         }
 
-        // --- TAB 2: CERTIFICATES (Same logic, triggered by selection) ---
+        // --- TAB 2: CERTIFICATES (Restricted to Department)) ---
         private void LoadCertificates(int employeeId)
         {
             // Logic identical to Admin, as we already filtered the Employee List
@@ -223,62 +224,11 @@ namespace EmployeeTrainingTracker
             }
         }
 
-        // --- GROUPS ---
-        private void LoadGroups()
-        {
-            // Managers should only see groups they manage OR groups relevant to their dept.
-            // Simplest logic: Groups where ManagerID == _managerId
+       
 
-            using var conn = DatabaseHelper.GetConnection();
-            conn.Open();
-            string query = "SELECT * FROM Groups WHERE ManagerID = $1";
-            using var cmd = new NpgsqlCommand(query, conn);
-            cmd.Parameters.AddWithValue(_managerId);
+       
 
-            DataTable dt = new DataTable();
-            using var reader = cmd.ExecuteReader();
-            dt.Load(reader);
-
-            dgvGroups.DataSource = dt;
-        }
-
-        private void LoadManagers()
-        {
-            // Managers might want to assign a "Team Lead" within their dept as a group manager
-            using var conn = DatabaseHelper.GetConnection();
-            conn.Open();
-
-            string query = "SELECT EmployeeID, FullName FROM Employees WHERE Department = $1 ORDER BY FullName";
-
-            using var cmd = new NpgsqlCommand(query, conn);
-            cmd.Parameters.AddWithValue(_managerDepartment);
-            using var reader = cmd.ExecuteReader();
-
-            DataTable dtManagers = new DataTable();
-            dtManagers.Load(reader);
-
-            cbManager.DataSource = dtManagers;
-            cbManager.DisplayMember = "FullName";
-            cbManager.ValueMember = "EmployeeID";
-        }
-
-        private void LoadGroupMembers(int groupId)
-        {
-            // Fetch members from DB
-            DataTable dtMembers = GroupService.GetMembersByGroup(groupId);
-
-            // Debug: confirm rows returned
-            Console.WriteLine($"GroupID {groupId} Members returned: {dtMembers.Rows.Count}");
-
-            // Bind to DGV
-            dgvGroupMembers.AutoGenerateColumns = true;
-            dgvGroupMembers.DataSource = dtMembers;
-            dgvGroupMembers.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-
-            foreach (DataGridViewColumn col in dgvGroupMembers.Columns)
-                col.ReadOnly = true;
-        }
-
+       
         // CRUD for certificates
         private void btnAddCert_Click(object sender, EventArgs e)
         {
@@ -551,12 +501,13 @@ namespace EmployeeTrainingTracker
             {
                 conn.Open();
 
-                // Delete certificates first
-                using (var cmdCert = new NpgsqlCommand("DELETE FROM TrainingCertificates WHERE EmployeeID=$1", conn))
-                {
-                    cmdCert.Parameters.AddWithValue(empId.Value);
-                    cmdCert.ExecuteNonQuery();
-                }
+                // REMOVED: Explicit DELETE from TrainingCertificates
+                //// Delete certificates first
+                //using (var cmdCert = new NpgsqlCommand("DELETE FROM TrainingCertificates WHERE EmployeeID=$1", conn))
+                //{
+                //    cmdCert.Parameters.AddWithValue(empId.Value);
+                //    cmdCert.ExecuteNonQuery();
+                //}
 
                 // Then delete user
                 using (var cmdUser = new NpgsqlCommand("DELETE FROM Users WHERE EmployeeID=$1", conn))
@@ -664,126 +615,7 @@ namespace EmployeeTrainingTracker
 
 
         //CRUD for Groups
-        private void btnAddGroup_Click(object sender, EventArgs e)
-        {
-            GroupService.AddGroup(
-                txtGroupName.Text.Trim(),
-                txtDescription.Text.Trim(),
-                cbManager.SelectedValue as int?
-            );
-
-            LoadGroups();
-        }
-
-        private void btnEditGroup_Click(object sender, EventArgs e)
-        {
-            if (dgvGroups.SelectedRows.Count == 0)
-            {
-                MessageBox.Show("Please select a group to edit.", "Edit Group", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            int groupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
-            string groupName = txtGroupName.Text.Trim();
-            string description = txtDescription.Text.Trim();
-
-            // Handle manager selection safely
-            int? managerId = null;
-            if (cbManager.SelectedValue != null && cbManager.SelectedValue != DBNull.Value)
-                managerId = Convert.ToInt32(cbManager.SelectedValue);
-
-            // Update the group
-            GroupService.UpdateGroup(
-                groupId,
-                groupName,
-                description,
-                managerId
-            );
-
-            // Refresh the groups grid
-            LoadGroups();
-
-            // Optionally re-select the edited row
-            foreach (DataGridViewRow row in dgvGroups.Rows)
-            {
-                if (Convert.ToInt32(row.Cells["GroupID"].Value) == groupId)
-                {
-                    row.Selected = true;
-                    dgvGroups.FirstDisplayedScrollingRowIndex = row.Index;
-                    break;
-                }
-            }
-
-            MessageBox.Show("Group updated successfully.", "Edit Group", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-
-        private void btnDeleteGroup_Click(object sender, EventArgs e)
-        {
-            if (dgvGroups.SelectedRows.Count == 0)
-            {
-                MessageBox.Show("Please select a group to delete.", "Delete Group", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            int groupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
-
-            var confirm = MessageBox.Show(
-                "Are you sure you want to delete this group? All memberships will also be removed.",
-                "Confirm Delete",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning
-            );
-
-            if (confirm == DialogResult.Yes)
-            {
-                GroupService.DeleteGroup(groupId);
-                LoadGroups();
-                dgvGroupMembers.DataSource = null; // clear members grid
-            }
-        }
-
-        private void btnAddMember_Click(object sender, EventArgs e)
-        {
-            if (dgvGroups.SelectedRows.Count == 0)
-            {
-                MessageBox.Show("Please select a group first.", "Add Member", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            int groupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
-
-            using var addForm = new AddMemberForm(groupId);
-            if (addForm.ShowDialog() == DialogResult.OK)
-            {
-                LoadGroupMembers(groupId); // refresh after adding
-            }
-        }
-
-        private void btnRemoveMember_Click(object sender, EventArgs e)
-        {
-            if (dgvGroups.SelectedRows.Count == 0 || dgvGroupMembers.SelectedRows.Count == 0)
-            {
-                MessageBox.Show("Please select a group and a member to remove.", "Remove Member", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            int groupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
-            int employeeId = Convert.ToInt32(dgvGroupMembers.SelectedRows[0].Cells["EmployeeID"].Value);
-
-            var confirm = MessageBox.Show(
-                "Are you sure you want to remove this member from the group?",
-                "Confirm Remove",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning
-            );
-
-            if (confirm == DialogResult.Yes)
-            {
-                GroupService.RemoveMemberFromGroup(groupId, employeeId);
-                LoadGroupMembers(groupId); // refresh members DGV
-            }
-        }
-
+       
 
         // Reporting and Exports
         private void btnGenerateReport_Click(object sender, EventArgs e)
@@ -935,38 +767,60 @@ namespace EmployeeTrainingTracker
                     cmbDept.Text = dgvEmployees.CurrentRow.Cells["Department"].Value?.ToString();
                     txtJobTitle.Text = dgvEmployees.CurrentRow.Cells["JobTitle"].Value?.ToString();
 
-                    // If EmployeeID exists, load certificates
                     if (empIdObj != null && empIdObj != DBNull.Value)
                     {
-                        int empId = Convert.ToInt32(empIdObj);
-                        string fullName = dgvEmployees.CurrentRow.Cells["FullName"].Value?.ToString() ?? "Unknown";
-                        SetCurrentEmployeeName(fullName);
-                        LoadCertificates(empId);
-                        tabCertificates.Enabled = true;
+                        int selectedId = Convert.ToInt32(empIdObj);
+
+                        // ---------------------------------------------------
+                        // NEW: SELF-MANAGEMENT LOGIC
+                        // ---------------------------------------------------
+                        if (selectedId == _managerId)
+                        {
+                            // CASE: Manager selected themselves
+                            btnDeleteEmployee.Enabled = false;        // Prevent Self-Deletion
+                            btnEditEmployee.Enabled = true;         // Allow updating (e.g., fixing their own email)
+
+                        }
+                        else
+                        {
+                            // CASE: Manager selected someone else
+                            btnDeleteEmployee.Enabled = true;         // Allow normal management
+                            btnEditEmployee.Enabled = true;
+                        }
+
+                        // If EmployeeID exists, load certificates
+                        if (empIdObj != null && empIdObj != DBNull.Value)
+                        {
+                            int empId = Convert.ToInt32(empIdObj);
+                            string fullName = dgvEmployees.CurrentRow.Cells["FullName"].Value?.ToString() ?? "Unknown";
+                            SetCurrentEmployeeName(fullName);
+                            LoadCertificates(empId);
+                            tabCertificates.Enabled = true;
+                        }
+                        else
+                        {
+                            SetCurrentEmployeeName("None");
+                            dgvCertificates.DataSource = null;
+                            tabCertificates.Enabled = false;
+                        }
                     }
                     else
                     {
-                        SetCurrentEmployeeName("None");
+                        // No valid user selected
+                        ClearEmployeeInputs();
                         dgvCertificates.DataSource = null;
                         tabCertificates.Enabled = false;
                     }
                 }
                 else
                 {
-                    // No valid user selected
                     ClearEmployeeInputs();
-                    dgvCertificates.DataSource = null;
                     tabCertificates.Enabled = false;
                 }
-            }
-            else
-            {
-                ClearEmployeeInputs();
-                tabCertificates.Enabled = false;
-            }
 
-            // Update certificate buttons (add/edit/delete)
-            UpdateCertificateButtons();
+                // Update certificate buttons (add/edit/delete)
+                UpdateCertificateButtons();
+            }
         }
 
         private void dgvCertificates_SelectionChanged(object sender, EventArgs e)
@@ -1040,38 +894,7 @@ namespace EmployeeTrainingTracker
                 SyncDgvSelection(empId);
             }
         }
-
-        private void cbManager_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            if (_loadingManagerCombo) return; // skip if combo is still loading
-            if (dgvGroups.SelectedRows.Count == 0) return;
-            if (cbManager.SelectedValue == null) return;
-
-            int groupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
-            int newManagerId = Convert.ToInt32(cbManager.SelectedValue);
-
-            // Update DB
-            GroupService.UpdateGroup(
-                groupId,
-                dgvGroups.SelectedRows[0].Cells["GroupName"].Value.ToString(),
-                dgvGroups.SelectedRows[0].Cells["Description"].Value.ToString(),
-                newManagerId
-            );
-
-            // Refresh main grid safely after update
-            LoadGroups();
-
-            // Re-select group after reload
-            foreach (DataGridViewRow row in dgvGroups.Rows)
-            {
-                if (Convert.ToInt32(row.Cells["GroupID"].Value) == groupId)
-                {
-                    row.Selected = true;
-                    break;
-                }
-            }
-        }
-
+     
         private void dgvPlannedTraining_SelectionChanged(object sender, EventArgs e)
         {
             if (dgvPlannedTraining.CurrentRow?.DataBoundItem is not DataRowView rowView)
@@ -1195,48 +1018,6 @@ namespace EmployeeTrainingTracker
             }
         }
 
-        private void dgvGroups_SelectionChanged(object sender, EventArgs e)
-        {
-            try
-            {
-                if (dgvGroups.SelectedRows.Count == 0) return;
-
-                int groupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
-
-                LoadGroupMembers(groupId); // Your log message
-
-                var row = dgvGroups.SelectedRows[0];
-                txtGroupName.Text = row.Cells["GroupName"].Value.ToString();
-                txtDescription.Text = row.Cells["Description"].Value.ToString();
-
-                // --- APPLY THIS CHANGE ---
-                _loadingManagerCombo = true; 
-                PopulateManagerComboBox(groupId, row.Cells["ManagerID"].Value);
-                _loadingManagerCombo = false; 
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"An error occurred while selecting the group:\n\n{ex.Message}\n\n{ex.StackTrace}",
-                                "Event Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        private void PopulateManagerComboBox(int groupId, object currentManagerId)
-        {
-            DataTable dtMembers = GroupService.GetMembersByGroup(groupId);
-
-            cbManager.DataSource = dtMembers;
-            cbManager.DisplayMember = "FullName";
-            cbManager.ValueMember = "EmployeeID";
-
-            // Set current manager if exists
-            if (currentManagerId != DBNull.Value)
-                cbManager.SelectedValue = Convert.ToInt32(currentManagerId);
-            else
-                cbManager.SelectedIndex = -1;
-        }
-
-
         // Helper Functions
 
         private void StyleAllDGVs()
@@ -1246,16 +1027,13 @@ namespace EmployeeTrainingTracker
             UIHelpers.StyleDataGridView(dgvCertificates);
             UIHelpers.StyleDataGridView(dgvEmployees);
             UIHelpers.StyleDataGridView(dgvReportResults);
-            UIHelpers.StyleDataGridView(dgvGroups);
-            UIHelpers.StyleDataGridView(dgvGroupMembers);
+        
 
             UIHelpers.RenameColumns(dgvPlannedTraining);
             UIHelpers.RenameColumns(dgvCertificates);
             UIHelpers.RenameColumns(dgvEmployees);
             UIHelpers.RenameColumns(dgvReportResults);
-            UIHelpers.RenameColumns(dgvGroups);
-            UIHelpers.RenameColumns(dgvGroupMembers);
-
+         
             foreach (TabPage tab in tabControl.TabPages)
             {
                 //tab.BackColor = Color.Gray; // or Color.Gainsboro / Color.WhiteSmoke / LightGray
