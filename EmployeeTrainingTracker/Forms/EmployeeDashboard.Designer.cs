@@ -101,7 +101,7 @@
             btnBrowseFile.Location = new Point(944, 348);
             btnBrowseFile.Name = "btnBrowseFile";
             btnBrowseFile.Size = new Size(53, 22);
-            btnBrowseFile.TabIndex = 70;
+            btnBrowseFile.TabIndex = 8;
             btnBrowseFile.Text = "Browse";
             btnBrowseFile.UseVisualStyleBackColor = true;
             // 
@@ -137,14 +137,14 @@
             txtProvider.Location = new Point(797, 129);
             txtProvider.Name = "txtProvider";
             txtProvider.Size = new Size(200, 23);
-            txtProvider.TabIndex = 66;
+            txtProvider.TabIndex = 4;
             // 
             // txtHrs
             // 
             txtHrs.Location = new Point(897, 80);
             txtHrs.Name = "txtHrs";
             txtHrs.Size = new Size(100, 23);
-            txtHrs.TabIndex = 65;
+            txtHrs.TabIndex = 3;
             // 
             // txtKey
             // 
@@ -153,7 +153,7 @@
             txtKey.Location = new Point(797, 80);
             txtKey.Name = "txtKey";
             txtKey.Size = new Size(71, 23);
-            txtKey.TabIndex = 64;
+            txtKey.TabIndex = 2;
             // 
             // label1
             // 
@@ -196,51 +196,53 @@
             txtFilePath.Location = new Point(797, 319);
             txtFilePath.Name = "txtFilePath";
             txtFilePath.Size = new Size(200, 23);
-            txtFilePath.TabIndex = 59;
+            txtFilePath.TabIndex = 7;
             // 
             // btnEdit
             // 
             btnEdit.Location = new Point(850, 417);
             btnEdit.Name = "btnEdit";
             btnEdit.Size = new Size(75, 23);
-            btnEdit.TabIndex = 58;
+            btnEdit.TabIndex = 9;
             btnEdit.Text = "Edit";
             btnEdit.UseVisualStyleBackColor = true;
+            btnEdit.Click += btnEdit_Click;
             // 
             // btnAdd
             // 
             btnAdd.Location = new Point(931, 417);
             btnAdd.Name = "btnAdd";
             btnAdd.Size = new Size(75, 23);
-            btnAdd.TabIndex = 57;
+            btnAdd.TabIndex = 10;
             btnAdd.Text = "Add";
             btnAdd.UseVisualStyleBackColor = true;
+            btnAdd.Click += btnAdd_Click;
             // 
             // dtpExpiryDate
             // 
             dtpExpiryDate.Location = new Point(797, 249);
             dtpExpiryDate.Name = "dtpExpiryDate";
             dtpExpiryDate.Size = new Size(200, 23);
-            dtpExpiryDate.TabIndex = 56;
+            dtpExpiryDate.TabIndex = 6;
             // 
             // dtpIssueDate
             // 
             dtpIssueDate.Location = new Point(797, 192);
             dtpIssueDate.Name = "dtpIssueDate";
             dtpIssueDate.Size = new Size(200, 23);
-            dtpIssueDate.TabIndex = 55;
+            dtpIssueDate.TabIndex = 5;
             // 
             // txtCertName
             // 
             txtCertName.Location = new Point(797, 22);
             txtCertName.Name = "txtCertName";
             txtCertName.Size = new Size(200, 23);
-            txtCertName.TabIndex = 54;
+            txtCertName.TabIndex = 1;
             // 
             // dataGridView1
             // 
             dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dataGridView1.Location = new Point(5, 4);
+            dataGridView1.Location = new Point(0, 0);
             dataGridView1.Name = "dataGridView1";
             dataGridView1.Size = new Size(786, 407);
             dataGridView1.TabIndex = 53;

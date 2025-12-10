@@ -209,7 +209,7 @@ namespace EmployeeTrainingTracker
             txtJobTitle.Location = new Point(775, 311);
             txtJobTitle.Name = "txtJobTitle";
             txtJobTitle.Size = new Size(228, 23);
-            txtJobTitle.TabIndex = 21;
+            txtJobTitle.TabIndex = 5;
             // 
             // cmbDept
             // 
@@ -219,7 +219,7 @@ namespace EmployeeTrainingTracker
             cmbDept.Location = new Point(775, 242);
             cmbDept.Name = "cmbDept";
             cmbDept.Size = new Size(228, 23);
-            cmbDept.TabIndex = 20;
+            cmbDept.TabIndex = 4;
             // 
             // lbl_Department
             // 
@@ -237,7 +237,7 @@ namespace EmployeeTrainingTracker
             btnDeleteEmployee.Location = new Point(724, 422);
             btnDeleteEmployee.Name = "btnDeleteEmployee";
             btnDeleteEmployee.Size = new Size(75, 23);
-            btnDeleteEmployee.TabIndex = 17;
+            btnDeleteEmployee.TabIndex = 6;
             btnDeleteEmployee.Text = "Delete";
             btnDeleteEmployee.UseVisualStyleBackColor = true;
             btnDeleteEmployee.Click += btnDeleteEmployee_Click;
@@ -248,7 +248,7 @@ namespace EmployeeTrainingTracker
             btnEditEmployee.Location = new Point(847, 422);
             btnEditEmployee.Name = "btnEditEmployee";
             btnEditEmployee.Size = new Size(75, 23);
-            btnEditEmployee.TabIndex = 16;
+            btnEditEmployee.TabIndex = 7;
             btnEditEmployee.Text = "Edit";
             btnEditEmployee.UseVisualStyleBackColor = true;
             btnEditEmployee.Click += btnUpdateEmployee_Click;
@@ -259,7 +259,7 @@ namespace EmployeeTrainingTracker
             btnAddEmployee.Location = new Point(928, 424);
             btnAddEmployee.Name = "btnAddEmployee";
             btnAddEmployee.Size = new Size(75, 23);
-            btnAddEmployee.TabIndex = 15;
+            btnAddEmployee.TabIndex = 8;
             btnAddEmployee.Text = "Add";
             btnAddEmployee.UseVisualStyleBackColor = true;
             btnAddEmployee.Click += btnAddEmployee_Click;
@@ -302,7 +302,7 @@ namespace EmployeeTrainingTracker
             cmbRole.Location = new Point(775, 198);
             cmbRole.Name = "cmbRole";
             cmbRole.Size = new Size(228, 23);
-            cmbRole.TabIndex = 11;
+            cmbRole.TabIndex = 3;
             // 
             // txtPassword
             // 
@@ -310,7 +310,7 @@ namespace EmployeeTrainingTracker
             txtPassword.Location = new Point(775, 117);
             txtPassword.Name = "txtPassword";
             txtPassword.Size = new Size(228, 23);
-            txtPassword.TabIndex = 10;
+            txtPassword.TabIndex = 2;
             txtPassword.UseSystemPasswordChar = true;
             // 
             // txtUsername
@@ -319,7 +319,7 @@ namespace EmployeeTrainingTracker
             txtUsername.Location = new Point(775, 73);
             txtUsername.Name = "txtUsername";
             txtUsername.Size = new Size(228, 23);
-            txtUsername.TabIndex = 9;
+            txtUsername.TabIndex = 1;
             // 
             // tabCertificates
             // 
@@ -358,7 +358,7 @@ namespace EmployeeTrainingTracker
             btnBrowseFile.Location = new Point(939, 376);
             btnBrowseFile.Name = "btnBrowseFile";
             btnBrowseFile.Size = new Size(53, 22);
-            btnBrowseFile.TabIndex = 51;
+            btnBrowseFile.TabIndex = 9;
             btnBrowseFile.Text = "Browse";
             btnBrowseFile.UseVisualStyleBackColor = true;
             btnBrowseFile.Click += btnBrowseFile_Click;
@@ -399,7 +399,7 @@ namespace EmployeeTrainingTracker
             txtProviderCertsTab.Location = new Point(792, 193);
             txtProviderCertsTab.Name = "txtProviderCertsTab";
             txtProviderCertsTab.Size = new Size(200, 23);
-            txtProviderCertsTab.TabIndex = 47;
+            txtProviderCertsTab.TabIndex = 5;
             // 
             // txtHrsCertsTab
             // 
@@ -407,7 +407,7 @@ namespace EmployeeTrainingTracker
             txtHrsCertsTab.Location = new Point(892, 144);
             txtHrsCertsTab.Name = "txtHrsCertsTab";
             txtHrsCertsTab.Size = new Size(100, 23);
-            txtHrsCertsTab.TabIndex = 46;
+            txtHrsCertsTab.TabIndex = 4;
             // 
             // txtKeyCertsTab
             // 
@@ -417,7 +417,7 @@ namespace EmployeeTrainingTracker
             txtKeyCertsTab.Location = new Point(792, 144);
             txtKeyCertsTab.Name = "txtKeyCertsTab";
             txtKeyCertsTab.Size = new Size(71, 23);
-            txtKeyCertsTab.TabIndex = 45;
+            txtKeyCertsTab.TabIndex = 3;
             // 
             // label9
             // 
@@ -438,7 +438,7 @@ namespace EmployeeTrainingTracker
             chkAddToTrainingFolder.Location = new Point(792, 402);
             chkAddToTrainingFolder.Name = "chkAddToTrainingFolder";
             chkAddToTrainingFolder.Size = new Size(140, 19);
-            chkAddToTrainingFolder.TabIndex = 27;
+            chkAddToTrainingFolder.TabIndex = 10;
             chkAddToTrainingFolder.Text = "Add to training folder";
             chkAddToTrainingFolder.UseVisualStyleBackColor = true;
             // 
@@ -460,7 +460,7 @@ namespace EmployeeTrainingTracker
             cmbCurrentEmployee.Location = new Point(825, 26);
             cmbCurrentEmployee.Name = "cmbCurrentEmployee";
             cmbCurrentEmployee.Size = new Size(126, 23);
-            cmbCurrentEmployee.TabIndex = 25;
+            cmbCurrentEmployee.TabIndex = 1;
             // 
             // txtFilePath
             // 
@@ -468,7 +468,7 @@ namespace EmployeeTrainingTracker
             txtFilePath.Location = new Point(792, 347);
             txtFilePath.Name = "txtFilePath";
             txtFilePath.Size = new Size(200, 23);
-            txtFilePath.TabIndex = 14;
+            txtFilePath.TabIndex = 8;
             // 
             // lbl_ExpiryDate
             // 
@@ -506,7 +506,7 @@ namespace EmployeeTrainingTracker
             dtpExpiryDate.Location = new Point(792, 291);
             dtpExpiryDate.Name = "dtpExpiryDate";
             dtpExpiryDate.Size = new Size(200, 23);
-            dtpExpiryDate.TabIndex = 10;
+            dtpExpiryDate.TabIndex = 7;
             // 
             // dtpIssueDate
             // 
@@ -514,7 +514,7 @@ namespace EmployeeTrainingTracker
             dtpIssueDate.Location = new Point(792, 247);
             dtpIssueDate.Name = "dtpIssueDate";
             dtpIssueDate.Size = new Size(200, 23);
-            dtpIssueDate.TabIndex = 9;
+            dtpIssueDate.TabIndex = 6;
             // 
             // txtCertName
             // 
@@ -522,7 +522,7 @@ namespace EmployeeTrainingTracker
             txtCertName.Location = new Point(792, 96);
             txtCertName.Name = "txtCertName";
             txtCertName.Size = new Size(200, 23);
-            txtCertName.TabIndex = 8;
+            txtCertName.TabIndex = 2;
             // 
             // btnDelete
             // 
@@ -530,7 +530,7 @@ namespace EmployeeTrainingTracker
             btnDelete.Location = new Point(792, 427);
             btnDelete.Name = "btnDelete";
             btnDelete.Size = new Size(50, 23);
-            btnDelete.TabIndex = 7;
+            btnDelete.TabIndex = 11;
             btnDelete.Text = "Delete";
             btnDelete.UseVisualStyleBackColor = true;
             btnDelete.Click += btnDeleteCert_Click;
@@ -541,7 +541,7 @@ namespace EmployeeTrainingTracker
             btnEdit.Location = new Point(904, 427);
             btnEdit.Name = "btnEdit";
             btnEdit.Size = new Size(47, 23);
-            btnEdit.TabIndex = 6;
+            btnEdit.TabIndex = 12;
             btnEdit.Text = "Edit";
             btnEdit.UseVisualStyleBackColor = true;
             btnEdit.Click += btnEditCert_Click;
@@ -552,7 +552,7 @@ namespace EmployeeTrainingTracker
             btnAdd.Location = new Point(957, 427);
             btnAdd.Name = "btnAdd";
             btnAdd.Size = new Size(48, 23);
-            btnAdd.TabIndex = 5;
+            btnAdd.TabIndex = 13;
             btnAdd.Text = "Add";
             btnAdd.UseVisualStyleBackColor = true;
             btnAdd.Click += btnAddCert_Click;
@@ -598,7 +598,7 @@ namespace EmployeeTrainingTracker
             clbGroups.Location = new Point(794, 300);
             clbGroups.Name = "clbGroups";
             clbGroups.Size = new Size(199, 94);
-            clbGroups.TabIndex = 53;
+            clbGroups.TabIndex = 5;
             // 
             // clbEmployees
             // 
@@ -608,7 +608,7 @@ namespace EmployeeTrainingTracker
             clbEmployees.Location = new Point(793, 183);
             clbEmployees.Name = "clbEmployees";
             clbEmployees.Size = new Size(199, 94);
-            clbEmployees.TabIndex = 52;
+            clbEmployees.TabIndex = 4;
             // 
             // label8
             // 
@@ -626,7 +626,7 @@ namespace EmployeeTrainingTracker
             btnExportCsv.Location = new Point(824, 424);
             btnExportCsv.Name = "btnExportCsv";
             btnExportCsv.Size = new Size(90, 23);
-            btnExportCsv.TabIndex = 9;
+            btnExportCsv.TabIndex = 6;
             btnExportCsv.Text = "Export CSV";
             btnExportCsv.UseVisualStyleBackColor = true;
             btnExportCsv.Click += btnExportCsv_Click;
@@ -637,7 +637,7 @@ namespace EmployeeTrainingTracker
             btnGenerateReport.Location = new Point(915, 424);
             btnGenerateReport.Name = "btnGenerateReport";
             btnGenerateReport.Size = new Size(90, 23);
-            btnGenerateReport.TabIndex = 8;
+            btnGenerateReport.TabIndex = 7;
             btnGenerateReport.Text = "Create Report";
             btnGenerateReport.UseVisualStyleBackColor = true;
             btnGenerateReport.Click += btnGenerateReport_Click;
@@ -668,7 +668,7 @@ namespace EmployeeTrainingTracker
             dtpEnd.Location = new Point(793, 128);
             dtpEnd.Name = "dtpEnd";
             dtpEnd.Size = new Size(200, 23);
-            dtpEnd.TabIndex = 5;
+            dtpEnd.TabIndex = 3;
             // 
             // dtpStart
             // 
@@ -676,7 +676,7 @@ namespace EmployeeTrainingTracker
             dtpStart.Location = new Point(793, 84);
             dtpStart.Name = "dtpStart";
             dtpStart.Size = new Size(200, 23);
-            dtpStart.TabIndex = 4;
+            dtpStart.TabIndex = 2;
             // 
             // lblReportType
             // 
@@ -705,7 +705,7 @@ namespace EmployeeTrainingTracker
             cmbReportType.Location = new Point(793, 40);
             cmbReportType.Name = "cmbReportType";
             cmbReportType.Size = new Size(121, 23);
-            cmbReportType.TabIndex = 0;
+            cmbReportType.TabIndex = 1;
             cmbReportType.SelectedIndexChanged += cmbReportType_SelectedIndexChanged;
             // 
             // Planning
@@ -747,7 +747,7 @@ namespace EmployeeTrainingTracker
             textStatusPlan.Location = new Point(793, 219);
             textStatusPlan.Name = "textStatusPlan";
             textStatusPlan.Size = new Size(200, 23);
-            textStatusPlan.TabIndex = 52;
+            textStatusPlan.TabIndex = 6;
             // 
             // btnCompleteTraining
             // 
@@ -755,7 +755,7 @@ namespace EmployeeTrainingTracker
             btnCompleteTraining.Location = new Point(707, 426);
             btnCompleteTraining.Name = "btnCompleteTraining";
             btnCompleteTraining.Size = new Size(80, 23);
-            btnCompleteTraining.TabIndex = 51;
+            btnCompleteTraining.TabIndex = 9;
             btnCompleteTraining.Text = "Complete";
             btnCompleteTraining.UseVisualStyleBackColor = true;
             btnCompleteTraining.Click += btnCompleteTraining_Click;
@@ -776,7 +776,7 @@ namespace EmployeeTrainingTracker
             textNotesPlan.Location = new Point(793, 263);
             textNotesPlan.Name = "textNotesPlan";
             textNotesPlan.Size = new Size(200, 23);
-            textNotesPlan.TabIndex = 49;
+            textNotesPlan.TabIndex = 7;
             // 
             // label3
             // 
@@ -795,7 +795,7 @@ namespace EmployeeTrainingTracker
             clbEmployeesPlan.Location = new Point(793, 309);
             clbEmployeesPlan.Name = "clbEmployeesPlan";
             clbEmployeesPlan.Size = new Size(200, 94);
-            clbEmployeesPlan.TabIndex = 46;
+            clbEmployeesPlan.TabIndex = 8;
             // 
             // label7
             // 
@@ -833,7 +833,7 @@ namespace EmployeeTrainingTracker
             txtProviderPlan.Location = new Point(793, 131);
             txtProviderPlan.Name = "txtProviderPlan";
             txtProviderPlan.Size = new Size(200, 23);
-            txtProviderPlan.TabIndex = 41;
+            txtProviderPlan.TabIndex = 4;
             // 
             // txtHrsPlan
             // 
@@ -841,7 +841,7 @@ namespace EmployeeTrainingTracker
             txtHrsPlan.Location = new Point(893, 87);
             txtHrsPlan.Name = "txtHrsPlan";
             txtHrsPlan.Size = new Size(100, 23);
-            txtHrsPlan.TabIndex = 40;
+            txtHrsPlan.TabIndex = 3;
             // 
             // txtKeyPlan
             // 
@@ -851,7 +851,7 @@ namespace EmployeeTrainingTracker
             txtKeyPlan.Location = new Point(793, 87);
             txtKeyPlan.Name = "txtKeyPlan";
             txtKeyPlan.Size = new Size(71, 23);
-            txtKeyPlan.TabIndex = 39;
+            txtKeyPlan.TabIndex = 2;
             // 
             // statusTxt
             // 
@@ -889,7 +889,7 @@ namespace EmployeeTrainingTracker
             dtpPlannedDate.Location = new Point(793, 175);
             dtpPlannedDate.Name = "dtpPlannedDate";
             dtpPlannedDate.Size = new Size(200, 23);
-            dtpPlannedDate.TabIndex = 32;
+            dtpPlannedDate.TabIndex = 5;
             // 
             // txtCertificateNamePlan
             // 
@@ -897,7 +897,7 @@ namespace EmployeeTrainingTracker
             txtCertificateNamePlan.Location = new Point(793, 27);
             txtCertificateNamePlan.Name = "txtCertificateNamePlan";
             txtCertificateNamePlan.Size = new Size(200, 23);
-            txtCertificateNamePlan.TabIndex = 31;
+            txtCertificateNamePlan.TabIndex = 1;
             // 
             // btnDeleteSession
             // 
@@ -905,7 +905,7 @@ namespace EmployeeTrainingTracker
             btnDeleteSession.Location = new Point(793, 428);
             btnDeleteSession.Name = "btnDeleteSession";
             btnDeleteSession.Size = new Size(50, 23);
-            btnDeleteSession.TabIndex = 30;
+            btnDeleteSession.TabIndex = 10;
             btnDeleteSession.Text = "Delete";
             btnDeleteSession.UseVisualStyleBackColor = true;
             btnDeleteSession.Click += btnDeleteSession_Click;
@@ -916,7 +916,7 @@ namespace EmployeeTrainingTracker
             btnEditSession.Location = new Point(905, 428);
             btnEditSession.Name = "btnEditSession";
             btnEditSession.Size = new Size(47, 23);
-            btnEditSession.TabIndex = 29;
+            btnEditSession.TabIndex = 11;
             btnEditSession.Text = "Edit";
             btnEditSession.UseVisualStyleBackColor = true;
             btnEditSession.Click += btnEditSession_Click;
@@ -927,7 +927,7 @@ namespace EmployeeTrainingTracker
             btnAddSession.Location = new Point(958, 428);
             btnAddSession.Name = "btnAddSession";
             btnAddSession.Size = new Size(48, 23);
-            btnAddSession.TabIndex = 28;
+            btnAddSession.TabIndex = 12;
             btnAddSession.Text = "Add";
             btnAddSession.UseVisualStyleBackColor = true;
             btnAddSession.Click += btnAddSession_Click;
@@ -998,14 +998,14 @@ namespace EmployeeTrainingTracker
             txtDescription.Location = new Point(792, 96);
             txtDescription.Name = "txtDescription";
             txtDescription.Size = new Size(170, 23);
-            txtDescription.TabIndex = 43;
+            txtDescription.TabIndex = 2;
             // 
             // txtGroupName
             // 
             txtGroupName.Location = new Point(792, 52);
             txtGroupName.Name = "txtGroupName";
             txtGroupName.Size = new Size(170, 23);
-            txtGroupName.TabIndex = 42;
+            txtGroupName.TabIndex = 1;
             // 
             // lblGroups
             // 
@@ -1022,7 +1022,7 @@ namespace EmployeeTrainingTracker
             btnSaveManager.Location = new Point(928, 424);
             btnSaveManager.Name = "btnSaveManager";
             btnSaveManager.Size = new Size(75, 23);
-            btnSaveManager.TabIndex = 39;
+            btnSaveManager.TabIndex = 9;
             btnSaveManager.Text = "Save";
             btnSaveManager.UseVisualStyleBackColor = true;
             // 
@@ -1032,7 +1032,7 @@ namespace EmployeeTrainingTracker
             cbManager.Location = new Point(792, 140);
             cbManager.Name = "cbManager";
             cbManager.Size = new Size(170, 23);
-            cbManager.TabIndex = 37;
+            cbManager.TabIndex = 3;
             cbManager.SelectedIndexChanged += cbManager_SelectedIndexChanged;
             // 
             // btnRemoveMember
@@ -1040,7 +1040,7 @@ namespace EmployeeTrainingTracker
             btnRemoveMember.Location = new Point(669, 409);
             btnRemoveMember.Name = "btnRemoveMember";
             btnRemoveMember.Size = new Size(117, 23);
-            btnRemoveMember.TabIndex = 36;
+            btnRemoveMember.TabIndex = 8;
             btnRemoveMember.Text = "Remove Member";
             btnRemoveMember.UseVisualStyleBackColor = true;
             btnRemoveMember.Click += btnRemoveMember_Click;
@@ -1050,7 +1050,7 @@ namespace EmployeeTrainingTracker
             btnAddMember.Location = new Point(561, 409);
             btnAddMember.Name = "btnAddMember";
             btnAddMember.Size = new Size(102, 23);
-            btnAddMember.TabIndex = 35;
+            btnAddMember.TabIndex = 7;
             btnAddMember.Text = "Add Member";
             btnAddMember.UseVisualStyleBackColor = true;
             btnAddMember.Click += btnAddMember_Click;
@@ -1073,7 +1073,7 @@ namespace EmployeeTrainingTracker
             btnDeleteGroup.Location = new Point(166, 409);
             btnDeleteGroup.Name = "btnDeleteGroup";
             btnDeleteGroup.Size = new Size(50, 23);
-            btnDeleteGroup.TabIndex = 33;
+            btnDeleteGroup.TabIndex = 4;
             btnDeleteGroup.Text = "Delete";
             btnDeleteGroup.UseVisualStyleBackColor = true;
             btnDeleteGroup.Click += btnDeleteGroup_Click;
@@ -1084,7 +1084,7 @@ namespace EmployeeTrainingTracker
             btnEditGroup.Location = new Point(278, 409);
             btnEditGroup.Name = "btnEditGroup";
             btnEditGroup.Size = new Size(47, 23);
-            btnEditGroup.TabIndex = 32;
+            btnEditGroup.TabIndex = 5;
             btnEditGroup.Text = "Edit";
             btnEditGroup.UseVisualStyleBackColor = true;
             btnEditGroup.Click += btnEditGroup_Click;
@@ -1095,7 +1095,7 @@ namespace EmployeeTrainingTracker
             btnAddGroup.Location = new Point(331, 409);
             btnAddGroup.Name = "btnAddGroup";
             btnAddGroup.Size = new Size(48, 23);
-            btnAddGroup.TabIndex = 31;
+            btnAddGroup.TabIndex = 6;
             btnAddGroup.Text = "Add";
             btnAddGroup.UseVisualStyleBackColor = true;
             btnAddGroup.Click += btnAddGroup_Click;

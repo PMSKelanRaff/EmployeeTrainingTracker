@@ -495,3 +495,5 @@ C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTrac
 C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\obj\Release\net8.0-windows\win-x86\EmployeeTrainingTracker.pdb
 C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\obj\Release\net8.0-windows\win-x86\EmployeeTrainingTracker.genruntimeconfig.cache
 C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\obj\Release\net8.0-windows\win-x86\ref\EmployeeTrainingTracker.dll
+C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\obj\Release\net8.0-windows\win-x86\EmployeeTrainingTracker.ManagerDashboard.resources
+C:\Users\KelanRafferty\source\repos\EmployeeTrainingTracker\EmployeeTrainingTracker\bin\Release\net8.0-windows\win-x86\Resources\favicon.ico

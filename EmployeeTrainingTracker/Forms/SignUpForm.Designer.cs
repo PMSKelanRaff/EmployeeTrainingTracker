@@ -48,7 +48,7 @@
             btnCreate.Location = new Point(143, 301);
             btnCreate.Name = "btnCreate";
             btnCreate.Size = new Size(102, 23);
-            btnCreate.TabIndex = 0;
+            btnCreate.TabIndex = 7;
             btnCreate.Text = "Create Account";
             btnCreate.UseVisualStyleBackColor = true;
             btnCreate.Click += btnCreate_Click;
@@ -93,7 +93,7 @@
             txtPassword.Location = new Point(84, 97);
             txtPassword.Name = "txtPassword";
             txtPassword.Size = new Size(131, 23);
-            txtPassword.TabIndex = 6;
+            txtPassword.TabIndex = 2;
             // 
             // Lbl_FullName
             // 
@@ -127,21 +127,21 @@
             txtDepartment.Location = new Point(84, 184);
             txtDepartment.Name = "txtDepartment";
             txtDepartment.Size = new Size(131, 23);
-            txtDepartment.TabIndex = 10;
+            txtDepartment.TabIndex = 4;
             // 
             // txtFullName
             // 
             txtFullName.Location = new Point(84, 140);
             txtFullName.Name = "txtFullName";
             txtFullName.Size = new Size(131, 23);
-            txtFullName.TabIndex = 11;
+            txtFullName.TabIndex = 3;
             // 
             // txtJobTitle
             // 
             txtJobTitle.Location = new Point(84, 227);
             txtJobTitle.Name = "txtJobTitle";
             txtJobTitle.Size = new Size(131, 23);
-            txtJobTitle.TabIndex = 12;
+            txtJobTitle.TabIndex = 5;
             // 
             // chkLinkWindows
             // 
@@ -149,7 +149,7 @@
             chkLinkWindows.Location = new Point(12, 266);
             chkLinkWindows.Name = "chkLinkWindows";
             chkLinkWindows.Size = new Size(188, 19);
-            chkLinkWindows.TabIndex = 13;
+            chkLinkWindows.TabIndex = 6;
             chkLinkWindows.Text = "Store details for windows login";
             chkLinkWindows.UseVisualStyleBackColor = true;
             // 

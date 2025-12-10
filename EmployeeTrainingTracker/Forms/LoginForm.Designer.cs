@@ -44,14 +44,14 @@
             txtUsername.Location = new Point(12, 107);
             txtUsername.Name = "txtUsername";
             txtUsername.Size = new Size(191, 23);
-            txtUsername.TabIndex = 0;
+            txtUsername.TabIndex = 1;
             // 
             // txtPassword
             // 
             txtPassword.Location = new Point(12, 151);
             txtPassword.Name = "txtPassword";
             txtPassword.Size = new Size(191, 23);
-            txtPassword.TabIndex = 1;
+            txtPassword.TabIndex = 2;
             txtPassword.UseSystemPasswordChar = true;
             // 
             // lbl_Username
@@ -87,7 +87,7 @@
             WindowsLogin_btn.Location = new Point(11, 192);
             WindowsLogin_btn.Name = "WindowsLogin_btn";
             WindowsLogin_btn.Size = new Size(108, 23);
-            WindowsLogin_btn.TabIndex = 5;
+            WindowsLogin_btn.TabIndex = 3;
             WindowsLogin_btn.Text = "Windows Log In";
             WindowsLogin_btn.UseVisualStyleBackColor = true;
             WindowsLogin_btn.Click += WindowsLogin_btn_Click;
@@ -107,7 +107,7 @@
             SignUp_btn.Location = new Point(75, 221);
             SignUp_btn.Name = "SignUp_btn";
             SignUp_btn.Size = new Size(58, 23);
-            SignUp_btn.TabIndex = 7;
+            SignUp_btn.TabIndex = 5;
             SignUp_btn.Text = "Sign Up";
             SignUp_btn.UseVisualStyleBackColor = true;
             SignUp_btn.Click += SignUp_btn_Click;
