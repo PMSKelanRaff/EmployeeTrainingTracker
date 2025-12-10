@@ -28,7 +28,7 @@ namespace EmployeeTrainingTracker.Utilities
             return table;
         }
 
-        public static void AddCertificate(int employeeId, string certName, string key, double cpdHrs, string provider, DateTime issueDate, DateTime expiryDate, string? filePath = null)
+        public static void AddCertificate(int employeeId, string certName, string key, double cpdHrs, string provider, string issueDate, string? expiryDate, string? filePath = null)
         {
             using var conn = DatabaseHelper.GetConnection();
             conn.Open();
@@ -37,46 +37,58 @@ namespace EmployeeTrainingTracker.Utilities
         INSERT INTO TrainingCertificates (EmployeeID, CertificateName, Key, HRS, Provider, IssueDate, ExpiryDate, FilePath)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)", conn);
 
-            // Positional parameters in order
+
             cmd.Parameters.AddWithValue(employeeId);
             cmd.Parameters.AddWithValue(certName);
             cmd.Parameters.AddWithValue(string.IsNullOrEmpty(key) ? DBNull.Value : key);
-            cmd.Parameters.AddWithValue(cpdHrs); // Assumes 0 if not provided
+            cmd.Parameters.AddWithValue(cpdHrs);
             cmd.Parameters.AddWithValue(string.IsNullOrEmpty(provider) ? DBNull.Value : provider);
-            cmd.Parameters.AddWithValue(issueDate.Date); // Pass as DateTime
-            cmd.Parameters.AddWithValue(expiryDate.Date); // Pass as DateTime
-            cmd.Parameters.AddWithValue(string.IsNullOrEmpty(filePath) ? DBNull.Value : filePath);
+            cmd.Parameters.AddWithValue(issueDate);
+            if (!string.IsNullOrEmpty(expiryDate))
+            {
+                // It is already a string, so just pass it.
+                cmd.Parameters.AddWithValue(expiryDate);
+            }
+            else
+            {
+                cmd.Parameters.AddWithValue(DBNull.Value);
+            }
 
+            cmd.Parameters.AddWithValue(string.IsNullOrEmpty(filePath) ? DBNull.Value : filePath);
             cmd.ExecuteNonQuery();
         }
 
-        // No more connection string
-        public static void UpdateCertificate(int certId, string name, string key, double cpdHrs, string provider, DateTime issue, DateTime expiry, string? filePath)
+        public static void UpdateCertificate(int certId, string name, string key, double hrs, string provider, string issueDate, string? expiryDate, string? filePath)
         {
-            // Uses new DatabaseHelper.GetConnection()
             using var conn = DatabaseHelper.GetConnection();
             conn.Open();
 
-            // Using NpgsqlCommand and positional parameters ($1, $2, etc.)
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = @"
-        UPDATE TrainingCertificates
-        SET CertificateName = $1,
-            Key = $2,
-            HRS = $3,
-            Provider = $4,
-            IssueDate = $5,
-            ExpiryDate = $6,
+            using var cmd = new NpgsqlCommand(@"
+        UPDATE TrainingCertificates 
+        SET CertificateName = $1, 
+            Key = $2, 
+            HRS = $3, 
+            Provider = $4, 
+            IssueDate = $5, 
+            ExpiryDate = $6, 
             FilePath = $7
-        WHERE CertificateID = $8";
+        WHERE CertificateID = $8", conn);
 
             cmd.Parameters.AddWithValue(name);
             cmd.Parameters.AddWithValue(string.IsNullOrEmpty(key) ? DBNull.Value : key);
-            cmd.Parameters.AddWithValue(cpdHrs);
+            cmd.Parameters.AddWithValue(hrs);
             cmd.Parameters.AddWithValue(string.IsNullOrEmpty(provider) ? DBNull.Value : provider);
-            cmd.Parameters.AddWithValue(issue.Date); // Pass as DateTime
-            cmd.Parameters.AddWithValue(expiry.Date); // Pass as DateTime
-            cmd.Parameters.AddWithValue((object?)filePath ?? DBNull.Value);
+            cmd.Parameters.AddWithValue(issueDate);
+
+            // Check for null string
+            if (!string.IsNullOrEmpty(expiryDate))
+                cmd.Parameters.AddWithValue(expiryDate);
+            else
+                cmd.Parameters.AddWithValue(DBNull.Value);
+
+            cmd.Parameters.AddWithValue(string.IsNullOrEmpty(filePath) ? DBNull.Value : filePath);
+
+            // The ID goes last because it is the last parameter ($8) in the query
             cmd.Parameters.AddWithValue(certId);
 
             cmd.ExecuteNonQuery();

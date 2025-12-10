@@ -222,6 +222,7 @@
             // 
             dtpExpiryDate.Location = new Point(797, 249);
             dtpExpiryDate.Name = "dtpExpiryDate";
+            dtpExpiryDate.ShowCheckBox = true;
             dtpExpiryDate.Size = new Size(200, 23);
             dtpExpiryDate.TabIndex = 6;
             // 

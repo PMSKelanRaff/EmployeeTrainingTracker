@@ -192,8 +192,8 @@ namespace EmployeeTrainingTracker
             string key = txtKey.Text.Trim();
             double.TryParse(txtHrs.Text.Trim(), out double hrs);
             string provider = txtProvider.Text.Trim();
-            DateTime issueDate = dtpIssueDate.Value;
-            DateTime expiryDate = dtpExpiryDate.Value;
+            string issueDate = dtpIssueDate.Value.ToString("yyyy-MM-dd");
+            string? expiryDate = dtpExpiryDate.Checked ? dtpExpiryDate.Value.ToString("yyyy-MM-dd") : null;
             string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim()) ? null : txtFilePath.Text.Trim('"').Trim();
 
             if (string.IsNullOrEmpty(certName))
@@ -220,11 +220,15 @@ namespace EmployeeTrainingTracker
             string key = txtKey.Text.Trim();
             double.TryParse(txtHrs.Text.Trim(), out double hrs);
             string provider = txtProvider.Text.Trim();
-            DateTime issueDate = dtpIssueDate.Value;
-            DateTime expiryDate = dtpExpiryDate.Value;
+
+            // FIX 1
+            string issueDate = dtpIssueDate.Value.ToString("yyyy-MM-dd");
+            string? expiryDate = dtpExpiryDate.Checked ? dtpExpiryDate.Value.ToString("yyyy-MM-dd") : null;
+
             string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim()) ? null : txtFilePath.Text.Trim('"').Trim();
 
             CertificateService.UpdateCertificate(certId, certName, key, hrs, provider, issueDate, expiryDate, filePath);
+
             LoadCertificates(employeeId);
             ClearInputs();
         }
@@ -275,7 +279,6 @@ namespace EmployeeTrainingTracker
         }
 
         // Events
-
         private void dataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0) return;

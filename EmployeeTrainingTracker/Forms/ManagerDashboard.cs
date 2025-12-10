@@ -239,8 +239,9 @@ namespace EmployeeTrainingTracker
             string key = txtKeyCertsTab.Text.Trim();
             string hrsText = txtHrsCertsTab.Text.Trim();
             string provider = txtProviderCertsTab.Text.Trim();
-            DateTime issue = dtpIssueDate.Value;
-            DateTime expiry = dtpExpiryDate.Value;
+            //fixed date format issue
+            string issue = dtpIssueDate.Value.ToString("yyyy-MM-dd");
+            string? expiry = dtpExpiryDate.Checked ? dtpExpiryDate.Value.ToString("yyyy-MM-dd") : null;
             string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim()) ? null : txtFilePath.Text.Trim('"').Trim();
 
             if (string.IsNullOrEmpty(name))
@@ -259,7 +260,7 @@ namespace EmployeeTrainingTracker
             {
                 try
                 {
-                    LegacyExcelService.AppendTrainingRecord(empId, name, issue);
+                    LegacyExcelService.AppendTrainingRecord(empId, name, dtpIssueDate.Value);
                     MessageBox.Show("Record also added to employee's training sheet.");
                 }
                 catch (Exception ex)
@@ -278,8 +279,11 @@ namespace EmployeeTrainingTracker
             string key = txtKeyCertsTab.Text.Trim();
             string hrsText = txtHrsCertsTab.Text.Trim();
             string provider = txtProviderCertsTab.Text.Trim();
-            DateTime issue = dtpIssueDate.Value;
-            DateTime expiry = dtpExpiryDate.Value;
+
+            string issue = dtpIssueDate.Value.ToString("yyyy-MM-dd");
+
+            string? expiry = dtpExpiryDate.Checked ? dtpExpiryDate.Value.ToString("yyyy-MM-dd") : null;
+
             string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim())
                 ? null
                 : txtFilePath.Text.Trim('"').Trim();
@@ -295,7 +299,7 @@ namespace EmployeeTrainingTracker
             {
                 try
                 {
-                    LegacyExcelService.UpdateTrainingRecord(empId, name, issue);
+                    LegacyExcelService.UpdateTrainingRecord(empId, name, dtpIssueDate.Value);
                 }
                 catch (Exception ex)
                 {

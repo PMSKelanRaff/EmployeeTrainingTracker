@@ -505,6 +505,7 @@ namespace EmployeeTrainingTracker
             dtpExpiryDate.Anchor = AnchorStyles.Right;
             dtpExpiryDate.Location = new Point(792, 291);
             dtpExpiryDate.Name = "dtpExpiryDate";
+            dtpExpiryDate.ShowCheckBox = true;
             dtpExpiryDate.Size = new Size(200, 23);
             dtpExpiryDate.TabIndex = 7;
             // 
