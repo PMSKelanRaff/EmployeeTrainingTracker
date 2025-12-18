@@ -120,6 +120,11 @@ namespace EmployeeTrainingTracker
             // Bind DataSource last
             dataGridView1.DataSource = table;
 
+            if (dataGridView1.Columns.Contains("CertificateID"))
+            {
+                dataGridView1.Columns["CertificateID"].Visible = false;
+            }
+
             // Apply consistent styling
             UIHelpers.StyleDataGridView(dataGridView1);
         }

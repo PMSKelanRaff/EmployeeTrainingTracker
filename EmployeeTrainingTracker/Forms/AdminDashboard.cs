@@ -182,6 +182,11 @@ namespace EmployeeTrainingTracker
             // Set DataSource last
             dgvCertificates.DataSource = table;
 
+            if (dgvCertificates.Columns.Contains("CertificateID"))
+            {
+                dgvCertificates.Columns["CertificateID"].Visible = false;
+            }
+
             // update buttons correctly
             UpdateCertificateButtons();
         } //Certs
@@ -363,6 +368,23 @@ namespace EmployeeTrainingTracker
 
                 clbGroups.Items.Add(groupItem);
             }
+        }
+
+        private void LoadAvailableMembersForGroup(int groupId)
+        {
+            // Reuse the exact service call used in your AddMemberForm
+            DataTable dt = GroupService.GetAvailableEmployeesForGroup(groupId);
+
+            // Bind to the new ComboBox
+            cmbPotentialMembers.DataSource = dt;
+            cmbPotentialMembers.DisplayMember = "FullName"; // Assumed column name based on other queries
+            cmbPotentialMembers.ValueMember = "EmployeeID"; // The PK for the employee
+
+            // Reset selection so it doesn't default to the first person immediately
+            cmbPotentialMembers.SelectedIndex = -1;
+
+            // Disable the button if no one is available to add
+            btnAddMemberDirect.Enabled = dt.Rows.Count > 0;
         }
 
 
@@ -836,20 +858,40 @@ namespace EmployeeTrainingTracker
             }
         }
 
-        private void btnAddMember_Click(object sender, EventArgs e)
+        private void btnAddMemberDirect_Click(object sender, EventArgs e)
         {
+            // 1. Validation: Is a group selected?
             if (dgvGroups.SelectedRows.Count == 0)
             {
-                MessageBox.Show("Please select a group first.", "Add Member", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Please select a group first.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            int groupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
-
-            using var addForm = new AddMemberForm(groupId);
-            if (addForm.ShowDialog() == DialogResult.OK)
+            // 2. Validation: Is a user selected in the dropdown?
+            if (cmbPotentialMembers.SelectedIndex == -1 || cmbPotentialMembers.SelectedValue == null)
             {
-                LoadGroupMembers(groupId); // refresh after adding
+                MessageBox.Show("Please select an employee to add.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                int groupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
+                int employeeId = Convert.ToInt32(cmbPotentialMembers.SelectedValue);
+
+                // 3. Call the service (Same logic as AddMemberForm.cs)
+                GroupService.AddMemberToGroup(groupId, employeeId);
+
+                // 4. Refresh the grids and the dropdown
+                LoadGroupMembers(groupId); // Show the new member in the grid
+                LoadAvailableMembersForGroup(groupId); // Remove the added member from the dropdown
+
+                // Optional: Show success message (or keep it silent for speed)
+                // MessageBox.Show("Member added successfully.");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error adding member: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -1306,7 +1348,9 @@ namespace EmployeeTrainingTracker
                 // --- APPLY THIS CHANGE ---
                 _loadingManagerCombo = true; 
                 PopulateManagerComboBox(groupId, row.Cells["ManagerID"].Value);
-                _loadingManagerCombo = false; 
+                _loadingManagerCombo = false;
+
+                LoadAvailableMembersForGroup(groupId);
             }
             catch (Exception ex)
             {

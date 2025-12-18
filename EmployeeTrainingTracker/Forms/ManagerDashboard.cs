@@ -180,6 +180,11 @@ namespace EmployeeTrainingTracker
             dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn { Name = "IssueDate", DataPropertyName = "IssueDate", HeaderText = "Issue Date" });
             dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn { Name = "ExpiryDate", DataPropertyName = "ExpiryDate", HeaderText = "Expiry Date" });
             dgvCertificates.Columns.Add(new DataGridViewLinkColumn { Name = "FileLink", DataPropertyName = "FilePath", HeaderText = "File", TrackVisitedState = true });
+
+            if (dgvCertificates.Columns.Contains("CertificateID"))
+            {
+                dgvCertificates.Columns["CertificateID"].Visible = false;
+            }
         }
 
         // --- TAB 3: PLANNING (Restricted to Department) ---

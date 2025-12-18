@@ -106,6 +106,8 @@ namespace EmployeeTrainingTracker
             btnAddSession = new Button();
             dgvPlannedTraining = new DataGridView();
             Groups = new TabPage();
+            btnAddMemberDirect = new Button();
+            cmbPotentialMembers = new ComboBox();
             label14 = new Label();
             label13 = new Label();
             lblGroupName = new Label();
@@ -115,7 +117,6 @@ namespace EmployeeTrainingTracker
             btnSaveManager = new Button();
             cbManager = new ComboBox();
             btnRemoveMember = new Button();
-            btnAddMember = new Button();
             dgvGroupMembers = new DataGridView();
             btnDeleteGroup = new Button();
             btnEditGroup = new Button();
@@ -945,6 +946,8 @@ namespace EmployeeTrainingTracker
             // 
             // Groups
             // 
+            Groups.Controls.Add(btnAddMemberDirect);
+            Groups.Controls.Add(cmbPotentialMembers);
             Groups.Controls.Add(label14);
             Groups.Controls.Add(label13);
             Groups.Controls.Add(lblGroupName);
@@ -954,7 +957,6 @@ namespace EmployeeTrainingTracker
             Groups.Controls.Add(btnSaveManager);
             Groups.Controls.Add(cbManager);
             Groups.Controls.Add(btnRemoveMember);
-            Groups.Controls.Add(btnAddMember);
             Groups.Controls.Add(dgvGroupMembers);
             Groups.Controls.Add(btnDeleteGroup);
             Groups.Controls.Add(btnEditGroup);
@@ -966,6 +968,25 @@ namespace EmployeeTrainingTracker
             Groups.TabIndex = 4;
             Groups.Text = "Departments";
             Groups.UseVisualStyleBackColor = true;
+            // 
+            // btnAddMemberDirect
+            // 
+            btnAddMemberDirect.Location = new Point(573, 409);
+            btnAddMemberDirect.Name = "btnAddMemberDirect";
+            btnAddMemberDirect.Size = new Size(101, 23);
+            btnAddMemberDirect.TabIndex = 8;
+            btnAddMemberDirect.Text = "Add Member(s)";
+            btnAddMemberDirect.UseVisualStyleBackColor = true;
+            btnAddMemberDirect.Click += btnAddMemberDirect_Click;
+            // 
+            // cmbPotentialMembers
+            // 
+            cmbPotentialMembers.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmbPotentialMembers.FormattingEnabled = true;
+            cmbPotentialMembers.Location = new Point(407, 409);
+            cmbPotentialMembers.Name = "cmbPotentialMembers";
+            cmbPotentialMembers.Size = new Size(160, 23);
+            cmbPotentialMembers.TabIndex = 7;
             // 
             // label14
             // 
@@ -1023,7 +1044,7 @@ namespace EmployeeTrainingTracker
             btnSaveManager.Location = new Point(928, 424);
             btnSaveManager.Name = "btnSaveManager";
             btnSaveManager.Size = new Size(75, 23);
-            btnSaveManager.TabIndex = 9;
+            btnSaveManager.TabIndex = 10;
             btnSaveManager.Text = "Save";
             btnSaveManager.UseVisualStyleBackColor = true;
             // 
@@ -1038,23 +1059,13 @@ namespace EmployeeTrainingTracker
             // 
             // btnRemoveMember
             // 
-            btnRemoveMember.Location = new Point(669, 409);
+            btnRemoveMember.Location = new Point(680, 409);
             btnRemoveMember.Name = "btnRemoveMember";
-            btnRemoveMember.Size = new Size(117, 23);
-            btnRemoveMember.TabIndex = 8;
+            btnRemoveMember.Size = new Size(106, 23);
+            btnRemoveMember.TabIndex = 9;
             btnRemoveMember.Text = "Remove Member";
             btnRemoveMember.UseVisualStyleBackColor = true;
             btnRemoveMember.Click += btnRemoveMember_Click;
-            // 
-            // btnAddMember
-            // 
-            btnAddMember.Location = new Point(561, 409);
-            btnAddMember.Name = "btnAddMember";
-            btnAddMember.Size = new Size(102, 23);
-            btnAddMember.TabIndex = 7;
-            btnAddMember.Text = "Add Member";
-            btnAddMember.UseVisualStyleBackColor = true;
-            btnAddMember.Click += btnAddMember_Click;
             // 
             // dgvGroupMembers
             // 
@@ -1227,7 +1238,6 @@ namespace EmployeeTrainingTracker
         private Button btnAddGroup;
         private DataGridView dgvGroupMembers;
         private Button btnRemoveMember;
-        private Button btnAddMember;
         private Button btnSaveManager;
         private TextBox txtSearchGroups;
         private Label lblGroups;
@@ -1239,5 +1249,7 @@ namespace EmployeeTrainingTracker
         private Label label15;
         private CheckedListBox clbGroups;
         private Button btnBrowseFile;
+        private ComboBox cmbPotentialMembers;
+        private Button btnAddMemberDirect;
     }
 }

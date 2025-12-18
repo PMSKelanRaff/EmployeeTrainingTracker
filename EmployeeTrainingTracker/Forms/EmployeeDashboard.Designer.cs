@@ -104,6 +104,7 @@
             btnBrowseFile.TabIndex = 8;
             btnBrowseFile.Text = "Browse";
             btnBrowseFile.UseVisualStyleBackColor = true;
+            btnBrowseFile.Click += btnBrowseFile_Click;
             // 
             // label7
             // 
