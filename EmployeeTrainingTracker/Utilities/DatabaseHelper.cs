@@ -7,11 +7,11 @@ namespace EmployeeTrainingTracker
     {
         // 1. Store your new AWS connection string
         private static readonly string _connectionString =
-            "Host=training-tracker-database.cluster-ce36aqqcqbm1.us-east-1.rds.amazonaws.com;" +
+            "Host=database-1.cb48g6awa7ky.eu-west-1.rds.amazonaws.com;" +
             "Port=5432;" +
             "Database=postgres;" +
             "Username=postgres;" +
-            "Password=Open1234;" +
+            "Password=du2UAWhtAuREzRzOZmvl;" +
             "SslMode=Require;" +
             "Trust Server Certificate=true";
 

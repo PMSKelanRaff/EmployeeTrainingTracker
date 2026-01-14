@@ -1,0 +1,8 @@
+# Ignore build results
+[Bb]in/
+[Oo]bj/
+[Rr]elease/
+
+# Ignore Visual Studio temporary files
+.vs/
+*.user

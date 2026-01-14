@@ -666,22 +666,38 @@ namespace EmployeeTrainingTracker
             {
                 conn.Open();
 
-                // REMOVED: Explicit DELETE from TrainingCertificates
-                //// Delete certificates first
-                //using (var cmdCert = new NpgsqlCommand("DELETE FROM TrainingCertificates WHERE EmployeeID=$1", conn))
-                //{
-                //    cmdCert.Parameters.AddWithValue(empId.Value);
-                //    cmdCert.ExecuteNonQuery();
-                //}
+                // ---------------------------------------------------------
+                // 1. NEW: Unassign them as Manager from any Groups
+                // ---------------------------------------------------------
+                using (var cmdUnassign = new NpgsqlCommand("UPDATE Groups SET ManagerID = NULL WHERE ManagerID = $1", conn))
+                {
+                    cmdUnassign.Parameters.AddWithValue(empId.Value);
+                    cmdUnassign.ExecuteNonQuery();
+                }
+                // ---------------------------------------------------------
 
-                // Then delete user
+                // 2. Delete certificates (Uncomment this if you don't have CASCADE delete in DB)
+                using (var cmdCert = new NpgsqlCommand("DELETE FROM TrainingCertificates WHERE EmployeeID=$1", conn))
+                {
+                    cmdCert.Parameters.AddWithValue(empId.Value);
+                    cmdCert.ExecuteNonQuery();
+                }
+
+                // 3. Delete from GroupMembers (Just in case they are also a member)
+                using (var cmdMembers = new NpgsqlCommand("DELETE FROM GroupMembers WHERE EmployeeID=$1", conn))
+                {
+                    cmdMembers.Parameters.AddWithValue(empId.Value);
+                    cmdMembers.ExecuteNonQuery();
+                }
+
+                // 4. Delete user account
                 using (var cmdUser = new NpgsqlCommand("DELETE FROM Users WHERE EmployeeID=$1", conn))
                 {
                     cmdUser.Parameters.AddWithValue(empId.Value);
                     cmdUser.ExecuteNonQuery();
                 }
 
-                // Finally, delete the employee record
+                // 5. Finally, delete the employee record
                 using (var cmdEmp = new NpgsqlCommand("DELETE FROM Employees WHERE EmployeeID=$1", conn))
                 {
                     cmdEmp.Parameters.AddWithValue(empId.Value);

@@ -44,8 +44,11 @@ namespace EmployeeTrainingTracker.Utilities
         {
             var renameMap = new Dictionary<string, string>
         {
+            { "email", "Email" },
+            { "role", "Role" },
+            { "department", "Department" },
             { "CertificateName", "Certificate Name" },
-             //{ "CertificateID", "Certificate ID" },
+            { "certificateid", "Certificate ID" },
             { "PlannedDate", "Planned Date" },
             { "IssueDate", "Issue Date" },
             { "ExpiryDate", "Expiry Date" },

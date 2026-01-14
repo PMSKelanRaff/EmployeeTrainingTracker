@@ -11,7 +11,6 @@ public static class ReportService
     {
         string query = @"
         SELECT 
-            tc.CertificateID, 
             tc.CertificateName, 
             tc.IssueDate, 
             tc.ExpiryDate, 
@@ -66,8 +65,7 @@ public static class ReportService
         }
 
         query += @"
-        GROUP BY 
-            tc.CertificateID, 
+        GROUP BY  
             tc.CertificateName, 
             tc.IssueDate, 
             tc.ExpiryDate, 

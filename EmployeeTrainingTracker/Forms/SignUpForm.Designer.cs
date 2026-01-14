@@ -40,12 +40,11 @@
             txtDepartment = new TextBox();
             txtFullName = new TextBox();
             txtJobTitle = new TextBox();
-            chkLinkWindows = new CheckBox();
             SuspendLayout();
             // 
             // btnCreate
             // 
-            btnCreate.Location = new Point(143, 301);
+            btnCreate.Location = new Point(154, 271);
             btnCreate.Name = "btnCreate";
             btnCreate.Size = new Size(102, 23);
             btnCreate.TabIndex = 7;
@@ -143,22 +142,11 @@
             txtJobTitle.Size = new Size(131, 23);
             txtJobTitle.TabIndex = 5;
             // 
-            // chkLinkWindows
-            // 
-            chkLinkWindows.AutoSize = true;
-            chkLinkWindows.Location = new Point(12, 266);
-            chkLinkWindows.Name = "chkLinkWindows";
-            chkLinkWindows.Size = new Size(188, 19);
-            chkLinkWindows.TabIndex = 6;
-            chkLinkWindows.Text = "Store details for windows login";
-            chkLinkWindows.UseVisualStyleBackColor = true;
-            // 
             // SignUpForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(268, 348);
-            Controls.Add(chkLinkWindows);
+            ClientSize = new Size(268, 306);
             Controls.Add(txtJobTitle);
             Controls.Add(txtFullName);
             Controls.Add(txtDepartment);
@@ -191,6 +179,5 @@
         private TextBox txtDepartment;
         private TextBox txtFullName;
         private TextBox txtJobTitle;
-        private CheckBox chkLinkWindows;
     }
 }

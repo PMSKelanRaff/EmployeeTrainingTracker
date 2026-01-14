@@ -1,8 +1,0 @@
-C:\Users\KelanRafferty\Desktop\Training Tracker\EmployeeTrainingTracker.pdb
-C:\Users\KelanRafferty\Desktop\Training Tracker\Resources\favicon.ico
-C:\Users\KelanRafferty\Desktop\Training Tracker\D3DCompiler_47_cor3.dll
-C:\Users\KelanRafferty\Desktop\Training Tracker\PenImc_cor3.dll
-C:\Users\KelanRafferty\Desktop\Training Tracker\PresentationNative_cor3.dll
-C:\Users\KelanRafferty\Desktop\Training Tracker\vcruntime140_cor3.dll
-C:\Users\KelanRafferty\Desktop\Training Tracker\wpfgfx_cor3.dll
-C:\Users\KelanRafferty\Desktop\Training Tracker\EmployeeTrainingTracker.exe

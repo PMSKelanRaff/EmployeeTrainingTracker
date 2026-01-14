@@ -22,9 +22,26 @@ namespace EmployeeTrainingTracker
             string department = txtDepartment.Text.Trim();
             string jobTitle = txtJobTitle.Text.Trim();
 
-            string? windowsUser = chkLinkWindows.Checked
-                ? (Environment.UserDomainName + "\\" + Environment.UserName).ToLower()
-                : null;
+            string? windowsUser = null;
+            try
+            {
+                string fullUser = System.Security.Principal.WindowsIdentity.GetCurrent().Name;
+                if (!string.IsNullOrEmpty(fullUser))
+                {
+                    // Format: "DOMAIN\John" -> "John"
+                    windowsUser = fullUser.Contains("\\")
+                        ? fullUser.Split('\\')[1]
+                        : fullUser;
+
+                    windowsUser = windowsUser.ToLower();
+                }
+            }
+            catch
+            {
+                // Silently fail if we can't get it (e.g. permission error)
+                windowsUser = null;
+            }
+            // -----------------------------------------------------------
 
             if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
             {
@@ -32,26 +49,22 @@ namespace EmployeeTrainingTracker
                 return;
             }
 
-            // Using new DatabaseHelper
+
             using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
-                // This will now be an NpgsqlTransaction
                 using (var tran = conn.BeginTransaction())
                 {
                     try
                     {
                         int? employeeId = null;
 
-                        // Insert into Employees if we got details
                         if (!string.IsNullOrWhiteSpace(fullName))
                         {
-                            // Using NpgsqlCommand
                             using (var cmd = new NpgsqlCommand())
                             {
                                 cmd.Connection = conn;
                                 cmd.Transaction = tran;
-                                // SQL syntax for PostgreSQL (RETURNING and positional parameters)
                                 cmd.CommandText = @"
                                     INSERT INTO Employees (FullName, Department, JobTitle)
                                     VALUES ($1, $2, $3)
@@ -70,7 +83,6 @@ namespace EmployeeTrainingTracker
                         {
                             cmd.Connection = conn;
                             cmd.Transaction = tran;
-                            // SQL syntax for PostgreSQL (positional parameters)
                             cmd.CommandText = @"
                                 INSERT INTO Users 
                                 (Email, PasswordHash, Role, EmployeeID, WindowsUsername)
