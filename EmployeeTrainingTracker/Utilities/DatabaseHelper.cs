@@ -7,7 +7,7 @@ namespace EmployeeTrainingTracker
     {
         // 1. Store your new AWS connection string
         private static readonly string _connectionString =
-            "Host=database-1.cb48g6awa7ky.eu-west-1.rds.amazonaws.com;" +
+            "Host=trainingtracker-db.cb48g6awa7ky.eu-west-1.rds.amazonaws.com;" +
             "Port=5432;" +
             "Database=postgres;" +
             "Username=postgres;" +
@@ -15,7 +15,7 @@ namespace EmployeeTrainingTracker
             "SslMode=Require;" +
             "Trust Server Certificate=true";
 
-        // 2. This is the simple method your forms will call
+        // 2. The method your forms will call
         public static NpgsqlConnection GetConnection()
         {
             return new NpgsqlConnection(_connectionString);

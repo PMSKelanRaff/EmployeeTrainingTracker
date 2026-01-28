@@ -56,7 +56,6 @@ namespace EmployeeTrainingTracker
             txtHrsCertsTab = new TextBox();
             txtKeyCertsTab = new ComboBox();
             label9 = new Label();
-            chkAddToTrainingFolder = new CheckBox();
             label1 = new Label();
             cmbCurrentEmployee = new ComboBox();
             txtFilePath = new TextBox();
@@ -332,7 +331,6 @@ namespace EmployeeTrainingTracker
             tabCertificates.Controls.Add(txtHrsCertsTab);
             tabCertificates.Controls.Add(txtKeyCertsTab);
             tabCertificates.Controls.Add(label9);
-            tabCertificates.Controls.Add(chkAddToTrainingFolder);
             tabCertificates.Controls.Add(label1);
             tabCertificates.Controls.Add(cmbCurrentEmployee);
             tabCertificates.Controls.Add(txtFilePath);
@@ -429,19 +427,6 @@ namespace EmployeeTrainingTracker
             label9.Size = new Size(58, 15);
             label9.TabIndex = 28;
             label9.Text = "File Path :";
-            // 
-            // chkAddToTrainingFolder
-            // 
-            chkAddToTrainingFolder.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            chkAddToTrainingFolder.AutoSize = true;
-            chkAddToTrainingFolder.Checked = true;
-            chkAddToTrainingFolder.CheckState = CheckState.Checked;
-            chkAddToTrainingFolder.Location = new Point(792, 402);
-            chkAddToTrainingFolder.Name = "chkAddToTrainingFolder";
-            chkAddToTrainingFolder.Size = new Size(140, 19);
-            chkAddToTrainingFolder.TabIndex = 10;
-            chkAddToTrainingFolder.Text = "Add to training folder";
-            chkAddToTrainingFolder.UseVisualStyleBackColor = true;
             // 
             // label1
             // 
@@ -1197,7 +1182,6 @@ namespace EmployeeTrainingTracker
         private Label lblDtpEnd;
         private Button btnGenerateReport;
         private Button btnExportCsv;
-        private CheckBox chkAddToTrainingFolder;
         private TabPage Planning;
         private DataGridView dgvPlannedTraining;
         private Label statusTxt;

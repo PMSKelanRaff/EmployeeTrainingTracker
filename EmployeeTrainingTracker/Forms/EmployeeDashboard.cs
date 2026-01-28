@@ -197,8 +197,18 @@ namespace EmployeeTrainingTracker
             string key = txtKey.Text.Trim();
             double.TryParse(txtHrs.Text.Trim(), out double hrs);
             string provider = txtProvider.Text.Trim();
+
+            // Check dates before processing
+            if (dtpExpiryDate.Checked && dtpExpiryDate.Value.Date < dtpIssueDate.Value.Date)
+            {
+                MessageBox.Show("Expiry Date cannot be earlier than Issue Date.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Format dates (ensure CertificateService accepts these types, typically DateTime)
             string issueDate = dtpIssueDate.Value.ToString("yyyy-MM-dd");
             string? expiryDate = dtpExpiryDate.Checked ? dtpExpiryDate.Value.ToString("yyyy-MM-dd") : null;
+
             string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim()) ? null : txtFilePath.Text.Trim('"').Trim();
 
             if (string.IsNullOrEmpty(certName))
@@ -207,7 +217,9 @@ namespace EmployeeTrainingTracker
                 return;
             }
 
+            // Note: If your CertificateService expects DateTime objects, pass dtpIssueDate.Value directly instead of 'issueDate' string
             CertificateService.AddCertificate(employeeId, certName, key, hrs, provider, issueDate, expiryDate, filePath);
+
             LoadCertificates(employeeId);
             ClearInputs();
         }
@@ -226,12 +238,19 @@ namespace EmployeeTrainingTracker
             double.TryParse(txtHrs.Text.Trim(), out double hrs);
             string provider = txtProvider.Text.Trim();
 
-            // FIX 1
+            // Check dates before processing
+            if (dtpExpiryDate.Checked && dtpExpiryDate.Value.Date < dtpIssueDate.Value.Date)
+            {
+                MessageBox.Show("Expiry Date cannot be earlier than Issue Date.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             string issueDate = dtpIssueDate.Value.ToString("yyyy-MM-dd");
             string? expiryDate = dtpExpiryDate.Checked ? dtpExpiryDate.Value.ToString("yyyy-MM-dd") : null;
 
             string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim()) ? null : txtFilePath.Text.Trim('"').Trim();
 
+            // Note: If your CertificateService expects DateTime objects, pass dtpIssueDate.Value directly
             CertificateService.UpdateCertificate(certId, certName, key, hrs, provider, issueDate, expiryDate, filePath);
 
             LoadCertificates(employeeId);

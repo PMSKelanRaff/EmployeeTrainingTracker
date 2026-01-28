@@ -399,7 +399,15 @@ namespace EmployeeTrainingTracker
             string hrsText = txtHrsCertsTab.Text.Trim();
             string provider = txtProviderCertsTab.Text.Trim();
 
-            //fixed date format issue
+            
+            // Check dates before processing
+        
+            if (dtpExpiryDate.Checked && dtpExpiryDate.Value.Date < dtpIssueDate.Value.Date)
+            {
+                MessageBox.Show("Expiry Date cannot be earlier than Issue Date.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             string issue = dtpIssueDate.Value.ToString("yyyy-MM-dd");
             string? expiry = dtpExpiryDate.Checked ? dtpExpiryDate.Value.ToString("yyyy-MM-dd") : null;
 
@@ -417,18 +425,18 @@ namespace EmployeeTrainingTracker
 
             LoadCertificates(empId);
 
-            if (chkAddToTrainingFolder.Checked)
-            {
-                try
-                {
-                    LegacyExcelService.AppendTrainingRecord(empId, name, dtpIssueDate.Value);
-                    MessageBox.Show("Record also added to employee's training sheet.");
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Certificate added, but failed to update Excel sheet:\n{ex.Message}");
-                }
-            }
+            //if (chkAddToTrainingFolder.Checked)
+            //{
+            //    try
+            //    {
+            //        LegacyExcelService.AppendTrainingRecord(empId, name, dtpIssueDate.Value);
+            //        MessageBox.Show("Record also added to employee's training sheet.");
+            //    }
+            //    catch (Exception ex)
+            //    {
+            //        MessageBox.Show($"Certificate added, but failed to update Excel sheet:\n{ex.Message}");
+            //    }
+            //}
         }
 
         private void btnEditCert_Click(object sender, EventArgs e)
@@ -441,8 +449,14 @@ namespace EmployeeTrainingTracker
             string hrsText = txtHrsCertsTab.Text.Trim();
             string provider = txtProviderCertsTab.Text.Trim();
 
-            string issue = dtpIssueDate.Value.ToString("yyyy-MM-dd");
+            // Check dates before processing
+            if (dtpExpiryDate.Checked && dtpExpiryDate.Value.Date < dtpIssueDate.Value.Date)
+            {
+                MessageBox.Show("Expiry Date cannot be earlier than Issue Date.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
 
+            string issue = dtpIssueDate.Value.ToString("yyyy-MM-dd");
             string? expiry = dtpExpiryDate.Checked ? dtpExpiryDate.Value.ToString("yyyy-MM-dd") : null;
 
             string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim())
@@ -456,17 +470,17 @@ namespace EmployeeTrainingTracker
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
             LoadCertificates(empId);
 
-            if (chkAddToTrainingFolder.Checked)
-            {
-                try
-                {
-                    LegacyExcelService.UpdateTrainingRecord(empId, name, dtpIssueDate.Value);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Certificate updated, but failed to update Excel sheet:\n{ex.Message}");
-                }
-            }
+            //if (chkAddToTrainingFolder.Checked)
+            //{
+            //    try
+            //    {
+            //        LegacyExcelService.UpdateTrainingRecord(empId, name, dtpIssueDate.Value);
+            //    }
+            //    catch (Exception ex)
+            //    {
+            //        MessageBox.Show($"Certificate updated, but failed to update Excel sheet:\n{ex.Message}");
+            //    }
+            //}
 
             MessageBox.Show("Certificate updated successfully!");
         }
@@ -1132,7 +1146,7 @@ namespace EmployeeTrainingTracker
                 dtpIssueDate.Value = DateTime.Today;
                 dtpExpiryDate.Value = DateTime.Today;
                 txtFilePath.Text = "";
-                chkAddToTrainingFolder.Checked = false; // reset when nothing selected
+                //chkAddToTrainingFolder.Checked = false; // reset when nothing selected
                 return;
             }
 
@@ -1166,17 +1180,17 @@ namespace EmployeeTrainingTracker
                     string certName = txtCertName.Text;
 
                     bool exists = LegacyExcelService.TrainingRecordExists(employeeId, certName);
-                    chkAddToTrainingFolder.Checked = exists;
+                    //chkAddToTrainingFolder.Checked = exists;
                 }
                 else
                 {
                     // If no EmployeeID in table, just default to unchecked
-                    chkAddToTrainingFolder.Checked = false;
+                    //chkAddToTrainingFolder.Checked = false;
                 }
             }
             catch (Exception ex)
             {
-                chkAddToTrainingFolder.Checked = false;
+                //chkAddToTrainingFolder.Checked = false;
                 Console.WriteLine($"Error checking Excel: {ex.Message}");
             }
         }
