@@ -104,6 +104,8 @@ namespace EmployeeTrainingTracker
             txtPassword = new TextBox();
             dgvEmployees = new DataGridView();
             tabControl = new TabControl();
+            lbl_FullName = new Label();
+            txtFullName = new TextBox();
             Planning.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dgvPlannedTraining).BeginInit();
             Reports.SuspendLayout();
@@ -736,6 +738,8 @@ namespace EmployeeTrainingTracker
             // 
             // tabEmployees
             // 
+            tabEmployees.Controls.Add(lbl_FullName);
+            tabEmployees.Controls.Add(txtFullName);
             tabEmployees.Controls.Add(lbl_JobTitle);
             tabEmployees.Controls.Add(txtJobTitle);
             tabEmployees.Controls.Add(txtUsername);
@@ -909,6 +913,24 @@ namespace EmployeeTrainingTracker
             tabControl.Size = new Size(1019, 483);
             tabControl.TabIndex = 2;
             // 
+            // lbl_FullName
+            // 
+            lbl_FullName.Anchor = AnchorStyles.Right;
+            lbl_FullName.AutoSize = true;
+            lbl_FullName.Location = new Point(775, 11);
+            lbl_FullName.Name = "lbl_FullName";
+            lbl_FullName.Size = new Size(67, 15);
+            lbl_FullName.TabIndex = 26;
+            lbl_FullName.Text = "Full Name :";
+            // 
+            // txtFullName
+            // 
+            txtFullName.Anchor = AnchorStyles.Right;
+            txtFullName.Location = new Point(775, 29);
+            txtFullName.Name = "txtFullName";
+            txtFullName.Size = new Size(228, 23);
+            txtFullName.TabIndex = 25;
+            // 
             // ManagerDashboard
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -1012,5 +1034,7 @@ namespace EmployeeTrainingTracker
         private TabControl tabControl;
         private Label lbl_Type;
         private ComboBox cmbRole;
+        private Label lbl_FullName;
+        private TextBox txtFullName;
     }
 }

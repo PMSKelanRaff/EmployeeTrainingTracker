@@ -121,6 +121,8 @@ namespace EmployeeTrainingTracker
             btnEditGroup = new Button();
             btnAddGroup = new Button();
             dgvGroups = new DataGridView();
+            lbl_FullName = new Label();
+            txtFullName = new TextBox();
             ((System.ComponentModel.ISupportInitialize)dgvEmployees).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvCertificates).BeginInit();
             tabControl.SuspendLayout();
@@ -171,6 +173,8 @@ namespace EmployeeTrainingTracker
             // 
             // tabEmployees
             // 
+            tabEmployees.Controls.Add(lbl_FullName);
+            tabEmployees.Controls.Add(txtFullName);
             tabEmployees.Controls.Add(lbl_JobTitle);
             tabEmployees.Controls.Add(txtJobTitle);
             tabEmployees.Controls.Add(cmbDept);
@@ -1109,6 +1113,24 @@ namespace EmployeeTrainingTracker
             dgvGroups.TabIndex = 4;
             dgvGroups.SelectionChanged += dgvGroups_SelectionChanged;
             // 
+            // lbl_FullName
+            // 
+            lbl_FullName.Anchor = AnchorStyles.Right;
+            lbl_FullName.AutoSize = true;
+            lbl_FullName.Location = new Point(775, 11);
+            lbl_FullName.Name = "lbl_FullName";
+            lbl_FullName.Size = new Size(67, 15);
+            lbl_FullName.TabIndex = 24;
+            lbl_FullName.Text = "Full Name :";
+            // 
+            // txtFullName
+            // 
+            txtFullName.Anchor = AnchorStyles.Right;
+            txtFullName.Location = new Point(775, 29);
+            txtFullName.Name = "txtFullName";
+            txtFullName.Size = new Size(228, 23);
+            txtFullName.TabIndex = 23;
+            // 
             // AdminDashboard
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -1235,5 +1257,7 @@ namespace EmployeeTrainingTracker
         private Button btnBrowseFile;
         private ComboBox cmbPotentialMembers;
         private Button btnAddMemberDirect;
+        private Label lbl_FullName;
+        private TextBox txtFullName;
     }
 }

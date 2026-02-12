@@ -603,9 +603,12 @@ namespace EmployeeTrainingTracker
             }
 
             int userId = Convert.ToInt32(userIdObj);
-            int? employeeId = empIdObj == null || empIdObj == DBNull.Value ? (int?)null : Convert.ToInt32(empIdObj);
+            int? employeeId = empIdObj == null || empIdObj == DBNull.Value
+                ? (int?)null
+                : Convert.ToInt32(empIdObj);
 
-            string username = txtUsername.Text.Trim();
+            string fullName = txtFullName.Text.Trim();
+            string email = txtUsername.Text.Trim();
             string role = cmbRole.SelectedItem?.ToString() ?? "Employee";
             string department = string.IsNullOrEmpty(cmbDept.Text.Trim()) ? "Unknown" : cmbDept.Text.Trim();
             string jobTitle = string.IsNullOrEmpty(txtJobTitle.Text.Trim()) ? "Unknown" : txtJobTitle.Text.Trim();
@@ -616,10 +619,11 @@ namespace EmployeeTrainingTracker
 
                 if (employeeId.HasValue)
                 {
+                    // Update existing employee
                     using (var cmdEmp = new NpgsqlCommand(
                         "UPDATE Employees SET FullName=$1, Department=$2, JobTitle=$3 WHERE EmployeeID=$4", conn))
                     {
-                        cmdEmp.Parameters.AddWithValue(username);
+                        cmdEmp.Parameters.AddWithValue(fullName);
                         cmdEmp.Parameters.AddWithValue(department);
                         cmdEmp.Parameters.AddWithValue(jobTitle);
                         cmdEmp.Parameters.AddWithValue(employeeId.Value);
@@ -628,17 +632,17 @@ namespace EmployeeTrainingTracker
                 }
                 else
                 {
-                    // Insert new Employee
+                    // Insert new employee
                     using (var cmdInsertEmp = new NpgsqlCommand(
                         "INSERT INTO Employees (FullName, Department, JobTitle) VALUES ($1,$2,$3) RETURNING EmployeeID;", conn))
                     {
-                        cmdInsertEmp.Parameters.AddWithValue(username);
+                        cmdInsertEmp.Parameters.AddWithValue(fullName);
                         cmdInsertEmp.Parameters.AddWithValue(department);
                         cmdInsertEmp.Parameters.AddWithValue(jobTitle);
 
                         long newEmpId = (long)cmdInsertEmp.ExecuteScalar();
 
-                        // Link back to Users
+                        // Link Employee to User
                         using (var cmdUpdateUserEmp = new NpgsqlCommand(
                             "UPDATE Users SET EmployeeID=$1 WHERE UserID=$2", conn))
                         {
@@ -649,12 +653,11 @@ namespace EmployeeTrainingTracker
                     }
                 }
 
-                // Always update Users table (username + role)
+                // Always update Users (ONLY ONCE)
                 using (var cmdUser = new NpgsqlCommand(
                     "UPDATE Users SET Email=$1, Role=$2 WHERE UserID=$3", conn))
                 {
-                    // CHANGED: Using positional parameters
-                    cmdUser.Parameters.AddWithValue(username);
+                    cmdUser.Parameters.AddWithValue(email);
                     cmdUser.Parameters.AddWithValue(role);
                     cmdUser.Parameters.AddWithValue(userId);
                     cmdUser.ExecuteNonQuery();
@@ -663,6 +666,7 @@ namespace EmployeeTrainingTracker
 
             LoadEmployees();
         }
+
 
         private void btnDeleteEmployee_Click(object sender, EventArgs e)
         {
@@ -1096,6 +1100,7 @@ namespace EmployeeTrainingTracker
                     int userId = Convert.ToInt32(userIdObj);
 
                     // Load employee + user details directly from DataGridView (faster than requerying DB)
+                    txtFullName.Text = dgvEmployees.CurrentRow.Cells["FullName"].Value?.ToString();
                     txtUsername.Text = dgvEmployees.CurrentRow.Cells["Email"].Value?.ToString();
                     cmbRole.SelectedItem = dgvEmployees.CurrentRow.Cells["Role"].Value?.ToString();
                     cmbDept.Text = dgvEmployees.CurrentRow.Cells["Department"].Value?.ToString();
