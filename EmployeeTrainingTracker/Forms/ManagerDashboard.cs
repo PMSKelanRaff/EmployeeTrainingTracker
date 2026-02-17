@@ -4,6 +4,7 @@ using Npgsql;
 using System.Windows.Forms;
 using System.Text;
 using EmployeeTrainingTracker.Utilities;
+using System.Security.Cryptography;
 
 namespace EmployeeTrainingTracker
 {
@@ -235,7 +236,9 @@ namespace EmployeeTrainingTracker
 
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
             string name = txtCertName.Text.Trim();
-            string key = txtKeyCertsTab.Text.Trim();
+            string key = string.IsNullOrWhiteSpace(txtKeyCertsTab.Text)
+                ? string.Empty
+                : txtKeyCertsTab.Text.Trim()[0].ToString();
             string hrsText = txtHrsCertsTab.Text.Trim();
             string provider = txtProviderCertsTab.Text.Trim();
 
@@ -265,18 +268,6 @@ namespace EmployeeTrainingTracker
 
             LoadCertificates(empId);
 
-            //if (chkAddToTrainingFolder.Checked)
-            //{
-            //    try
-            //    {
-            //        LegacyExcelService.AppendTrainingRecord(empId, name, dtpIssueDate.Value);
-            //        MessageBox.Show("Record also added to employee's training sheet.");
-            //    }
-            //    catch (Exception ex)
-            //    {
-            //        MessageBox.Show($"Certificate added, but failed to update Excel sheet:\n{ex.Message}");
-            //    }
-            //}
         }
 
         private void btnEditCert_Click(object sender, EventArgs e)
@@ -285,7 +276,9 @@ namespace EmployeeTrainingTracker
 
             int certId = Convert.ToInt32(dgvCertificates.CurrentRow.Cells["CertificateID"].Value);
             string name = txtCertName.Text.Trim();
-            string key = txtKeyCertsTab.Text.Trim();
+            string key = string.IsNullOrWhiteSpace(txtKeyCertsTab.Text)
+                ? string.Empty
+                : txtKeyCertsTab.Text.Trim()[0].ToString();
             string hrsText = txtHrsCertsTab.Text.Trim();
             string provider = txtProviderCertsTab.Text.Trim();
 
@@ -310,18 +303,6 @@ namespace EmployeeTrainingTracker
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
             LoadCertificates(empId);
 
-            //if (chkAddToTrainingFolder.Checked)
-            //{
-            //    try
-            //    {
-            //        LegacyExcelService.UpdateTrainingRecord(empId, name, dtpIssueDate.Value);
-            //    }
-            //    catch (Exception ex)
-            //    {
-            //        MessageBox.Show($"Certificate updated, but failed to update Excel sheet:\n{ex.Message}");
-            //    }
-            //}
-
             MessageBox.Show("Certificate updated successfully!");
         }
 
@@ -339,16 +320,6 @@ namespace EmployeeTrainingTracker
 
             // Delete from database
             CertificateService.DeleteCertificate(certId);
-
-            // Delete from Excel
-            try
-            {
-                LegacyExcelService.DeleteTrainingRecord(empId, certName);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Deleted from database, but failed to update Excel: {ex.Message}");
-            }
 
             LoadCertificates(empId);
         }
@@ -447,19 +418,31 @@ namespace EmployeeTrainingTracker
                 ? (int?)null
                 : Convert.ToInt32(empIdObj);
 
+            // 1. Gather Input
             string fullName = txtFullName.Text.Trim();
-            string email = txtUsername.Text.Trim();
+            string email = txtUsername.Text.Trim(); // Assuming txtUsername holds the Email
             string role = cmbRole.SelectedItem?.ToString() ?? "Employee";
             string department = string.IsNullOrEmpty(cmbDept.Text.Trim()) ? "Unknown" : cmbDept.Text.Trim();
             string jobTitle = string.IsNullOrEmpty(txtJobTitle.Text.Trim()) ? "Unknown" : txtJobTitle.Text.Trim();
+
+            // NEW: Get the password
+            string newPassword = txtPassword.Text.Trim(); // Ensure your textbox is named 'txtPassword'
+
+            // 2. Validate Password (if user typed one)
+            // We only validate length if the box is NOT empty. If empty, we ignore it (keep old password).
+            if (!string.IsNullOrEmpty(newPassword) && newPassword.Length < 6)
+            {
+                MessageBox.Show("Password must be at least 6 characters.");
+                return; // Stop the update
+            }
 
             using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
 
+                // 3. Update or Insert Employee Info (Your existing logic)
                 if (employeeId.HasValue)
                 {
-                    // Update existing employee
                     using (var cmdEmp = new NpgsqlCommand(
                         "UPDATE Employees SET FullName=$1, Department=$2, JobTitle=$3 WHERE EmployeeID=$4", conn))
                     {
@@ -472,7 +455,6 @@ namespace EmployeeTrainingTracker
                 }
                 else
                 {
-                    // Insert new employee
                     using (var cmdInsertEmp = new NpgsqlCommand(
                         "INSERT INTO Employees (FullName, Department, JobTitle) VALUES ($1,$2,$3) RETURNING EmployeeID;", conn))
                     {
@@ -482,7 +464,6 @@ namespace EmployeeTrainingTracker
 
                         long newEmpId = (long)cmdInsertEmp.ExecuteScalar();
 
-                        // Link Employee to User
                         using (var cmdUpdateUserEmp = new NpgsqlCommand(
                             "UPDATE Users SET EmployeeID=$1 WHERE UserID=$2", conn))
                         {
@@ -493,7 +474,7 @@ namespace EmployeeTrainingTracker
                     }
                 }
 
-                // Always update Users (ONLY ONCE)
+                // 4. Update User Role and Email (Always runs)
                 using (var cmdUser = new NpgsqlCommand(
                     "UPDATE Users SET Email=$1, Role=$2 WHERE UserID=$3", conn))
                 {
@@ -502,9 +483,39 @@ namespace EmployeeTrainingTracker
                     cmdUser.Parameters.AddWithValue(userId);
                     cmdUser.ExecuteNonQuery();
                 }
+
+                // 5. NEW: Update Password (Only runs if text box is not empty)
+                if (!string.IsNullOrEmpty(newPassword))
+                {
+                    // Hash the password using the helper method to match your signup format
+                    string passwordHash = HashPassword(newPassword);
+
+                    // Verify your column name is 'Password' or 'PasswordHash' in your database!
+                    using (var cmdPass = new NpgsqlCommand(
+                        "UPDATE Users SET Password=$1 WHERE UserID=$2", conn))
+                    {
+                        cmdPass.Parameters.AddWithValue(passwordHash);
+                        cmdPass.Parameters.AddWithValue(userId);
+                        cmdPass.ExecuteNonQuery();
+                    }
+                }
             }
 
+            MessageBox.Show("Employee updated successfully.");
             LoadEmployees();
+
+            // Optional: Clear the password box after update for security
+            txtPassword.Text = "";
+        }
+
+        private string HashPassword(string password)
+        {
+            using (var sha = SHA256.Create())
+            {
+                var bytes = Encoding.UTF8.GetBytes(password);
+                var hash = sha.ComputeHash(bytes);
+                return BitConverter.ToString(hash).Replace("-", "").ToLower();
+            }
         }
 
         private void btnDeleteEmployee_Click(object sender, EventArgs e)
@@ -890,13 +901,7 @@ namespace EmployeeTrainingTracker
                     int employeeId = Convert.ToInt32(rowView["EmployeeID"]);
                     string certName = txtCertName.Text;
 
-                    bool exists = LegacyExcelService.TrainingRecordExists(employeeId, certName);
-                    //chkAddToTrainingFolder.Checked = exists;
-                }
-                else
-                {
-                    // If no EmployeeID in table, just default to unchecked
-                    //chkAddToTrainingFolder.Checked = false;
+                    
                 }
             }
             catch (Exception ex)

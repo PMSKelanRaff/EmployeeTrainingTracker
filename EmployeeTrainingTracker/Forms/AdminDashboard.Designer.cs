@@ -34,6 +34,8 @@ namespace EmployeeTrainingTracker
             dgvCertificates = new DataGridView();
             tabControl = new TabControl();
             tabEmployees = new TabPage();
+            lbl_FullName = new Label();
+            txtFullName = new TextBox();
             lbl_JobTitle = new Label();
             txtJobTitle = new TextBox();
             cmbDept = new ComboBox();
@@ -121,8 +123,6 @@ namespace EmployeeTrainingTracker
             btnEditGroup = new Button();
             btnAddGroup = new Button();
             dgvGroups = new DataGridView();
-            lbl_FullName = new Label();
-            txtFullName = new TextBox();
             ((System.ComponentModel.ISupportInitialize)dgvEmployees).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvCertificates).BeginInit();
             tabControl.SuspendLayout();
@@ -196,6 +196,24 @@ namespace EmployeeTrainingTracker
             tabEmployees.TabIndex = 0;
             tabEmployees.Text = "Employees";
             tabEmployees.UseVisualStyleBackColor = true;
+            // 
+            // lbl_FullName
+            // 
+            lbl_FullName.Anchor = AnchorStyles.Right;
+            lbl_FullName.AutoSize = true;
+            lbl_FullName.Location = new Point(775, 11);
+            lbl_FullName.Name = "lbl_FullName";
+            lbl_FullName.Size = new Size(67, 15);
+            lbl_FullName.TabIndex = 24;
+            lbl_FullName.Text = "Full Name :";
+            // 
+            // txtFullName
+            // 
+            txtFullName.Anchor = AnchorStyles.Right;
+            txtFullName.Location = new Point(775, 29);
+            txtFullName.Name = "txtFullName";
+            txtFullName.Size = new Size(228, 23);
+            txtFullName.TabIndex = 23;
             // 
             // lbl_JobTitle
             // 
@@ -358,6 +376,7 @@ namespace EmployeeTrainingTracker
             // 
             // btnBrowseFile
             // 
+            btnBrowseFile.Anchor = AnchorStyles.Right;
             btnBrowseFile.Location = new Point(939, 376);
             btnBrowseFile.Name = "btnBrowseFile";
             btnBrowseFile.Size = new Size(53, 22);
@@ -416,7 +435,7 @@ namespace EmployeeTrainingTracker
             // 
             txtKeyCertsTab.Anchor = AnchorStyles.Right;
             txtKeyCertsTab.FormattingEnabled = true;
-            txtKeyCertsTab.Items.AddRange(new object[] { "T", "R", "P" });
+            txtKeyCertsTab.Items.AddRange(new object[] { "Training", "Retraining", "Proficiency" });
             txtKeyCertsTab.Location = new Point(792, 144);
             txtKeyCertsTab.Name = "txtKeyCertsTab";
             txtKeyCertsTab.Size = new Size(71, 23);
@@ -1112,24 +1131,6 @@ namespace EmployeeTrainingTracker
             dgvGroups.Size = new Size(379, 397);
             dgvGroups.TabIndex = 4;
             dgvGroups.SelectionChanged += dgvGroups_SelectionChanged;
-            // 
-            // lbl_FullName
-            // 
-            lbl_FullName.Anchor = AnchorStyles.Right;
-            lbl_FullName.AutoSize = true;
-            lbl_FullName.Location = new Point(775, 11);
-            lbl_FullName.Name = "lbl_FullName";
-            lbl_FullName.Size = new Size(67, 15);
-            lbl_FullName.TabIndex = 24;
-            lbl_FullName.Text = "Full Name :";
-            // 
-            // txtFullName
-            // 
-            txtFullName.Anchor = AnchorStyles.Right;
-            txtFullName.Location = new Point(775, 29);
-            txtFullName.Name = "txtFullName";
-            txtFullName.Size = new Size(228, 23);
-            txtFullName.TabIndex = 23;
             // 
             // AdminDashboard
             // 
