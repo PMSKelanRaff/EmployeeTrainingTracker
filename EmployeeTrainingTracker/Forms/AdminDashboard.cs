@@ -67,17 +67,21 @@ namespace EmployeeTrainingTracker
             {
                 conn.Open();
 
+                // CHANGED: 
+                // 1. Swapped positions of 'Email' and 'FullName' in the SELECT list
+                // 2. Added 'ORDER BY FullName ASC' at the end
                 using (var cmd = new NpgsqlCommand(@"
-                SELECT 
-                    u.UserID,
-                    u.Email AS Email,
-                    u.Role,
-                    e.EmployeeID,
-                    COALESCE(e.FullName, u.Email) AS FullName,
-                    COALESCE(e.Department, 'Unknown') AS Department,
-                    COALESCE(e.JobTitle, 'Unknown') AS JobTitle
-                FROM Users u
-                LEFT JOIN Employees e ON u.EmployeeID = e.EmployeeID", conn))
+                    SELECT 
+                        u.UserID,
+                        COALESCE(e.FullName, u.Email) AS FullName,
+                        u.Email AS Email,
+                        u.Role,
+                        e.EmployeeID,
+                        COALESCE(e.Department, 'Unknown') AS Department,
+                        COALESCE(e.JobTitle, 'Unknown') AS JobTitle
+                    FROM Users u
+                    LEFT JOIN Employees e ON u.EmployeeID = e.EmployeeID
+                    ORDER BY FullName ASC", conn))
                 {
                     using (var reader = cmd.ExecuteReader())
                     {
@@ -85,7 +89,7 @@ namespace EmployeeTrainingTracker
                         table.Load(reader);
                         dgvEmployees.DataSource = table;
 
-                        // Optional: hide technical ID columns so UI looks cleaner
+                        // Hide technical ID columns
                         if (dgvEmployees.Columns.Contains("UserID"))
                             dgvEmployees.Columns["UserID"].Visible = false;
 
@@ -99,7 +103,7 @@ namespace EmployeeTrainingTracker
                     }
                 }
             }
-        } //Employees
+        }
 
         private void LoadCertificates(int employeeId)
         {
@@ -503,57 +507,71 @@ namespace EmployeeTrainingTracker
         // CRUD for employees
         private void btnAddEmployee_Click(object sender, EventArgs e)
         {
-            // Get Windows username
-            string windowsUser = System.Security.Principal.WindowsIdentity.GetCurrent().Name;
-            string shortUser = windowsUser.Contains("\\")
-                ? windowsUser.Split('\\')[1]
-                : windowsUser;
-
-            string username = shortUser;  // Store the short name as Username
+            // 1. Gather Input from TextBoxes (instead of Windows Identity)
+            string fullName = txtFullName.Text.Trim();
+            string email = txtUsername.Text.Trim(); // Assuming txtUsername is your Email box
             string role = cmbRole.SelectedItem?.ToString() ?? "Employee";
             string department = string.IsNullOrEmpty(cmbDept.Text.Trim()) ? "Unknown" : cmbDept.Text.Trim();
             string jobTitle = string.IsNullOrEmpty(txtJobTitle.Text.Trim()) ? "Unknown" : txtJobTitle.Text.Trim();
+            string password = txtPassword.Text.Trim();
+
+            // 2. Basic Validation
+            if (string.IsNullOrEmpty(fullName) || string.IsNullOrEmpty(email))
+            {
+                MessageBox.Show("Full Name and Email are required.");
+                return;
+            }
+
+            if (string.IsNullOrEmpty(password))
+            {
+                MessageBox.Show("A password is required for new users.");
+                return;
+            }
+
+            // 3. Hash the password
+            string passwordHash = HashPassword(password);
 
             long newEmpId;
             long newUserId;
-
 
             using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
 
+                // 4. Insert into Employees Table
                 using (var cmdEmp = new NpgsqlCommand(
                     "INSERT INTO Employees (FullName, Department, JobTitle) VALUES ($1, $2, $3) RETURNING EmployeeID;", conn))
                 {
-
-                    cmdEmp.Parameters.AddWithValue(username);
+                    cmdEmp.Parameters.AddWithValue(fullName);   // Use the variable, not the Windows User!
                     cmdEmp.Parameters.AddWithValue(department);
                     cmdEmp.Parameters.AddWithValue(jobTitle);
                     newEmpId = (long)cmdEmp.ExecuteScalar();
                 }
 
-
+                // 5. Insert into Users Table (Now including PasswordHash)
                 using (var cmdUser = new NpgsqlCommand(
-                    "INSERT INTO Users (Email, Role, EmployeeID) VALUES ($1, $2, $3) RETURNING UserID;", conn))
+                    "INSERT INTO Users (Email, Role, EmployeeID, passwordHash) VALUES ($1, $2, $3, $4) RETURNING UserID;", conn))
                 {
-
-                    cmdUser.Parameters.AddWithValue(username);
+                    cmdUser.Parameters.AddWithValue(email);     // Use the variable!
                     cmdUser.Parameters.AddWithValue(role);
                     cmdUser.Parameters.AddWithValue(newEmpId);
+                    cmdUser.Parameters.AddWithValue(passwordHash); // Save the hashed password
                     newUserId = (long)cmdUser.ExecuteScalar();
                 }
             }
 
+            // 6. Refresh UI
             LoadEmployees();
             ClearEmployeeInputs();
+            MessageBox.Show("Employee added successfully.");
 
-            // Select the newly added user
+            // Select the newly added user in the grid
             foreach (DataGridViewRow row in dgvEmployees.Rows)
             {
-                if (row.Cells["Email"].Value?.ToString() == username) 
+                if (row.Cells["Email"].Value?.ToString() == email)
                 {
                     row.Selected = true;
-                    dgvEmployees.CurrentCell = row.Cells["Email"]; 
+                    dgvEmployees.CurrentCell = row.Cells["Email"];
                     break;
                 }
             }
