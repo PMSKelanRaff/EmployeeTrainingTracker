@@ -1,10 +1,11 @@
-﻿using System;
-using System.Data;
-using System.Windows.Forms;
+﻿using EmployeeTrainingTracker.Forms;
 using Npgsql;
-using System.Security.Principal; // for WindowsIdentity if needed
+using System;
+using System.Data;
 using System.Security.Cryptography;
+using System.Security.Principal; // for WindowsIdentity if needed
 using System.Text;
+using System.Windows.Forms;
 
 namespace EmployeeTrainingTracker
 {
@@ -98,7 +99,7 @@ namespace EmployeeTrainingTracker
         {
             string windowsUser = (Environment.UserDomainName + "\\" + Environment.UserName).ToLower();
 
-            
+
             using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
@@ -178,5 +179,27 @@ namespace EmployeeTrainingTracker
                 return BitConverter.ToString(hash).Replace("-", "").ToLower();
             }
         }
+
+        //toggle hide password
+        private void login_hidePasswordCheckBox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (login_hidePasswordCheckBox.Checked)
+            {
+                // hide password
+                txtPassword.UseSystemPasswordChar = true;
+            }
+            else
+            {
+                // show password
+                txtPassword.UseSystemPasswordChar = false;
+            }
+        }
+
+        private void forgotPasswordLbl_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            var forgotForm = new ForgotPasswordForm();
+            forgotForm.ShowDialog(); // Opens the reset window modally
+        }
     }
+
 }

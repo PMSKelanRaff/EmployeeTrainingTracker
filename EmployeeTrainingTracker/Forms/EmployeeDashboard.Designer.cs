@@ -120,9 +120,9 @@
             label6.AutoSize = true;
             label6.Location = new Point(897, 62);
             label6.Name = "label6";
-            label6.Size = new Size(45, 15);
+            label6.Size = new Size(71, 15);
             label6.TabIndex = 68;
-            label6.Text = "Hours :";
+            label6.Text = "CPD Hours :";
             // 
             // label5
             // 
@@ -150,7 +150,7 @@
             // txtKey
             // 
             txtKey.FormattingEnabled = true;
-            txtKey.Items.AddRange(new object[] { "T", "R", "P" });
+            txtKey.Items.AddRange(new object[] { "Training", "Retraining", "Proficiency" });
             txtKey.Location = new Point(797, 80);
             txtKey.Name = "txtKey";
             txtKey.Size = new Size(71, 23);

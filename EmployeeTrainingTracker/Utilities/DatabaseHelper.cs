@@ -10,8 +10,8 @@ namespace EmployeeTrainingTracker
             "Host=trainingtracker-db.cb48g6awa7ky.eu-west-1.rds.amazonaws.com;" +
             "Port=5432;" +
             "Database=postgres;" +
-            "Username=postgres;" +
-            "Password=du2UAWhtAuREzRzOZmvl;" +
+            "Username=tracker_app_user;" +
+            "Password='387£0!K;:4sBh%c7KzWa,o_Pj!';" +
             "SslMode=Require;" +
             "Trust Server Certificate=true";
 

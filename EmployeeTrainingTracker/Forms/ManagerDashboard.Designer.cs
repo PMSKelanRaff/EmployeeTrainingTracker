@@ -560,9 +560,9 @@ namespace EmployeeTrainingTracker
             label11.AutoSize = true;
             label11.Location = new Point(892, 126);
             label11.Name = "label11";
-            label11.Size = new Size(45, 15);
+            label11.Size = new Size(71, 15);
             label11.TabIndex = 49;
-            label11.Text = "Hours :";
+            label11.Text = "CPD Hours :";
             // 
             // label12
             // 

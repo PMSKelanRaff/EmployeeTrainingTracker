@@ -173,6 +173,7 @@ namespace EmployeeTrainingTracker
             // 
             // tabEmployees
             // 
+            tabEmployees.BackColor = Color.Transparent;
             tabEmployees.Controls.Add(lbl_FullName);
             tabEmployees.Controls.Add(txtFullName);
             tabEmployees.Controls.Add(lbl_JobTitle);
@@ -195,7 +196,6 @@ namespace EmployeeTrainingTracker
             tabEmployees.Size = new Size(1011, 455);
             tabEmployees.TabIndex = 0;
             tabEmployees.Text = "Employees";
-            tabEmployees.UseVisualStyleBackColor = true;
             // 
             // lbl_FullName
             // 
@@ -401,9 +401,9 @@ namespace EmployeeTrainingTracker
             label11.AutoSize = true;
             label11.Location = new Point(892, 126);
             label11.Name = "label11";
-            label11.Size = new Size(45, 15);
+            label11.Size = new Size(71, 15);
             label11.TabIndex = 49;
-            label11.Text = "Hours :";
+            label11.Text = "CPD Hours :";
             // 
             // label12
             // 

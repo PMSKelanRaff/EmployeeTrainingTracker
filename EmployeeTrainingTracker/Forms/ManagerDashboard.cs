@@ -14,6 +14,7 @@ namespace EmployeeTrainingTracker
         private string _managerDepartment;
         private string _currentEmployeeName = "None";
         private bool _loadingManagerCombo = false;
+        private bool _isSyncingSelection = false;
 
         private void SetCurrentEmployeeName(string employeeName)
         {
@@ -85,39 +86,61 @@ namespace EmployeeTrainingTracker
             {
                 conn.Open();
 
+                // CHANGED: 
+                // 1. Swapped positions of 'Email' and 'FullName' in the SELECT list
+                // 2. Added 'ORDER BY FullName ASC' at the end
                 using (var cmd = new NpgsqlCommand(@"
-                SELECT 
-                    u.UserID,
-                    u.Email AS Email,
-                    u.Role,
-                    e.EmployeeID,
-                    COALESCE(e.FullName, u.Email) AS FullName,
-                    COALESCE(e.Department, 'Unknown') AS Department,
-                    COALESCE(e.JobTitle, 'Unknown') AS JobTitle
-                FROM Users u
-                LEFT JOIN Employees e ON u.EmployeeID = e.EmployeeID", conn))
+            SELECT 
+                u.UserID,
+                COALESCE(e.FullName, u.Email) AS FullName,
+                u.Email AS Email,
+                u.Role,
+                e.EmployeeID,
+                COALESCE(e.Department, 'Unknown') AS Department,
+                COALESCE(e.JobTitle, 'Unknown') AS JobTitle
+            FROM Users u
+            LEFT JOIN Employees e ON u.EmployeeID = e.EmployeeID
+            ORDER BY FullName ASC", conn))
                 {
                     using (var reader = cmd.ExecuteReader())
                     {
                         DataTable table = new DataTable();
                         table.Load(reader);
+
+                        // 1. Bind original data to DataGridView
                         dgvEmployees.DataSource = table;
 
-                        // Optional: hide technical ID columns so UI looks cleaner
+                        // Hide technical ID columns
                         if (dgvEmployees.Columns.Contains("UserID"))
                             dgvEmployees.Columns["UserID"].Visible = false;
 
                         if (dgvEmployees.Columns.Contains("EmployeeID"))
                             dgvEmployees.Columns["EmployeeID"].Visible = false;
 
-                        // Populate ComboBox
-                        cmbCurrentEmployee.DataSource = table;
+                        // ---------------------------------------------------------
+                        // NEW: Populate ComboBox independently with an "All" option
+                        // ---------------------------------------------------------
+                        DataTable comboTable = table.Copy();
+
+                        DataRow allRow = comboTable.NewRow();
+                        allRow["EmployeeID"] = 0; // Using 0 as our "All" flag
+                        allRow["FullName"] = "All Employees";
+                        comboTable.Rows.InsertAt(allRow, 0);
+
+                        // Unhook event to prevent errors while the data source is setting
+                        cmbCurrentEmployee.SelectedIndexChanged -= cmbCurrentEmployee_SelectedIndexChanged;
+
+                        cmbCurrentEmployee.DataSource = comboTable;
                         cmbCurrentEmployee.DisplayMember = "FullName";
                         cmbCurrentEmployee.ValueMember = "EmployeeID";
+
+                        // Re-hook the event
+                        cmbCurrentEmployee.SelectedIndexChanged += cmbCurrentEmployee_SelectedIndexChanged;
+                        // ---------------------------------------------------------
                     }
                 }
             }
-        } //Employees
+        }
 
         private void LoadDepartmentEmployees()
         {
@@ -155,16 +178,84 @@ namespace EmployeeTrainingTracker
             cmbCurrentEmployee.ValueMember = "EmployeeID";
         }
 
+
         // --- TAB 2: CERTIFICATES (Restricted to Department)) ---
         private void LoadCertificates(int employeeId)
         {
-            // Logic identical to Admin, as we already filtered the Employee List
             DataTable table = CertificateService.GetCertificates(employeeId);
 
-            SetupCertGridColumns();
+            dgvCertificates.Columns.Clear();
+            dgvCertificates.AutoGenerateColumns = false;
 
-            dgvCertificates.DataSource = table;
-            UpdateCertificateButtons();
+            // Hidden ID column (needed for editing/deleting)
+            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "CertificateID",
+                DataPropertyName = "CertificateID",
+                HeaderText = "ID",
+                Visible = false
+            });
+            // Certificate Name
+            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "CertificateName",
+                DataPropertyName = "CertificateName",
+                HeaderText = "Certificate Name"
+            });
+
+            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "Key",
+                DataPropertyName = "Key",
+                HeaderText = "Training Key"
+            });
+
+            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "HRS",
+                DataPropertyName = "HRS",  // or CPDHrs depending on your DB
+                HeaderText = "CPD Hrs"
+            });
+
+            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "Provider",
+                DataPropertyName = "Provider",
+                HeaderText = "Provider"
+            });
+
+            // Issue Date
+            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "IssueDate",
+                DataPropertyName = "IssueDate",
+                HeaderText = "Issue Date"
+            });
+
+            // Expiry Date
+            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "ExpiryDate",
+                DataPropertyName = "ExpiryDate",
+                HeaderText = "Expiry Date"
+            });
+
+            // FileLink
+            dgvCertificates.Columns.Add(new DataGridViewLinkColumn
+            {
+                Name = "FileLink",
+                DataPropertyName = "FilePath",
+                HeaderText = "Certificate File",
+                TrackVisitedState = true,
+                Width = 200 // width (pixels)
+            });
+
+            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "LastNotifiedDate",
+                DataPropertyName = "LastNotifiedDate",
+                HeaderText = "Last Notified"
+            });
         }
 
         private void SetupCertGridColumns()
@@ -785,6 +876,9 @@ namespace EmployeeTrainingTracker
         // Events
         private void dgvEmployees_SelectionChanged(object sender, EventArgs e)
         {
+            // Prevent infinite loop if we are currently syncing from the ComboBox
+            if (_isSyncingSelection) return;
+
             if (dgvEmployees.CurrentRow != null)
             {
                 var empIdObj = dgvEmployees.CurrentRow.Cells["EmployeeID"].Value;
@@ -792,9 +886,7 @@ namespace EmployeeTrainingTracker
 
                 if (userIdObj != null && userIdObj != DBNull.Value)
                 {
-                    int userId = Convert.ToInt32(userIdObj);
-
-                    // Load employee + user details directly from DataGridView (faster than requerying DB)
+                    // Load employee details into textboxes
                     txtFullName.Text = dgvEmployees.CurrentRow.Cells["FullName"].Value?.ToString();
                     txtUsername.Text = dgvEmployees.CurrentRow.Cells["Email"].Value?.ToString();
                     cmbRole.SelectedItem = dgvEmployees.CurrentRow.Cells["Role"].Value?.ToString();
@@ -803,45 +895,21 @@ namespace EmployeeTrainingTracker
 
                     if (empIdObj != null && empIdObj != DBNull.Value)
                     {
-                        int selectedId = Convert.ToInt32(empIdObj);
+                        int empId = Convert.ToInt32(empIdObj);
+                        string fullName = dgvEmployees.CurrentRow.Cells["FullName"].Value?.ToString() ?? "Unknown";
+                        SetCurrentEmployeeName(fullName);
 
-                        // ---------------------------------------------------
-                        // NEW: SELF-MANAGEMENT LOGIC
-                        // ---------------------------------------------------
-                        if (selectedId == _managerId)
-                        {
-                            // CASE: Manager selected themselves
-                            btnDeleteEmployee.Enabled = false;        // Prevent Self-Deletion
-                            btnEditEmployee.Enabled = true;         // Allow updating (e.g., fixing their own email)
+                        // TURN ON THE FLAG before changing the ComboBox
+                        _isSyncingSelection = true;
+                        cmbCurrentEmployee.SelectedValue = empId; // This syncs the dropdown!
+                        _isSyncingSelection = false; // TURN IT OFF
 
-                        }
-                        else
-                        {
-                            // CASE: Manager selected someone else
-                            btnDeleteEmployee.Enabled = true;         // Allow normal management
-                            btnEditEmployee.Enabled = true;
-                        }
-
-                        // If EmployeeID exists, load certificates
-                        if (empIdObj != null && empIdObj != DBNull.Value)
-                        {
-                            int empId = Convert.ToInt32(empIdObj);
-                            string fullName = dgvEmployees.CurrentRow.Cells["FullName"].Value?.ToString() ?? "Unknown";
-                            SetCurrentEmployeeName(fullName);
-                            LoadCertificates(empId);
-                            tabCertificates.Enabled = true;
-                        }
-                        else
-                        {
-                            SetCurrentEmployeeName("None");
-                            dgvCertificates.DataSource = null;
-                            tabCertificates.Enabled = false;
-                        }
+                        LoadCertificates(empId);
+                        tabCertificates.Enabled = true;
                     }
                     else
                     {
-                        // No valid user selected
-                        ClearEmployeeInputs();
+                        SetCurrentEmployeeName("None");
                         dgvCertificates.DataSource = null;
                         tabCertificates.Enabled = false;
                     }
@@ -849,12 +917,17 @@ namespace EmployeeTrainingTracker
                 else
                 {
                     ClearEmployeeInputs();
+                    dgvCertificates.DataSource = null;
                     tabCertificates.Enabled = false;
                 }
-
-                // Update certificate buttons (add/edit/delete)
-                UpdateCertificateButtons();
             }
+            else
+            {
+                ClearEmployeeInputs();
+                tabCertificates.Enabled = false;
+            }
+
+            UpdateCertificateButtons();
         }
 
         private void dgvCertificates_SelectionChanged(object sender, EventArgs e)
@@ -913,16 +986,48 @@ namespace EmployeeTrainingTracker
 
         private void cmbCurrentEmployee_SelectedIndexChanged(object sender, EventArgs e)
         {
+            // Prevent infinite loop if we are currently syncing from the DataGridView
+            if (_isSyncingSelection) return;
+
             if (cmbCurrentEmployee.SelectedItem == null) return;
 
             if (cmbCurrentEmployee.SelectedItem is DataRowView drv)
             {
                 int empId = Convert.ToInt32(drv["EmployeeID"]);
-                LoadCertificates(empId);
-                SyncDgvSelection(empId);
+
+                if (empId == 0)
+                {
+                    // "All Employees" is selected
+                    SetCurrentEmployeeName("All Employees");
+                    LoadCertificates(0);
+
+                    // Turn on flag, clear grid selection, turn off flag
+                    _isSyncingSelection = true;
+                    dgvEmployees.ClearSelection();
+                    _isSyncingSelection = false;
+                }
+                else
+                {
+                    // Specific employee selected
+                    SetCurrentEmployeeName(drv["FullName"].ToString());
+                    LoadCertificates(empId);
+
+                    // Turn on flag, update grid selection, turn off flag
+                    _isSyncingSelection = true;
+                    SyncDgvSelection(empId);
+                    _isSyncingSelection = false;
+                }
+
+                // Enable/Disable buttons
+                bool employeeSelected = (empId != 0);
+                btnAdd.Enabled = employeeSelected;
+                btnEdit.Enabled = employeeSelected;
+                btnDelete.Enabled = employeeSelected;
+
+                tabCertificates.Enabled = true;
             }
         }
-     
+
         private void dgvPlannedTraining_SelectionChanged(object sender, EventArgs e)
         {
             if (dgvPlannedTraining.CurrentRow?.DataBoundItem is not DataRowView rowView)

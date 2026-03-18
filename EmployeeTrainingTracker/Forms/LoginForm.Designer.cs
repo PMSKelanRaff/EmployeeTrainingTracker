@@ -37,18 +37,20 @@
             WindowsLogin_btn = new Button();
             label1 = new Label();
             SignUp_btn = new Button();
+            login_hidePasswordCheckBox = new CheckBox();
+            forgotPasswordLbl = new LinkLabel();
             SuspendLayout();
             // 
             // txtUsername
             // 
-            txtUsername.Location = new Point(12, 107);
+            txtUsername.Location = new Point(12, 95);
             txtUsername.Name = "txtUsername";
             txtUsername.Size = new Size(191, 23);
             txtUsername.TabIndex = 1;
             // 
             // txtPassword
             // 
-            txtPassword.Location = new Point(12, 151);
+            txtPassword.Location = new Point(12, 139);
             txtPassword.Name = "txtPassword";
             txtPassword.Size = new Size(191, 23);
             txtPassword.TabIndex = 2;
@@ -57,7 +59,7 @@
             // lbl_Username
             // 
             lbl_Username.AutoSize = true;
-            lbl_Username.Location = new Point(15, 89);
+            lbl_Username.Location = new Point(12, 77);
             lbl_Username.Name = "lbl_Username";
             lbl_Username.Size = new Size(42, 15);
             lbl_Username.TabIndex = 2;
@@ -66,7 +68,7 @@
             // lbl_Password
             // 
             lbl_Password.AutoSize = true;
-            lbl_Password.Location = new Point(12, 133);
+            lbl_Password.Location = new Point(12, 121);
             lbl_Password.Name = "lbl_Password";
             lbl_Password.Size = new Size(63, 15);
             lbl_Password.TabIndex = 3;
@@ -74,7 +76,7 @@
             // 
             // Login_btn
             // 
-            Login_btn.Location = new Point(11, 221);
+            Login_btn.Location = new Point(11, 232);
             Login_btn.Name = "Login_btn";
             Login_btn.Size = new Size(58, 23);
             Login_btn.TabIndex = 4;
@@ -84,7 +86,7 @@
             // 
             // WindowsLogin_btn
             // 
-            WindowsLogin_btn.Location = new Point(11, 192);
+            WindowsLogin_btn.Location = new Point(15, 203);
             WindowsLogin_btn.Name = "WindowsLogin_btn";
             WindowsLogin_btn.Size = new Size(108, 23);
             WindowsLogin_btn.TabIndex = 3;
@@ -96,7 +98,7 @@
             // 
             label1.AutoSize = true;
             label1.Font = new Font("Segoe UI Black", 12F, FontStyle.Bold, GraphicsUnit.Point, 0);
-            label1.Location = new Point(25, 34);
+            label1.Location = new Point(25, 26);
             label1.Name = "label1";
             label1.Size = new Size(178, 21);
             label1.TabIndex = 6;
@@ -104,7 +106,7 @@
             // 
             // SignUp_btn
             // 
-            SignUp_btn.Location = new Point(75, 221);
+            SignUp_btn.Location = new Point(75, 232);
             SignUp_btn.Name = "SignUp_btn";
             SignUp_btn.Size = new Size(58, 23);
             SignUp_btn.TabIndex = 5;
@@ -112,11 +114,37 @@
             SignUp_btn.UseVisualStyleBackColor = true;
             SignUp_btn.Click += SignUp_btn_Click;
             // 
+            // login_hidePasswordCheckBox
+            // 
+            login_hidePasswordCheckBox.AutoSize = true;
+            login_hidePasswordCheckBox.Checked = true;
+            login_hidePasswordCheckBox.CheckState = CheckState.Checked;
+            login_hidePasswordCheckBox.Location = new Point(15, 167);
+            login_hidePasswordCheckBox.Name = "login_hidePasswordCheckBox";
+            login_hidePasswordCheckBox.Size = new Size(104, 19);
+            login_hidePasswordCheckBox.TabIndex = 7;
+            login_hidePasswordCheckBox.Text = "Hide Password";
+            login_hidePasswordCheckBox.UseVisualStyleBackColor = true;
+            login_hidePasswordCheckBox.CheckedChanged += login_hidePasswordCheckBox_CheckedChanged;
+            // 
+            // forgotPasswordLbl
+            // 
+            forgotPasswordLbl.AutoSize = true;
+            forgotPasswordLbl.Location = new Point(117, 262);
+            forgotPasswordLbl.Name = "forgotPasswordLbl";
+            forgotPasswordLbl.Size = new Size(100, 15);
+            forgotPasswordLbl.TabIndex = 8;
+            forgotPasswordLbl.TabStop = true;
+            forgotPasswordLbl.Text = "Forgot Password?";
+            forgotPasswordLbl.LinkClicked += forgotPasswordLbl_LinkClicked;
+            // 
             // LoginForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(229, 252);
+            ClientSize = new Size(229, 286);
+            Controls.Add(forgotPasswordLbl);
+            Controls.Add(login_hidePasswordCheckBox);
             Controls.Add(SignUp_btn);
             Controls.Add(label1);
             Controls.Add(WindowsLogin_btn);
@@ -142,5 +170,7 @@
         private Button WindowsLogin_btn;
         private Label label1;
         private Button SignUp_btn;
+        private CheckBox login_hidePasswordCheckBox;
+        private LinkLabel forgotPasswordLbl;
     }
 }

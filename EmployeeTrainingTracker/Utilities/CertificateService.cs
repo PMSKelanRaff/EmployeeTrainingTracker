@@ -15,12 +15,49 @@ namespace EmployeeTrainingTracker.Utilities
             using var conn = DatabaseHelper.GetConnection();
             conn.Open();
 
-            using var cmd = new NpgsqlCommand(@"
-                  SELECT CertificateID, CertificateName, Key, HRS, Provider, IssueDate, ExpiryDate, FilePath, LastNotifiedDate
-                    FROM TrainingCertificates
-                    WHERE EmployeeID = $1", conn);
+            NpgsqlCommand cmd;
 
-            cmd.Parameters.AddWithValue(employeeId);
+            if (employeeId == 0)
+            {
+                // "All Employees" - Join to get the employee's name and show all
+                cmd = new NpgsqlCommand(@"
+            SELECT 
+                tc.CertificateID, 
+                tc.CertificateName, 
+                tc.Key, 
+                tc.HRS, 
+                tc.Provider, 
+                tc.IssueDate, 
+                tc.ExpiryDate, 
+                tc.FilePath, 
+                tc.LastNotifiedDate,
+                COALESCE(e.FullName, 'Unknown') AS EmployeeName
+            FROM TrainingCertificates tc
+            LEFT JOIN Employees e ON tc.EmployeeID = e.EmployeeID
+            ORDER BY e.FullName ASC, tc.IssueDate DESC", conn);
+            }
+            else
+            {
+                // Specific Employee
+                cmd = new NpgsqlCommand(@"
+            SELECT 
+                tc.CertificateID, 
+                tc.CertificateName, 
+                tc.Key, 
+                tc.HRS, 
+                tc.Provider, 
+                tc.IssueDate, 
+                tc.ExpiryDate, 
+                tc.FilePath, 
+                tc.LastNotifiedDate,
+                COALESCE(e.FullName, 'Unknown') AS EmployeeName
+            FROM TrainingCertificates tc
+            LEFT JOIN Employees e ON tc.EmployeeID = e.EmployeeID
+            WHERE tc.EmployeeID = $1
+            ORDER BY tc.IssueDate DESC", conn);
+
+                cmd.Parameters.AddWithValue(employeeId);
+            }
 
             using var reader = cmd.ExecuteReader();
             DataTable table = new DataTable();
@@ -94,7 +131,6 @@ namespace EmployeeTrainingTracker.Utilities
             cmd.ExecuteNonQuery();
         }
 
-
         public static void DeleteCertificate(int certId)
         {
             using (var conn = DatabaseHelper.GetConnection())
@@ -102,6 +138,21 @@ namespace EmployeeTrainingTracker.Utilities
                 conn.Open();
                 using (var cmd = new NpgsqlCommand(
                     "DELETE FROM TrainingCertificates WHERE CertificateID=$1", conn))
+                {
+                    cmd.Parameters.AddWithValue(certId);
+                    cmd.ExecuteNonQuery();
+                }
+            }
+        }
+
+        public static void MarkCertificateForDeletion(int certId)
+        {
+            using (var conn = DatabaseHelper.GetConnection())
+            {
+                conn.Open();
+                // We update the boolean instead of deleting the row
+                using (var cmd = new NpgsqlCommand(
+                    "UPDATE TrainingCertificates SET IsMarkedForDeletion = TRUE WHERE CertificateID = $1", conn))
                 {
                     cmd.Parameters.AddWithValue(certId);
                     cmd.ExecuteNonQuery();
