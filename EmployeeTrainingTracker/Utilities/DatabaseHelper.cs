@@ -1,21 +1,34 @@
-﻿using Npgsql;
+﻿using Microsoft.Extensions.Configuration;
+using Npgsql;
 using System.Windows.Forms; // Needed for MessageBox
 
 namespace EmployeeTrainingTracker
 {
     public static class DatabaseHelper
     {
-        // 1. Store your new AWS connection string
-        private static readonly string _connectionString =
-            "Host=trainingtracker-db.cb48g6awa7ky.eu-west-1.rds.amazonaws.com;" +
-            "Port=5432;" +
-            "Database=postgres;" +
-            "Username=tracker_app_user;" +
-            "Password='387£0!K;:4sBh%c7KzWa,o_Pj!';" +
-            "SslMode=Require;" +
-            "Trust Server Certificate=true";
+        private static readonly string _connectionString;
 
-        // 2. The method your forms will call
+        static DatabaseHelper()
+        {
+            var config = new ConfigurationBuilder()
+                .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .Build();
+
+            var builder = new NpgsqlConnectionStringBuilder
+            {
+                Host = config["Database:Host"],
+                Port = int.Parse(config["Database:Port"] ?? "5432"),
+                Database = config["Database:Name"],
+                Username = config["Database:User"],
+                Password = config["Database:Pass"], // The builder safely handles the !' here
+                SslMode = SslMode.Require,
+                TrustServerCertificate = true
+            };
+
+            _connectionString = builder.ToString();
+        }
+
         public static NpgsqlConnection GetConnection()
         {
             return new NpgsqlConnection(_connectionString);

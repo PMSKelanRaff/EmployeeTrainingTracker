@@ -6,3 +6,6 @@
 # Ignore Visual Studio temporary files
 .vs/
 *.user
+
+# CRITICAL: Ignore sensitive configuration files
+EmployeeTrainingTracker/appsettings.json

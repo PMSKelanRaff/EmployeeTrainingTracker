@@ -1,8 +1,9 @@
-﻿using System;
-using System.Data;
-using Npgsql;
-using System.Windows.Forms;
+﻿using EmployeeTrainingTracker.Helpers;
 using EmployeeTrainingTracker.Utilities;
+using Npgsql;
+using System;
+using System.Data;
+using System.Windows.Forms;
 
 namespace EmployeeTrainingTracker
 {
@@ -14,7 +15,7 @@ namespace EmployeeTrainingTracker
         {
             InitializeComponent();
             employeeId = empId;
-            
+
         }
 
         private void EmployeeDashboard_Load(object sender, EventArgs e)
@@ -33,7 +34,7 @@ namespace EmployeeTrainingTracker
             {
                 MessageBox.Show($"A critical error occurred while loading your dashboard:\n\n{ex.Message}\n\n{ex.StackTrace}",
                                 "Load Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                this.Close(); 
+                this.Close();
             }
         }
 
@@ -87,7 +88,8 @@ namespace EmployeeTrainingTracker
             {
                 Name = "IssueDate",
                 DataPropertyName = "IssueDate",
-                HeaderText = "Issue Date"
+                HeaderText = "Issue Date",
+                DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } // <--- ADD THIS LINE
             });
 
             // Expiry Date
@@ -95,14 +97,15 @@ namespace EmployeeTrainingTracker
             {
                 Name = "ExpiryDate",
                 DataPropertyName = "ExpiryDate",
-                HeaderText = "Expiry Date"
+                HeaderText = "Expiry Date",
+                DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } // <--- ADD THIS LINE
             });
 
             // FileLink
             dataGridView1.Columns.Add(new DataGridViewLinkColumn
             {
                 Name = "FileLink",
-                DataPropertyName = "FilePath",
+                DataPropertyName = "S3Key", // <--- CHANGED THIS TO S3Key
                 HeaderText = "Certificate File",
                 TrackVisitedState = true,
                 UseColumnTextForLinkValue = false,
@@ -191,39 +194,48 @@ namespace EmployeeTrainingTracker
             }
         }
 
-        private void btnAdd_Click(object sender, EventArgs e)
+        private async void btnUpload_Click(object sender, EventArgs e)
         {
-            string certName = txtCertName.Text.Trim();
-            string key = string.IsNullOrWhiteSpace(txtKey.Text)
-                ? string.Empty
-                : txtKey.Text.Trim()[0].ToString();
-            double.TryParse(txtHrs.Text.Trim(), out double hrs);
-            string provider = txtProvider.Text.Trim();
-
-            // Check dates before processing
-            if (dtpExpiryDate.Checked && dtpExpiryDate.Value.Date < dtpIssueDate.Value.Date)
+            using (OpenFileDialog ofd = new OpenFileDialog())
             {
-                MessageBox.Show("Expiry Date cannot be earlier than Issue Date.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                ofd.Filter = "PDF Files (*.pdf)|*.pdf|Image Files (*.jpg;*.png)|*.jpg;*.png|All Files (*.*)|*.*";
+                ofd.Title = "Select a Certificate to Upload";
+
+                if (ofd.ShowDialog() == DialogResult.OK)
+                {
+                    string localFilePath = ofd.FileName;
+
+                    string certName = txtCertName.Text.Trim();
+                    string key = string.IsNullOrWhiteSpace(txtKey.Text) ? string.Empty : txtKey.Text.Trim()[0].ToString();
+                    double.TryParse(txtHrs.Text.Trim(), out double hrs);
+                    string provider = txtProvider.Text.Trim();
+                    DateTime issueDate = dtpIssueDate.Value.Date;
+                    DateTime expiryDate = dtpExpiryDate.Value.Date;
+
+                    if (string.IsNullOrEmpty(certName))
+                    {
+                        MessageBox.Show("Please enter a name for the certificate.");
+                        return;
+                    }
+
+                    // We pass an empty string for the name because the employee dashboard doesn't track it.
+                    // S3Service will automatically default to "Unknown_123/file.pdf", which works perfectly!
+                    bool success = await CertificateService.SaveCertificateAsync(
+                        employeeId, "", certName, localFilePath,
+                        issueDate, expiryDate, key, hrs, provider);
+
+                    if (success)
+                    {
+                        MessageBox.Show("Certificate successfully uploaded to the cloud!");
+                        LoadCertificates(employeeId);
+                        ClearInputs();
+                    }
+                    else
+                    {
+                        MessageBox.Show("Upload failed. Please try again.");
+                    }
+                }
             }
-
-            // Format dates (ensure CertificateService accepts these types, typically DateTime)
-            string issueDate = dtpIssueDate.Value.ToString("yyyy-MM-dd");
-            string? expiryDate = dtpExpiryDate.Checked ? dtpExpiryDate.Value.ToString("yyyy-MM-dd") : null;
-
-            string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim()) ? null : txtFilePath.Text.Trim('"').Trim();
-
-            if (string.IsNullOrEmpty(certName))
-            {
-                MessageBox.Show("Certificate name is required.");
-                return;
-            }
-
-            // Note: If your CertificateService expects DateTime objects, pass dtpIssueDate.Value directly instead of 'issueDate' string
-            CertificateService.AddCertificate(employeeId, certName, key, hrs, provider, issueDate, expiryDate, filePath);
-
-            LoadCertificates(employeeId);
-            ClearInputs();
         }
 
         private void btnEdit_Click(object sender, EventArgs e)
@@ -252,10 +264,9 @@ namespace EmployeeTrainingTracker
             string issueDate = dtpIssueDate.Value.ToString("yyyy-MM-dd");
             string? expiryDate = dtpExpiryDate.Checked ? dtpExpiryDate.Value.ToString("yyyy-MM-dd") : null;
 
-            string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim()) ? null : txtFilePath.Text.Trim('"').Trim();
+            // UPDATE THIS LINE to just pass null at the end instead of filePath:
+            CertificateService.UpdateCertificate(certId, certName, key, hrs, provider, issueDate, expiryDate, null);
 
-            // Note: If your CertificateService expects DateTime objects, pass dtpIssueDate.Value directly
-            CertificateService.UpdateCertificate(certId, certName, key, hrs, provider, issueDate, expiryDate, filePath);
 
             LoadCertificates(employeeId);
             ClearInputs();
@@ -303,30 +314,12 @@ namespace EmployeeTrainingTracker
         //}
 
 
-
-        private void btnBrowseFile_Click(object sender, EventArgs e)
-        {
-            using (OpenFileDialog ofd = new OpenFileDialog())
-            {
-                ofd.Title = "Select Report File";
-                ofd.Filter = "PDF Files (*.pdf)|*.pdf|Excel Files (*.xlsx;*.xls)|*.xlsx;*.xls|CSV Files (*.csv)|*.csv|All Files (*.*)|*.*";
-                ofd.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                ofd.RestoreDirectory = true;
-
-                if (ofd.ShowDialog() == DialogResult.OK)
-                {
-                    txtFilePath.Text = ofd.FileName;
-                }
-            }
-        }
-
         private void ClearInputs()
         {
             txtCertName.Text = "";
             txtKey.Text = "";
             txtHrs.Text = "";
             txtProvider.Text = "";
-            txtFilePath.Text = "";
             dtpIssueDate.Value = DateTime.Today;
             dtpExpiryDate.Value = DateTime.Today;
         }
@@ -334,28 +327,32 @@ namespace EmployeeTrainingTracker
         // Events
         private void dataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
-            if (e.RowIndex < 0) return;
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
 
             if (dataGridView1.Columns[e.ColumnIndex].Name == "FileLink")
             {
-                string? path = dataGridView1.Rows[e.RowIndex].Cells["FileLink"].Value?.ToString();
+                if (dataGridView1.Rows[e.RowIndex].DataBoundItem is not DataRowView rowView) return;
 
-                if (!string.IsNullOrEmpty(path))
+                string? s3Key = rowView["S3Key"]?.ToString();
+
+                if (string.IsNullOrEmpty(s3Key))
                 {
-                    path = path.Trim('"');
+                    MessageBox.Show("No cloud file linked for this certificate.");
+                    return;
+                }
 
-                    if (System.IO.File.Exists(path))
+                try
+                {
+                    string secureUrl = S3Service.GetSecureViewUrl(s3Key);
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                     {
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = path,
-                            UseShellExecute = true
-                        });
-                    }
-                    else
-                    {
-                        MessageBox.Show($"File not found:\n{path}");
-                    }
+                        FileName = secureUrl,
+                        UseShellExecute = true
+                    });
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Could not open file:\n{ex.Message}");
                 }
             }
         }
@@ -391,23 +388,28 @@ namespace EmployeeTrainingTracker
             else
                 dtpExpiryDate.Value = DateTime.Today;
 
-            txtFilePath.Text = rowView["FilePath"]?.ToString() ?? "";
         }
 
         private void dataGridView1_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
         {
-            // Check if the column is our deletion flag
+            // 1. Handle the Red Deletion Flag Background
             if (dataGridView1.Columns[e.ColumnIndex].Name == "IsMarkedForDeletion")
             {
                 if (e.Value != null && (bool)e.Value == true)
                 {
-                    // Turn the whole row a light red/gray to indicate it's pending deletion
                     dataGridView1.Rows[e.RowIndex].DefaultCellStyle.BackColor = Color.MistyRose;
                     dataGridView1.Rows[e.RowIndex].DefaultCellStyle.ForeColor = Color.Gray;
                 }
             }
-        }
 
+            // 2. Handle the Clean S3 File Names
+            if (dataGridView1.Columns[e.ColumnIndex].Name == "FileLink" && e.Value != null)
+            {
+                string fullS3Key = e.Value.ToString() ?? "";
+                e.Value = System.IO.Path.GetFileName(fullS3Key);
+                e.FormattingApplied = true;
+            }
+        }
 
     }
 }

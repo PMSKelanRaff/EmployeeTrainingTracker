@@ -50,7 +50,7 @@ namespace EmployeeTrainingTracker
             txtPassword = new TextBox();
             txtUsername = new TextBox();
             tabCertificates = new TabPage();
-            btnBrowseFile = new Button();
+            btnUpload = new Button();
             label10 = new Label();
             label11 = new Label();
             label12 = new Label();
@@ -69,7 +69,6 @@ namespace EmployeeTrainingTracker
             txtCertName = new TextBox();
             btnDelete = new Button();
             btnEdit = new Button();
-            btnAdd = new Button();
             Reports = new TabPage();
             label15 = new Label();
             clbGroups = new CheckedListBox();
@@ -345,7 +344,7 @@ namespace EmployeeTrainingTracker
             // 
             // tabCertificates
             // 
-            tabCertificates.Controls.Add(btnBrowseFile);
+            tabCertificates.Controls.Add(btnUpload);
             tabCertificates.Controls.Add(label10);
             tabCertificates.Controls.Add(label11);
             tabCertificates.Controls.Add(label12);
@@ -364,7 +363,6 @@ namespace EmployeeTrainingTracker
             tabCertificates.Controls.Add(txtCertName);
             tabCertificates.Controls.Add(btnDelete);
             tabCertificates.Controls.Add(btnEdit);
-            tabCertificates.Controls.Add(btnAdd);
             tabCertificates.Controls.Add(dgvCertificates);
             tabCertificates.Location = new Point(4, 24);
             tabCertificates.Name = "tabCertificates";
@@ -374,16 +372,16 @@ namespace EmployeeTrainingTracker
             tabCertificates.Text = "Certificates";
             tabCertificates.UseVisualStyleBackColor = true;
             // 
-            // btnBrowseFile
+            // btnUpload
             // 
-            btnBrowseFile.Anchor = AnchorStyles.Right;
-            btnBrowseFile.Location = new Point(939, 376);
-            btnBrowseFile.Name = "btnBrowseFile";
-            btnBrowseFile.Size = new Size(53, 22);
-            btnBrowseFile.TabIndex = 9;
-            btnBrowseFile.Text = "Browse";
-            btnBrowseFile.UseVisualStyleBackColor = true;
-            btnBrowseFile.Click += btnBrowseFile_Click;
+            btnUpload.Anchor = AnchorStyles.Right;
+            btnUpload.Location = new Point(939, 376);
+            btnUpload.Name = "btnUpload";
+            btnUpload.Size = new Size(53, 22);
+            btnUpload.TabIndex = 51;
+            btnUpload.Text = "Upload";
+            btnUpload.UseVisualStyleBackColor = true;
+            btnUpload.Click += btnUpload_Click;
             // 
             // label10
             // 
@@ -537,7 +535,7 @@ namespace EmployeeTrainingTracker
             // btnDelete
             // 
             btnDelete.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnDelete.Location = new Point(792, 427);
+            btnDelete.Location = new Point(902, 426);
             btnDelete.Name = "btnDelete";
             btnDelete.Size = new Size(50, 23);
             btnDelete.TabIndex = 11;
@@ -548,24 +546,13 @@ namespace EmployeeTrainingTracker
             // btnEdit
             // 
             btnEdit.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnEdit.Location = new Point(904, 427);
+            btnEdit.Location = new Point(958, 426);
             btnEdit.Name = "btnEdit";
             btnEdit.Size = new Size(47, 23);
             btnEdit.TabIndex = 12;
             btnEdit.Text = "Edit";
             btnEdit.UseVisualStyleBackColor = true;
             btnEdit.Click += btnEditCert_Click;
-            // 
-            // btnAdd
-            // 
-            btnAdd.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnAdd.Location = new Point(957, 427);
-            btnAdd.Name = "btnAdd";
-            btnAdd.Size = new Size(48, 23);
-            btnAdd.TabIndex = 13;
-            btnAdd.Text = "Add";
-            btnAdd.UseVisualStyleBackColor = true;
-            btnAdd.Click += btnAddCert_Click;
             // 
             // Reports
             // 
@@ -1170,7 +1157,6 @@ namespace EmployeeTrainingTracker
         private TabControl tabControl;
         private TabPage tabEmployees;
         private TabPage tabCertificates;
-        private Button btnAdd;
         private Button btnEdit;
         private Button btnDelete;
         private ComboBox cmbRole;
@@ -1255,10 +1241,10 @@ namespace EmployeeTrainingTracker
         private Label label14;
         private Label label15;
         private CheckedListBox clbGroups;
-        private Button btnBrowseFile;
         private ComboBox cmbPotentialMembers;
         private Button btnAddMemberDirect;
         private Label lbl_FullName;
         private TextBox txtFullName;
+        private Button btnUpload;
     }
 }

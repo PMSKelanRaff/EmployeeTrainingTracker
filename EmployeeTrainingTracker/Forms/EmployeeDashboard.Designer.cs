@@ -31,26 +31,23 @@
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(EmployeeDashboard));
             tabControl = new TabControl();
             tabPage1 = new TabPage();
-            btnBrowseFile = new Button();
             label7 = new Label();
             label6 = new Label();
             label5 = new Label();
             txtProvider = new TextBox();
             txtHrs = new TextBox();
             txtKey = new ComboBox();
-            label1 = new Label();
             lbl_ExpiryDate = new Label();
             lbl_IssueDate = new Label();
             lbl_Certname = new Label();
-            txtFilePath = new TextBox();
             btnEdit = new Button();
-            btnAdd = new Button();
             dtpExpiryDate = new DateTimePicker();
             dtpIssueDate = new DateTimePicker();
             txtCertName = new TextBox();
             dataGridView1 = new DataGridView();
             tabPage2 = new TabPage();
             dgvPlannedTraining = new DataGridView();
+            btnUpload = new Button();
             tabControl.SuspendLayout();
             tabPage1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dataGridView1).BeginInit();
@@ -70,20 +67,17 @@
             // 
             // tabPage1
             // 
-            tabPage1.Controls.Add(btnBrowseFile);
+            tabPage1.Controls.Add(btnUpload);
             tabPage1.Controls.Add(label7);
             tabPage1.Controls.Add(label6);
             tabPage1.Controls.Add(label5);
             tabPage1.Controls.Add(txtProvider);
             tabPage1.Controls.Add(txtHrs);
             tabPage1.Controls.Add(txtKey);
-            tabPage1.Controls.Add(label1);
             tabPage1.Controls.Add(lbl_ExpiryDate);
             tabPage1.Controls.Add(lbl_IssueDate);
             tabPage1.Controls.Add(lbl_Certname);
-            tabPage1.Controls.Add(txtFilePath);
             tabPage1.Controls.Add(btnEdit);
-            tabPage1.Controls.Add(btnAdd);
             tabPage1.Controls.Add(dtpExpiryDate);
             tabPage1.Controls.Add(dtpIssueDate);
             tabPage1.Controls.Add(txtCertName);
@@ -95,16 +89,6 @@
             tabPage1.TabIndex = 0;
             tabPage1.Text = "Certificates";
             tabPage1.UseVisualStyleBackColor = true;
-            // 
-            // btnBrowseFile
-            // 
-            btnBrowseFile.Location = new Point(944, 348);
-            btnBrowseFile.Name = "btnBrowseFile";
-            btnBrowseFile.Size = new Size(53, 22);
-            btnBrowseFile.TabIndex = 8;
-            btnBrowseFile.Text = "Browse";
-            btnBrowseFile.UseVisualStyleBackColor = true;
-            btnBrowseFile.Click += btnBrowseFile_Click;
             // 
             // label7
             // 
@@ -156,15 +140,6 @@
             txtKey.Size = new Size(71, 23);
             txtKey.TabIndex = 2;
             // 
-            // label1
-            // 
-            label1.AutoSize = true;
-            label1.Location = new Point(797, 301);
-            label1.Name = "label1";
-            label1.Size = new Size(115, 15);
-            label1.TabIndex = 63;
-            label1.Text = "Certificate File path :";
-            // 
             // lbl_ExpiryDate
             // 
             lbl_ExpiryDate.AutoSize = true;
@@ -192,13 +167,6 @@
             lbl_Certname.TabIndex = 60;
             lbl_Certname.Text = "Certificate Name : ";
             // 
-            // txtFilePath
-            // 
-            txtFilePath.Location = new Point(797, 319);
-            txtFilePath.Name = "txtFilePath";
-            txtFilePath.Size = new Size(200, 23);
-            txtFilePath.TabIndex = 7;
-            // 
             // btnEdit
             // 
             btnEdit.Location = new Point(850, 417);
@@ -208,16 +176,6 @@
             btnEdit.Text = "Edit";
             btnEdit.UseVisualStyleBackColor = true;
             btnEdit.Click += btnEdit_Click;
-            // 
-            // btnAdd
-            // 
-            btnAdd.Location = new Point(931, 417);
-            btnAdd.Name = "btnAdd";
-            btnAdd.Size = new Size(75, 23);
-            btnAdd.TabIndex = 10;
-            btnAdd.Text = "Add";
-            btnAdd.UseVisualStyleBackColor = true;
-            btnAdd.Click += btnAdd_Click;
             // 
             // dtpExpiryDate
             // 
@@ -271,6 +229,16 @@
             dgvPlannedTraining.Size = new Size(994, 430);
             dgvPlannedTraining.TabIndex = 4;
             // 
+            // btnUpload
+            // 
+            btnUpload.Location = new Point(922, 287);
+            btnUpload.Name = "btnUpload";
+            btnUpload.Size = new Size(75, 23);
+            btnUpload.TabIndex = 70;
+            btnUpload.Text = "Upload";
+            btnUpload.UseVisualStyleBackColor = true;
+            btnUpload.Click += btnUpload_Click;
+            // 
             // EmployeeDashboard
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -308,11 +276,11 @@
         private Label lbl_Certname;
         private TextBox txtFilePath;
         private Button btnEdit;
-        private Button btnAdd;
         private DateTimePicker dtpExpiryDate;
         private DateTimePicker dtpIssueDate;
         private TextBox txtCertName;
         private DataGridView dataGridView1;
         private DataGridView dgvPlannedTraining;
+        private Button btnUpload;
     }
 }

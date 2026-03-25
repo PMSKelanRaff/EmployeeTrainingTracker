@@ -1,10 +1,11 @@
-﻿using System;
-using System.Data;
-using Npgsql; 
-using System.Windows.Forms;
-using System.Text;
+﻿using EmployeeTrainingTracker.Helpers;
 using EmployeeTrainingTracker.Utilities;
+using Npgsql; 
+using System;
+using System.Data;
 using System.Security.Cryptography;
+using System.Text;
+using System.Windows.Forms;
 
 namespace EmployeeTrainingTracker
 {
@@ -24,7 +25,7 @@ namespace EmployeeTrainingTracker
         public AdminDashboard()
         {
             InitializeComponent();
-            
+
         }
 
         private void AdminDashboard_Load(object sender, EventArgs e)
@@ -41,7 +42,7 @@ namespace EmployeeTrainingTracker
                 LoadManagers();
                 LoadGroups();
 
-                cbManager.SelectedIndexChanged += cbManager_SelectedIndexChanged;            
+                cbManager.SelectedIndexChanged += cbManager_SelectedIndexChanged;
 
                 var plannedSessions = PlannedTrainingService.GetPlannedTraining();
                 if (plannedSessions.Rows.Count > 0)
@@ -172,7 +173,8 @@ namespace EmployeeTrainingTracker
             {
                 Name = "IssueDate",
                 DataPropertyName = "IssueDate",
-                HeaderText = "Issue Date"
+                HeaderText = "Issue Date",
+                DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } // <--- ADD THIS LINE
             });
 
             // Expiry Date
@@ -180,17 +182,18 @@ namespace EmployeeTrainingTracker
             {
                 Name = "ExpiryDate",
                 DataPropertyName = "ExpiryDate",
-                HeaderText = "Expiry Date"
+                HeaderText = "Expiry Date",
+                DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } // <--- ADD THIS LINE
             });
 
-            // FileLink
+            // Inside LoadCertificates(int employeeId)
             dgvCertificates.Columns.Add(new DataGridViewLinkColumn
             {
                 Name = "FileLink",
-                DataPropertyName = "FilePath",
+                DataPropertyName = "S3Key",
                 HeaderText = "Certificate File",
                 TrackVisitedState = true,
-                Width = 200 // width (pixels)
+                Width = 200
             });
 
             dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
@@ -267,6 +270,7 @@ namespace EmployeeTrainingTracker
 
             dgvPlannedTraining.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             dgvPlannedTraining.CellFormatting += dgvPlannedTraining_CellFormatting;
+            dgvCertificates.CellFormatting += dgvCertificates_CellFormatting;
 
             if (dgvPlannedTraining.Columns.Contains("SessionID"))
                 dgvPlannedTraining.Columns["SessionID"].Visible = false;
@@ -412,46 +416,6 @@ namespace EmployeeTrainingTracker
 
 
         // CRUD for certificates
-        private void btnAddCert_Click(object sender, EventArgs e)
-        {
-            if (dgvEmployees.CurrentRow == null) return;
-
-            int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
-            string name = txtCertName.Text.Trim();
-            string key = string.IsNullOrWhiteSpace(txtKeyCertsTab.Text)
-                ? string.Empty
-                : txtKeyCertsTab.Text.Trim()[0].ToString();
-            string hrsText = txtHrsCertsTab.Text.Trim();
-            string provider = txtProviderCertsTab.Text.Trim();
-
-            
-            // Check dates before processing
-        
-            if (dtpExpiryDate.Checked && dtpExpiryDate.Value.Date < dtpIssueDate.Value.Date)
-            {
-                MessageBox.Show("Expiry Date cannot be earlier than Issue Date.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            string issue = dtpIssueDate.Value.ToString("yyyy-MM-dd");
-            string? expiry = dtpExpiryDate.Checked ? dtpExpiryDate.Value.ToString("yyyy-MM-dd") : null;
-
-            string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim()) ? null : txtFilePath.Text.Trim('"').Trim();
-
-            if (string.IsNullOrEmpty(name))
-            {
-                MessageBox.Show("Certificate name is required.");
-                return;
-            }
-
-            double.TryParse(hrsText, out double cpdHrs);
-
-            CertificateService.AddCertificate(empId, name, key, cpdHrs, provider, issue, expiry, filePath);
-
-            LoadCertificates(empId);
-
-        }
-
         private void btnEditCert_Click(object sender, EventArgs e)
         {
             if (dgvCertificates.CurrentRow == null) return;
@@ -473,56 +437,218 @@ namespace EmployeeTrainingTracker
 
             string issue = dtpIssueDate.Value.ToString("yyyy-MM-dd");
             string? expiry = dtpExpiryDate.Checked ? dtpExpiryDate.Value.ToString("yyyy-MM-dd") : null;
-
-            string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim())
-                ? null
-                : txtFilePath.Text.Trim('"').Trim();
-
             double.TryParse(hrsText, out double cpdHrs);
 
-            CertificateService.UpdateCertificate(certId, name, key, cpdHrs, provider, issue, expiry, filePath);
-
+            CertificateService.UpdateCertificate(certId, name, key, cpdHrs, provider, issue, expiry, null);
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
             LoadCertificates(empId);
 
+            // clear the boxes 
+            txtCertName.Clear();
+            txtHrsCertsTab.Clear();
+            txtProviderCertsTab.Clear();
+            txtKeyCertsTab.SelectedIndex = -1;
+
             MessageBox.Show("Certificate updated successfully!");
+            
         }
 
-        private void btnDeleteCert_Click(object sender, EventArgs e)
+        private async void btnDeleteCert_Click(object sender, EventArgs e)
         {
             if (dgvCertificates.CurrentRow == null) return;
 
             int certId = Convert.ToInt32(dgvCertificates.CurrentRow.Cells["CertificateID"].Value);
-            string certName = dgvCertificates.CurrentRow.Cells["CertificateName"].Value.ToString();
+            string certName = dgvCertificates.CurrentRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
+            string? s3Key = dgvCertificates.CurrentRow.Cells["FileLink"].Value?.ToString();
 
-            var confirm = MessageBox.Show("Delete this certificate?", "Confirm", MessageBoxButtons.YesNo);
+            var confirm = MessageBox.Show($"Are you sure you want to permanently delete the certificate '{certName}'?", "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (confirm == DialogResult.No) return;
 
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
 
-            // Delete from database
-            CertificateService.DeleteCertificate(certId);
+            try
+            {
+                // 1. Delete the physical file from S3
+                if (!string.IsNullOrEmpty(s3Key))
+                {
+                    await S3Service.DeleteCertificateAsync(s3Key);
+                }
 
+                // 2. Delete the record from database
+                CertificateService.DeleteCertificate(certId);
+
+                // 3. Refresh UI
+                LoadCertificates(empId);
+
+                // Optional: Clear the textboxes if the deleted row was selected
+                txtCertName.Clear();
+                txtHrsCertsTab.Clear();
+                txtProviderCertsTab.Clear();
+                txtKeyCertsTab.SelectedIndex = -1;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"An error occurred while deleting:\n{ex.Message}", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
-        private void btnBrowseFile_Click(object sender, EventArgs e)
+        private async void btnUpload_Click(object sender, EventArgs e)
         {
+            int? currentEmployeeId = GetSelectedEmployeeId();
+
+            if (currentEmployeeId == null)
+            {
+                MessageBox.Show("Please select an employee first before uploading a certificate.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             using (OpenFileDialog ofd = new OpenFileDialog())
             {
-                ofd.Title = "Select Report File";
-                ofd.Filter = "PDF Files (*.pdf)|*.pdf|Excel Files (*.xlsx;*.xls)|*.xlsx;*.xls|CSV Files (*.csv)|*.csv|All Files (*.*)|*.*";
-                ofd.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                ofd.RestoreDirectory = true;
+                ofd.Filter = "PDF Files (*.pdf)|*.pdf|Image Files (*.jpg;*.png)|*.jpg;*.png|All Files (*.*)|*.*";
+                ofd.Title = "Select a Certificate to Upload";
 
                 if (ofd.ShowDialog() == DialogResult.OK)
                 {
-                    txtFilePath.Text = ofd.FileName;
+                    string localFilePath = ofd.FileName;
+
+                    // 1. Gather ALL the data from the UI
+                    string certName = txtCertName.Text.Trim();
+                    string key = string.IsNullOrWhiteSpace(txtKeyCertsTab.Text) ? string.Empty : txtKeyCertsTab.Text.Trim()[0].ToString();
+                    string hrsText = txtHrsCertsTab.Text.Trim();
+                    string provider = txtProviderCertsTab.Text.Trim();
+                    DateTime issueDate = dtpIssueDate.Value.Date;
+                    DateTime expiryDate = dtpExpiryDate.Value.Date;
+
+                    if (string.IsNullOrEmpty(certName))
+                    {
+                        MessageBox.Show("Please enter a name for the certificate.");
+                        return;
+                    }
+
+                    // Parse the hours safely
+                    double? cpdHrs = double.TryParse(hrsText, out double parsedHrs) ? parsedHrs : (double?)null;
+
+                    btnUpload.Enabled = false;
+                    btnUpload.Text = "Uploading...";
+
+                    // 2. Pass all data to the service
+                    bool success = await CertificateService.SaveCertificateAsync(
+                        currentEmployeeId.Value, currentEmployeeName, certName, localFilePath,
+                        issueDate, expiryDate, key, cpdHrs, provider);
+
+                    if (success)
+                    {
+                        MessageBox.Show("Certificate successfully uploaded to the cloud!");
+
+                        // 3. Clear UI and Reload Grid
+                        txtCertName.Clear();
+                        txtKeyCertsTab.SelectedIndex = -1;
+                        txtHrsCertsTab.Clear();
+                        txtProviderCertsTab.Clear();
+
+                        LoadCertificates(currentEmployeeId.Value);
+                    }
+                    else
+                    {
+                        MessageBox.Show("Upload failed. Please try again.");
+                    }
+
+                    btnUpload.Enabled = true;
+                    btnUpload.Text = "Upload";
                 }
             }
         }
 
 
+        //public static async Task MigrateOldCertificatesAsync()
+        //{
+        //    int successCount = 0;
+        //    int failCount = 0;
+
+        //    using (var conn = DatabaseHelper.GetConnection())
+        //    {
+        //        await conn.OpenAsync();
+
+        //        string selectSql = @"
+        //    SELECT tc.CertificateID, tc.EmployeeID, tc.FilePath, e.FullName 
+        //    FROM TrainingCertificates tc
+        //    JOIN Employees e ON tc.EmployeeID = e.EmployeeID
+        //    WHERE tc.S3Key IS NULL AND tc.FilePath IS NOT NULL";
+
+        //        using (var cmd = new NpgsqlCommand(selectSql, conn))
+        //        using (var reader = await cmd.ExecuteReaderAsync())
+        //        {
+        //            var recordsToMigrate = new List<(int CertId, int EmpId, string Path, string EmpName)>();
+        //            while (await reader.ReadAsync())
+        //            {
+        //                recordsToMigrate.Add((
+        //                    reader.GetInt32(0),
+        //                    reader.GetInt32(1),
+        //                    reader.GetString(2),
+        //                    reader.GetString(3)
+        //                ));
+        //            }
+        //            reader.Close();
+
+        //            foreach (var record in recordsToMigrate)
+        //            {
+        //                string actualPath = record.Path;
+
+        //                // 1. Check if the file exists at the exact database path
+        //                if (!System.IO.File.Exists(actualPath))
+        //                {
+        //                    // FALLBACK: Did someone move it to the "Obsolete" folder?
+        //                    string directory = System.IO.Path.GetDirectoryName(record.Path);
+        //                    string fileName = System.IO.Path.GetFileName(record.Path);
+        //                    string obsoletePath = System.IO.Path.Combine(directory, "Obsolete", fileName);
+
+        //                    if (System.IO.File.Exists(obsoletePath))
+        //                    {
+        //                        // We found it! Update the path so we upload the right file.
+        //                        actualPath = obsoletePath;
+        //                    }
+        //                    else
+        //                    {
+        //                        // It's genuinely missing from both places. Skip it.
+        //                        failCount++;
+        //                        continue;
+        //                    }
+        //                }
+
+        //                // Now use 'actualPath' for the rest of the logic
+        //                string finalFileName = System.IO.Path.GetFileName(actualPath);
+        //                string cleanName = record.EmpName.Replace(" ", "_");
+        //                string s3Key = $"{cleanName}_{record.EmpId}/{finalFileName}";
+
+        //                // 2. Try to upload to S3 using the corrected path
+        //                bool uploaded = await S3Service.UploadCertificateAsync(actualPath, s3Key);
+
+        //                if (uploaded)
+        //                {
+        //                    using (var updateCmd = new NpgsqlCommand("UPDATE TrainingCertificates SET S3Key = @key WHERE CertificateID = @id", conn))
+        //                    {
+        //                        updateCmd.Parameters.AddWithValue("key", s3Key);
+        //                        updateCmd.Parameters.AddWithValue("id", record.CertId);
+        //                        await updateCmd.ExecuteNonQueryAsync();
+        //                    }
+        //                    successCount++;
+        //                }
+        //                else
+        //                {
+        //                    System.Windows.Forms.MessageBox.Show(
+        //                        $"Migration stopped.\n\nThe file exists locally, but the S3 Upload failed for:\n{actualPath}",
+        //                        "Diagnostic: S3 Upload Failed");
+        //                    return;
+        //                }
+        //            }
+        //        }
+        //    }
+
+        //    System.Windows.Forms.MessageBox.Show($"Migration Complete!\nSuccess: {successCount}\nFailed/Missing: {failCount}");
+        //}
+
         // CRUD for employees
+
         private void btnAddEmployee_Click(object sender, EventArgs e)
         {
             // 1. Gather Input from TextBoxes (instead of Windows Identity)
@@ -1273,7 +1399,6 @@ namespace EmployeeTrainingTracker
 
                 // Enable/Disable buttons
                 bool employeeSelected = (empId != 0);
-                btnAdd.Enabled = employeeSelected;
                 btnEdit.Enabled = employeeSelected;
                 btnDelete.Enabled = employeeSelected;
 
@@ -1343,41 +1468,30 @@ namespace EmployeeTrainingTracker
             if (dgvCertificates.Rows[e.RowIndex].DataBoundItem is not DataRowView rowView)
                 return;
 
-            string? path = rowView["FilePath"]?.ToString()?.Trim('"').Trim();
+            // Grab the S3Key instead of the old FilePath
+            string? s3Key = rowView["S3Key"]?.ToString();
 
-            if (string.IsNullOrEmpty(path))
+            if (string.IsNullOrEmpty(s3Key))
             {
-                MessageBox.Show("No file linked for this certificate.");
-                return;
-            }
-
-            // Allowed extensions
-            string[] allowedExtensions = { ".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx" };
-            string ext = System.IO.Path.GetExtension(path).ToLower();
-
-            if (!System.IO.File.Exists(path))
-            {
-                MessageBox.Show($"File not found:\n{path}");
-                return;
-            }
-
-            if (!allowedExtensions.Contains(ext))
-            {
-                MessageBox.Show($"Unsupported file type: {ext}");
+                MessageBox.Show("No cloud file linked for this certificate.", "File Not Found", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
             try
             {
+                // 1. Generate the secure Presigned URL from AWS
+                string secureUrl = S3Service.GetSecureViewUrl(s3Key);
+
+                // 2. Open the URL in the default web browser
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
-                    FileName = path,
+                    FileName = secureUrl,
                     UseShellExecute = true
                 });
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Could not open file:\n{ex.Message}");
+                MessageBox.Show($"Could not open the file from the cloud:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -1388,7 +1502,6 @@ namespace EmployeeTrainingTracker
                                     cmbCurrentEmployee.SelectedValue != null &&
                                     Convert.ToInt32(cmbCurrentEmployee.SelectedValue) != 0;
 
-            btnAdd.Enabled = employeeSelected;
             btnEdit.Enabled = employeeSelected;
             btnDelete.Enabled = employeeSelected;
         }
@@ -1453,7 +1566,7 @@ namespace EmployeeTrainingTracker
                 txtDescription.Text = row.Cells["Description"].Value.ToString();
 
                 // --- APPLY THIS CHANGE ---
-                _loadingManagerCombo = true; 
+                _loadingManagerCombo = true;
                 PopulateManagerComboBox(groupId, row.Cells["ManagerID"].Value);
                 _loadingManagerCombo = false;
 
@@ -1543,6 +1656,21 @@ namespace EmployeeTrainingTracker
             }
 
             return selectedIds.Distinct().ToList(); // remove duplicates in case multiple groups overlap
+        }
+
+        private void dgvCertificates_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        {
+            // Check if the column being drawn is our FileLink column
+            if (dgvCertificates.Columns[e.ColumnIndex].Name == "FileLink" && e.Value != null)
+            {
+                string fullS3Key = e.Value.ToString() ?? "";
+
+                // System.IO.Path.GetFileName automatically strips off the folder path!
+                string cleanFileName = System.IO.Path.GetFileName(fullS3Key);
+
+                e.Value = cleanFileName;
+                e.FormattingApplied = true;
+            }
         }
     }
 

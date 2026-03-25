@@ -1,10 +1,11 @@
-﻿using System;
+﻿using EmployeeTrainingTracker.Helpers;
+using Npgsql; 
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Npgsql; 
 
 namespace EmployeeTrainingTracker.Utilities
 {
@@ -21,40 +22,42 @@ namespace EmployeeTrainingTracker.Utilities
             {
                 // "All Employees" - Join to get the employee's name and show all
                 cmd = new NpgsqlCommand(@"
-            SELECT 
-                tc.CertificateID, 
-                tc.CertificateName, 
-                tc.Key, 
-                tc.HRS, 
-                tc.Provider, 
-                tc.IssueDate, 
-                tc.ExpiryDate, 
-                tc.FilePath, 
-                tc.LastNotifiedDate,
-                COALESCE(e.FullName, 'Unknown') AS EmployeeName
-            FROM TrainingCertificates tc
-            LEFT JOIN Employees e ON tc.EmployeeID = e.EmployeeID
-            ORDER BY e.FullName ASC, tc.IssueDate DESC", conn);
+    SELECT 
+        tc.CertificateID, 
+        tc.CertificateName, 
+        tc.Key, 
+        tc.HRS, 
+        tc.Provider, 
+        tc.IssueDate, 
+        tc.ExpiryDate, 
+        tc.FilePath, 
+        tc.S3Key, /* <--- ADDED HERE */
+        tc.LastNotifiedDate,
+        COALESCE(e.FullName, 'Unknown') AS EmployeeName
+    FROM TrainingCertificates tc
+    LEFT JOIN Employees e ON tc.EmployeeID = e.EmployeeID
+    ORDER BY e.FullName ASC, tc.IssueDate DESC", conn);
             }
             else
             {
                 // Specific Employee
                 cmd = new NpgsqlCommand(@"
-            SELECT 
-                tc.CertificateID, 
-                tc.CertificateName, 
-                tc.Key, 
-                tc.HRS, 
-                tc.Provider, 
-                tc.IssueDate, 
-                tc.ExpiryDate, 
-                tc.FilePath, 
-                tc.LastNotifiedDate,
-                COALESCE(e.FullName, 'Unknown') AS EmployeeName
-            FROM TrainingCertificates tc
-            LEFT JOIN Employees e ON tc.EmployeeID = e.EmployeeID
-            WHERE tc.EmployeeID = $1
-            ORDER BY tc.IssueDate DESC", conn);
+    SELECT 
+        tc.CertificateID, 
+        tc.CertificateName, 
+        tc.Key, 
+        tc.HRS, 
+        tc.Provider, 
+        tc.IssueDate, 
+        tc.ExpiryDate, 
+        tc.FilePath, 
+        tc.S3Key, /* <--- ADDED HERE */
+        tc.LastNotifiedDate,
+        COALESCE(e.FullName, 'Unknown') AS EmployeeName
+    FROM TrainingCertificates tc
+    LEFT JOIN Employees e ON tc.EmployeeID = e.EmployeeID
+    WHERE tc.EmployeeID = $1
+    ORDER BY tc.IssueDate DESC", conn);
 
                 cmd.Parameters.AddWithValue(employeeId);
             }
@@ -63,6 +66,51 @@ namespace EmployeeTrainingTracker.Utilities
             DataTable table = new DataTable();
             table.Load(reader);
             return table;
+        }
+
+        public static async Task<bool> SaveCertificateAsync(
+        int employeeId, string employeeName, string certName, string localFilePath,
+        DateTime issueDate, DateTime expiryDate, string key, double? cpdHrs, string provider)
+        {
+            string fileName = Path.GetFileName(localFilePath);
+            string cleanName = string.IsNullOrWhiteSpace(employeeName) ? "Unknown" : employeeName.Replace(" ", "_");
+            string s3Key = $"{cleanName}_{employeeId}/{fileName}";
+
+            try
+            {
+                // 1. Upload to S3
+                bool s3Success = await S3Service.UploadCertificateAsync(localFilePath, s3Key);
+                if (!s3Success) return false;
+
+                // 2. Save EVERYTHING to PostgreSQL
+                using (var conn = DatabaseHelper.GetConnection())
+                {
+                    await conn.OpenAsync();
+                    const string sql = @"INSERT INTO TrainingCertificates 
+                                (EmployeeID, CertificateName, S3Key, IssueDate, ExpiryDate, Key, HRS, Provider, IsMarkedForDeletion) 
+                                VALUES (@empId, @name, @keyPath, @issue, @expiry, @key, @hrs, @provider, FALSE)";
+
+                    using (var cmd = new NpgsqlCommand(sql, conn))
+                    {
+                        cmd.Parameters.AddWithValue("empId", employeeId);
+                        cmd.Parameters.AddWithValue("name", certName);
+                        cmd.Parameters.AddWithValue("keyPath", s3Key);
+                        cmd.Parameters.AddWithValue("issue", issueDate);
+                        cmd.Parameters.AddWithValue("expiry", expiryDate);
+                        cmd.Parameters.AddWithValue("key", key ?? (object)DBNull.Value);
+                        cmd.Parameters.AddWithValue("hrs", cpdHrs ?? (object)DBNull.Value);
+                        cmd.Parameters.AddWithValue("provider", provider ?? (object)DBNull.Value);
+
+                        await cmd.ExecuteNonQueryAsync();
+                    }
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Windows.Forms.MessageBox.Show($"Upload Workflow Error: {ex.Message}");
+                return false;
+            }
         }
 
         public static void AddCertificate(int employeeId, string certName, string key, double cpdHrs, string provider, string issueDate, string? expiryDate, string? filePath = null)
