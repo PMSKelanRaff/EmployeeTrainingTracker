@@ -347,5 +347,77 @@ namespace EmployeeTrainingTracker.Utilities
             }
             return employees;
         }
+
+        // Fetch employees based on the Groups and GroupMembers tables
+        public static List<EmployeeItem> GetEmployeesByManager(int managerId)
+        {
+            var list = new List<EmployeeItem>();
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+
+            string sql = @"
+                SELECT DISTINCT e.EmployeeID, e.FullName 
+                FROM Employees e
+                INNER JOIN GroupMembers gm ON e.EmployeeID = gm.EmployeeID
+                INNER JOIN Groups g ON gm.GroupID = g.GroupID
+                WHERE g.ManagerID = $1
+                ORDER BY e.FullName";
+
+            using var cmd = new NpgsqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue(managerId);
+
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                list.Add(new EmployeeItem
+                {
+                    Id = reader.GetInt32(0),
+                    Name = reader.GetString(1)
+                });
+            }
+            return list;
+        }
+
+        // Fetch planned training sessions restricted to the manager's group members
+        public static DataTable GetPlannedTrainingForManager(int managerId)
+        {
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+
+            string sql = @"
+                SELECT 
+                    ts.SessionID,
+                    ts.CertificateName,
+                    ts.Key,
+                    ts.HRS,
+                    ts.Provider,
+                    ts.PlannedDate,
+                    ts.IssueDate,
+                    ts.ExpiryDate,
+                    ts.FilePath,
+                    ts.Status,
+                    ts.Notes,
+                    STRING_AGG(DISTINCT e.FullName, ', ') AS Participants
+                FROM TrainingSessions ts
+                INNER JOIN TrainingParticipants tp ON ts.SessionID = tp.SessionID
+                INNER JOIN Employees e ON tp.EmployeeID = e.EmployeeID
+                INNER JOIN GroupMembers gm ON e.EmployeeID = gm.EmployeeID
+                INNER JOIN Groups g ON gm.GroupID = g.GroupID
+                WHERE g.ManagerID = $1
+                  AND (ts.Status = 'Planned' OR ts.Status = 'Completed')
+                GROUP BY 
+                    ts.SessionID, ts.CertificateName, ts.Key, ts.HRS, ts.Provider, 
+                    ts.PlannedDate, ts.IssueDate, ts.ExpiryDate, ts.FilePath, ts.Status, ts.Notes
+                ORDER BY ts.PlannedDate;";
+
+            using var cmd = new NpgsqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue(managerId);
+
+            using var reader = cmd.ExecuteReader();
+            DataTable table = new DataTable();
+            table.Load(reader);
+
+            return table;
+        }
     }
 }

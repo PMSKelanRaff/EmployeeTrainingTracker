@@ -1,10 +1,11 @@
-﻿using System;
-using System.Data;
-using Npgsql; 
-using System.Windows.Forms;
-using System.Text;
+﻿using EmployeeTrainingTracker.Helpers;
 using EmployeeTrainingTracker.Utilities;
+using Npgsql; 
+using System;
+using System.Data;
 using System.Security.Cryptography;
+using System.Text;
+using System.Windows.Forms;
 
 namespace EmployeeTrainingTracker
 {
@@ -12,14 +13,9 @@ namespace EmployeeTrainingTracker
     {
         private int _managerId;
         private string _managerDepartment;
-        private string _currentEmployeeName = "None";
+        private string currentEmployeeName = "None";
         private bool _loadingManagerCombo = false;
         private bool _isSyncingSelection = false;
-
-        private void SetCurrentEmployeeName(string employeeName)
-        {
-            _currentEmployeeName = employeeName;
-        }
 
         public ManagerDashboard(int managerId)
         {
@@ -27,11 +23,26 @@ namespace EmployeeTrainingTracker
             _managerId = managerId;
         }
 
+        // Add this helper method right below the constructor
+        private string GetManagerDepartment(int empId)
+        {
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+            using var cmd = new NpgsqlCommand("SELECT Department FROM Employees WHERE EmployeeID = $1", conn);
+            cmd.Parameters.AddWithValue(empId);
+            return cmd.ExecuteScalar()?.ToString();
+        }
+
+        private void SetCurrentEmployeeName(string employeeName)
+        {
+            currentEmployeeName = employeeName;
+        }
+
         private void ManagerDashboard_Load(object sender, EventArgs e)
         {
             try
             {
-                // 1. Get Manager's Department
+                // 1. Authenticate Department
                 _managerDepartment = GetManagerDepartment(_managerId);
                 this.Text = $"Manager Dashboard - {_managerDepartment}";
 
@@ -42,144 +53,77 @@ namespace EmployeeTrainingTracker
                     return;
                 }
 
-                // -----------------------------------------------------------
-                // LOCK SENSITIVE CONTROLS
-                // -----------------------------------------------------------
-                cmbRole.Enabled = false; // Manager cannot change roles
-                cmbDept.Enabled = false; // Manager cannot change departments
-                                         // -----------------------------------------------------------
+                // 2. Lock Sensitive Controls (Managers can't change these)
+                cmbRole.Enabled = false;
+                cmbDept.Enabled = false;
 
-                // 2. Load Data restricted by Department
-                LoadDepartmentEmployees();
-                LoadEmployeeListForReports();
+                // 3. Load Restricted Data
+                LoadEmployees(); // Now uses the restricted version below
+                LoadEmployeeList();
                 LoadPlannedTraining();
 
-                // UI Setup
                 tabCertificates.Enabled = false;
                 LoadReportSettings();
                 StyleAllDGVs();
 
-               
+                // Disable Admin-only tabs if they carried over
+                // tabControl.TabPages.Remove(tabGroups); // Uncomment if you want to completely hide the Groups tab
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading dashboard: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Error loading dashboard:\n\n{ex.Message}", "Load Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                this.Close();
             }
         }
 
-
-
-        // Load data for each tab
-        private string GetManagerDepartment(int empId)
-        {
-            using var conn = DatabaseHelper.GetConnection();
-            conn.Open();
-            using var cmd = new NpgsqlCommand("SELECT Department FROM Employees WHERE EmployeeID = $1", conn);
-            cmd.Parameters.AddWithValue(empId);
-            return cmd.ExecuteScalar()?.ToString();
-        }
-
-        // --- TAB 1: EMPLOYEES (Restricted to Department) ---
         private void LoadEmployees()
         {
-            using (var conn = DatabaseHelper.GetConnection())
-            {
-                conn.Open();
-
-                // CHANGED: 
-                // 1. Swapped positions of 'Email' and 'FullName' in the SELECT list
-                // 2. Added 'ORDER BY FullName ASC' at the end
-                using (var cmd = new NpgsqlCommand(@"
-            SELECT 
-                u.UserID,
-                COALESCE(e.FullName, u.Email) AS FullName,
-                u.Email AS Email,
-                u.Role,
-                e.EmployeeID,
-                COALESCE(e.Department, 'Unknown') AS Department,
-                COALESCE(e.JobTitle, 'Unknown') AS JobTitle
-            FROM Users u
-            LEFT JOIN Employees e ON u.EmployeeID = e.EmployeeID
-            ORDER BY FullName ASC", conn))
-                {
-                    using (var reader = cmd.ExecuteReader())
-                    {
-                        DataTable table = new DataTable();
-                        table.Load(reader);
-
-                        // 1. Bind original data to DataGridView
-                        dgvEmployees.DataSource = table;
-
-                        // Hide technical ID columns
-                        if (dgvEmployees.Columns.Contains("UserID"))
-                            dgvEmployees.Columns["UserID"].Visible = false;
-
-                        if (dgvEmployees.Columns.Contains("EmployeeID"))
-                            dgvEmployees.Columns["EmployeeID"].Visible = false;
-
-                        // ---------------------------------------------------------
-                        // NEW: Populate ComboBox independently with an "All" option
-                        // ---------------------------------------------------------
-                        DataTable comboTable = table.Copy();
-
-                        DataRow allRow = comboTable.NewRow();
-                        allRow["EmployeeID"] = 0; // Using 0 as our "All" flag
-                        allRow["FullName"] = "All Employees";
-                        comboTable.Rows.InsertAt(allRow, 0);
-
-                        // Unhook event to prevent errors while the data source is setting
-                        cmbCurrentEmployee.SelectedIndexChanged -= cmbCurrentEmployee_SelectedIndexChanged;
-
-                        cmbCurrentEmployee.DataSource = comboTable;
-                        cmbCurrentEmployee.DisplayMember = "FullName";
-                        cmbCurrentEmployee.ValueMember = "EmployeeID";
-
-                        // Re-hook the event
-                        cmbCurrentEmployee.SelectedIndexChanged += cmbCurrentEmployee_SelectedIndexChanged;
-                        // ---------------------------------------------------------
-                    }
-                }
-            }
-        }
-
-        private void LoadDepartmentEmployees()
-        {
             using var conn = DatabaseHelper.GetConnection();
             conn.Open();
 
-            // Filter by Department
+            // NEW SQL: Filters by the Group hierarchy instead of a text-based Department match
             string query = @"
-                SELECT 
-                    u.UserID,
-                    u.Email AS Email,
-                    u.Role,
-                    e.EmployeeID,
-                    COALESCE(e.FullName, u.Email) AS FullName,
-                    COALESCE(e.Department, 'Unknown') AS Department,
-                    COALESCE(e.JobTitle, 'Unknown') AS JobTitle
-                FROM Users u
-                LEFT JOIN Employees e ON u.EmployeeID = e.EmployeeID
-                WHERE e.Department = $1";
+        SELECT DISTINCT
+            u.UserID,
+            COALESCE(e.FullName, u.Email) AS FullName,
+            u.Email AS Email,
+            u.Role,
+            e.EmployeeID,
+            COALESCE(e.Department, 'Unknown') AS Department,
+            COALESCE(e.JobTitle, 'Unknown') AS JobTitle
+        FROM Users u
+        INNER JOIN Employees e ON u.EmployeeID = e.EmployeeID
+        INNER JOIN GroupMembers gm ON e.EmployeeID = gm.EmployeeID
+        INNER JOIN Groups g ON gm.GroupID = g.GroupID
+        WHERE g.ManagerID = $1
+        ORDER BY FullName ASC";
 
             using var cmd = new NpgsqlCommand(query, conn);
-            cmd.Parameters.AddWithValue(_managerDepartment);
+            cmd.Parameters.AddWithValue(_managerId); // Pass the Manager's ID, not the Department!
 
             using var reader = cmd.ExecuteReader();
             DataTable table = new DataTable();
             table.Load(reader);
+
             dgvEmployees.DataSource = table;
 
             if (dgvEmployees.Columns.Contains("UserID")) dgvEmployees.Columns["UserID"].Visible = false;
             if (dgvEmployees.Columns.Contains("EmployeeID")) dgvEmployees.Columns["EmployeeID"].Visible = false;
 
-            // Populate Combo for "Current Employee" selection
-            cmbCurrentEmployee.DataSource = table;
+            // Populate Combo for "Current Employee" selection with an "All" option
+            DataTable comboTable = table.Copy();
+            DataRow allRow = comboTable.NewRow();
+            allRow["EmployeeID"] = 0;
+            allRow["FullName"] = "All Employees";
+            comboTable.Rows.InsertAt(allRow, 0);
+
+            cmbCurrentEmployee.SelectedIndexChanged -= cmbCurrentEmployee_SelectedIndexChanged;
+            cmbCurrentEmployee.DataSource = comboTable;
             cmbCurrentEmployee.DisplayMember = "FullName";
             cmbCurrentEmployee.ValueMember = "EmployeeID";
+            cmbCurrentEmployee.SelectedIndexChanged += cmbCurrentEmployee_SelectedIndexChanged;
         }
 
-
-        // --- TAB 2: CERTIFICATES (Restricted to Department)) ---
         private void LoadCertificates(int employeeId)
         {
             DataTable table = CertificateService.GetCertificates(employeeId);
@@ -229,7 +173,8 @@ namespace EmployeeTrainingTracker
             {
                 Name = "IssueDate",
                 DataPropertyName = "IssueDate",
-                HeaderText = "Issue Date"
+                HeaderText = "Issue Date",
+                DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } // <--- ADD THIS LINE
             });
 
             // Expiry Date
@@ -237,17 +182,18 @@ namespace EmployeeTrainingTracker
             {
                 Name = "ExpiryDate",
                 DataPropertyName = "ExpiryDate",
-                HeaderText = "Expiry Date"
+                HeaderText = "Expiry Date",
+                DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } // <--- ADD THIS LINE
             });
 
-            // FileLink
+            // Inside LoadCertificates(int employeeId)
             dgvCertificates.Columns.Add(new DataGridViewLinkColumn
             {
                 Name = "FileLink",
-                DataPropertyName = "FilePath",
+                DataPropertyName = "S3Key",
                 HeaderText = "Certificate File",
                 TrackVisitedState = true,
-                Width = 200 // width (pixels)
+                Width = 200
             });
 
             dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
@@ -256,32 +202,37 @@ namespace EmployeeTrainingTracker
                 DataPropertyName = "LastNotifiedDate",
                 HeaderText = "Last Notified"
             });
-        }
 
-        private void SetupCertGridColumns()
-        {
-            dgvCertificates.Columns.Clear();
-            dgvCertificates.AutoGenerateColumns = false;
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn { Name = "CertificateID", DataPropertyName = "CertificateID", Visible = false });
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn { Name = "CertificateName", DataPropertyName = "CertificateName", HeaderText = "Certificate Name" });
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn { Name = "Key", DataPropertyName = "Key", HeaderText = "Key" });
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn { Name = "HRS", DataPropertyName = "HRS", HeaderText = "CPD Hrs" });
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn { Name = "Provider", DataPropertyName = "Provider", HeaderText = "Provider" });
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn { Name = "IssueDate", DataPropertyName = "IssueDate", HeaderText = "Issue Date" });
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn { Name = "ExpiryDate", DataPropertyName = "ExpiryDate", HeaderText = "Expiry Date" });
-            dgvCertificates.Columns.Add(new DataGridViewLinkColumn { Name = "FileLink", DataPropertyName = "FilePath", HeaderText = "File", TrackVisitedState = true });
+
+
+            // Set DataSource last
+            dgvCertificates.DataSource = table;
 
             if (dgvCertificates.Columns.Contains("CertificateID"))
             {
                 dgvCertificates.Columns["CertificateID"].Visible = false;
             }
+
+            // update buttons correctly
+            UpdateCertificateButtons();
+        } //Certs
+
+        private void LoadEmployeeList()
+        {
+            clbEmployees.Items.Clear();
+
+            // Switch to the new Manager ID method
+            var list = PlannedTrainingService.GetEmployeesByManager(_managerId);
+            foreach (var item in list)
+            {
+                clbEmployees.Items.Add(item);
+            }
         }
 
-        // --- TAB 3: PLANNING (Restricted to Department) ---
         private void LoadPlannedTraining()
         {
-            // Use the NEW overload in PlannedTrainingService that accepts department
-            DataTable table = PlannedTrainingService.GetPlannedTraining(null, _managerDepartment);
+            // Switch to the new Manager ID method
+            DataTable table = PlannedTrainingService.GetPlannedTrainingForManager(_managerId);
 
             dgvPlannedTraining.DataSource = table;
             dgvPlannedTraining.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
@@ -294,73 +245,18 @@ namespace EmployeeTrainingTracker
         {
             clbEmployeesPlan.Items.Clear();
 
-            // Get ONLY department employees
-            var deptEmployees = PlannedTrainingService.GetEmployeesByDepartment(_managerDepartment);
+            // Switch to the new Manager ID method
+            var deptEmployees = PlannedTrainingService.GetEmployeesByManager(_managerId);
             var participantIds = PlannedTrainingService.GetPlannedEmployeeIds(sessionId);
 
             foreach (var emp in deptEmployees)
             {
                 clbEmployeesPlan.Items.Add(emp, participantIds.Contains(emp.Id));
             }
-
-            // Optional: Load groups managed by this manager
-            // ...
-        }
-
-        // --- TAB 4: REPORTS (Restricted Lists) ---
-        private void LoadEmployeeListForReports()
-        {
-            clbEmployees.Items.Clear();
-            // Use the new service method
-            var list = PlannedTrainingService.GetEmployeesByDepartment(_managerDepartment);
-            foreach (var item in list)
-            {
-                clbEmployees.Items.Add(item);
-            }
         }
 
 
         // CRUD for certificates
-        private void btnAddCert_Click(object sender, EventArgs e)
-        {
-            if (dgvEmployees.CurrentRow == null) return;
-
-            int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
-            string name = txtCertName.Text.Trim();
-            string key = string.IsNullOrWhiteSpace(txtKeyCertsTab.Text)
-                ? string.Empty
-                : txtKeyCertsTab.Text.Trim()[0].ToString();
-            string hrsText = txtHrsCertsTab.Text.Trim();
-            string provider = txtProviderCertsTab.Text.Trim();
-
-
-            // Check dates before processing
-
-            if (dtpExpiryDate.Checked && dtpExpiryDate.Value.Date < dtpIssueDate.Value.Date)
-            {
-                MessageBox.Show("Expiry Date cannot be earlier than Issue Date.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            string issue = dtpIssueDate.Value.ToString("yyyy-MM-dd");
-            string? expiry = dtpExpiryDate.Checked ? dtpExpiryDate.Value.ToString("yyyy-MM-dd") : null;
-
-            string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim()) ? null : txtFilePath.Text.Trim('"').Trim();
-
-            if (string.IsNullOrEmpty(name))
-            {
-                MessageBox.Show("Certificate name is required.");
-                return;
-            }
-
-            double.TryParse(hrsText, out double cpdHrs);
-
-            CertificateService.AddCertificate(empId, name, key, cpdHrs, provider, issue, expiry, filePath);
-
-            LoadCertificates(empId);
-
-        }
-
         private void btnEditCert_Click(object sender, EventArgs e)
         {
             if (dgvCertificates.CurrentRow == null) return;
@@ -382,110 +278,225 @@ namespace EmployeeTrainingTracker
 
             string issue = dtpIssueDate.Value.ToString("yyyy-MM-dd");
             string? expiry = dtpExpiryDate.Checked ? dtpExpiryDate.Value.ToString("yyyy-MM-dd") : null;
-
-            string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim())
-                ? null
-                : txtFilePath.Text.Trim('"').Trim();
-
             double.TryParse(hrsText, out double cpdHrs);
 
-            CertificateService.UpdateCertificate(certId, name, key, cpdHrs, provider, issue, expiry, filePath);
-
+            CertificateService.UpdateCertificate(certId, name, key, cpdHrs, provider, issue, expiry, null);
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
             LoadCertificates(empId);
 
+            // clear the boxes 
+            txtCertName.Clear();
+            txtHrsCertsTab.Clear();
+            txtProviderCertsTab.Clear();
+            txtKeyCertsTab.SelectedIndex = -1;
+
             MessageBox.Show("Certificate updated successfully!");
+            
         }
 
-        private void btnDeleteCert_Click(object sender, EventArgs e)
+        private async void btnDeleteCert_Click(object sender, EventArgs e)
         {
             if (dgvCertificates.CurrentRow == null) return;
 
             int certId = Convert.ToInt32(dgvCertificates.CurrentRow.Cells["CertificateID"].Value);
-            string certName = dgvCertificates.CurrentRow.Cells["CertificateName"].Value.ToString();
+            string certName = dgvCertificates.CurrentRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
+            string? s3Key = dgvCertificates.CurrentRow.Cells["FileLink"].Value?.ToString();
 
-            var confirm = MessageBox.Show("Delete this certificate?", "Confirm", MessageBoxButtons.YesNo);
+            var confirm = MessageBox.Show($"Are you sure you want to permanently delete the certificate '{certName}'?", "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (confirm == DialogResult.No) return;
 
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
 
-            // Delete from database
-            CertificateService.DeleteCertificate(certId);
+            try
+            {
+                // 1. Delete the physical file from S3
+                if (!string.IsNullOrEmpty(s3Key))
+                {
+                    await S3Service.DeleteCertificateAsync(s3Key);
+                }
 
-            LoadCertificates(empId);
+                // 2. Delete the record from database
+                CertificateService.DeleteCertificate(certId);
+
+                // 3. Refresh UI
+                LoadCertificates(empId);
+
+                // Optional: Clear the textboxes if the deleted row was selected
+                txtCertName.Clear();
+                txtHrsCertsTab.Clear();
+                txtProviderCertsTab.Clear();
+                txtKeyCertsTab.SelectedIndex = -1;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"An error occurred while deleting:\n{ex.Message}", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
-        private void btnBrowseFile_Click(object sender, EventArgs e)
+        private async void btnUpload_Click(object sender, EventArgs e)
         {
+            int? currentEmployeeId = GetSelectedEmployeeId();
+
+            if (currentEmployeeId == null)
+            {
+                MessageBox.Show("Please select an employee first before uploading a certificate.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             using (OpenFileDialog ofd = new OpenFileDialog())
             {
-                ofd.Title = "Select Report File";
-                ofd.Filter = "PDF Files (*.pdf)|*.pdf|Excel Files (*.xlsx;*.xls)|*.xlsx;*.xls|CSV Files (*.csv)|*.csv|All Files (*.*)|*.*";
-                ofd.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                ofd.RestoreDirectory = true;
+                ofd.Filter = "PDF Files (*.pdf)|*.pdf|Image Files (*.jpg;*.png)|*.jpg;*.png|All Files (*.*)|*.*";
+                ofd.Title = "Select a Certificate to Upload";
 
                 if (ofd.ShowDialog() == DialogResult.OK)
                 {
-                    txtFilePath.Text = ofd.FileName;
+                    string localFilePath = ofd.FileName;
+
+                    // 1. Gather ALL the data from the UI
+                    string certName = txtCertName.Text.Trim();
+                    string key = string.IsNullOrWhiteSpace(txtKeyCertsTab.Text) ? string.Empty : txtKeyCertsTab.Text.Trim()[0].ToString();
+                    string hrsText = txtHrsCertsTab.Text.Trim();
+                    string provider = txtProviderCertsTab.Text.Trim();
+                    DateTime issueDate = dtpIssueDate.Value.Date;
+                    DateTime expiryDate = dtpExpiryDate.Value.Date;
+
+                    if (string.IsNullOrEmpty(certName))
+                    {
+                        MessageBox.Show("Please enter a name for the certificate.");
+                        return;
+                    }
+
+                    // Parse the hours safely
+                    double? cpdHrs = double.TryParse(hrsText, out double parsedHrs) ? parsedHrs : (double?)null;
+
+                    btnUpload.Enabled = false;
+                    btnUpload.Text = "Uploading...";
+
+                    // 2. Pass all data to the service
+                    bool success = await CertificateService.SaveCertificateAsync(
+                        currentEmployeeId.Value, currentEmployeeName, certName, localFilePath,
+                        issueDate, expiryDate, key, cpdHrs, provider);
+
+                    if (success)
+                    {
+                        MessageBox.Show("Certificate successfully uploaded to the cloud!");
+
+                        // 3. Clear UI and Reload Grid
+                        txtCertName.Clear();
+                        txtKeyCertsTab.SelectedIndex = -1;
+                        txtHrsCertsTab.Clear();
+                        txtProviderCertsTab.Clear();
+
+                        LoadCertificates(currentEmployeeId.Value);
+                    }
+                    else
+                    {
+                        MessageBox.Show("Upload failed. Please try again.");
+                    }
+
+                    btnUpload.Enabled = true;
+                    btnUpload.Text = "Upload";
                 }
             }
         }
 
-
         // CRUD for employees
+
         private void btnAddEmployee_Click(object sender, EventArgs e)
         {
-            // Get Windows username
-            string windowsUser = System.Security.Principal.WindowsIdentity.GetCurrent().Name;
-            string shortUser = windowsUser.Contains("\\")
-                ? windowsUser.Split('\\')[1]
-                : windowsUser;
-
-            string username = shortUser;  // Store the short name as Username
+            // 1. Gather Input from TextBoxes
+            string fullName = txtFullName.Text.Trim();
+            string email = txtUsername.Text.Trim(); // Assuming txtUsername is your Email box
             string role = cmbRole.SelectedItem?.ToString() ?? "Employee";
             string department = string.IsNullOrEmpty(cmbDept.Text.Trim()) ? "Unknown" : cmbDept.Text.Trim();
             string jobTitle = string.IsNullOrEmpty(txtJobTitle.Text.Trim()) ? "Unknown" : txtJobTitle.Text.Trim();
+            string password = txtPassword.Text.Trim();
+
+            // 2. Basic Validation
+            if (string.IsNullOrEmpty(fullName) || string.IsNullOrEmpty(email))
+            {
+                MessageBox.Show("Full Name and Email are required.");
+                return;
+            }
+
+            if (string.IsNullOrEmpty(password))
+            {
+                MessageBox.Show("A password is required for new users.");
+                return;
+            }
+
+            // 3. Hash the password
+            string passwordHash = HashPassword(password);
 
             long newEmpId;
             long newUserId;
-
 
             using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
 
+                // --- STEP 1: Find the Manager's GroupID ---
+                int? managerGroupId = null;
+                using (var cmdGroup = new NpgsqlCommand("SELECT GroupID FROM Groups WHERE ManagerID = $1 LIMIT 1;", conn))
+                {
+                    cmdGroup.Parameters.AddWithValue(_managerId);
+                    var result = cmdGroup.ExecuteScalar();
+                    if (result != null && result != DBNull.Value)
+                    {
+                        managerGroupId = Convert.ToInt32(result);
+                    }
+                }
+
+                // If for some reason this manager isn't assigned a group in the database, stop here.
+                if (!managerGroupId.HasValue)
+                {
+                    MessageBox.Show("You are not currently assigned to manage any groups. Cannot add employee.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                // --- STEP 2: Insert into Employees Table ---
                 using (var cmdEmp = new NpgsqlCommand(
                     "INSERT INTO Employees (FullName, Department, JobTitle) VALUES ($1, $2, $3) RETURNING EmployeeID;", conn))
                 {
-
-                    cmdEmp.Parameters.AddWithValue(username);
+                    cmdEmp.Parameters.AddWithValue(fullName);
                     cmdEmp.Parameters.AddWithValue(department);
                     cmdEmp.Parameters.AddWithValue(jobTitle);
                     newEmpId = (long)cmdEmp.ExecuteScalar();
                 }
 
-
+                // --- STEP 3: Insert into Users Table ---
                 using (var cmdUser = new NpgsqlCommand(
-                    "INSERT INTO Users (Email, Role, EmployeeID) VALUES ($1, $2, $3) RETURNING UserID;", conn))
+                    "INSERT INTO Users (Email, Role, EmployeeID, passwordHash) VALUES ($1, $2, $3, $4) RETURNING UserID;", conn))
                 {
-
-                    cmdUser.Parameters.AddWithValue(username);
+                    cmdUser.Parameters.AddWithValue(email);
                     cmdUser.Parameters.AddWithValue(role);
                     cmdUser.Parameters.AddWithValue(newEmpId);
+                    cmdUser.Parameters.AddWithValue(passwordHash);
                     newUserId = (long)cmdUser.ExecuteScalar();
+                }
+
+                // --- STEP 4: Insert into GroupMembers Table ---
+                using (var cmdMember = new NpgsqlCommand(
+                    "INSERT INTO GroupMembers (GroupID, EmployeeID) VALUES ($1, $2);", conn))
+                {
+                    cmdMember.Parameters.AddWithValue(managerGroupId.Value);
+                    cmdMember.Parameters.AddWithValue(newEmpId);
+                    cmdMember.ExecuteNonQuery();
                 }
             }
 
+            // 4. Refresh UI
             LoadEmployees();
             ClearEmployeeInputs();
+            MessageBox.Show("Employee added and automatically assigned to your group successfully.");
 
-            // Select the newly added user
+            // Select the newly added user in the grid
             foreach (DataGridViewRow row in dgvEmployees.Rows)
             {
-                if (row.Cells["Email"].Value?.ToString() == username) 
+                if (row.Cells["Email"].Value?.ToString() == email)
                 {
                     row.Selected = true;
-                    dgvEmployees.CurrentCell = row.Cells["Email"]; 
+                    dgvEmployees.CurrentCell = row.Cells["Email"];
                     break;
                 }
             }
@@ -493,6 +504,7 @@ namespace EmployeeTrainingTracker
 
         private void btnUpdateEmployee_Click(object sender, EventArgs e)
         {
+            // 1. Basic Validation
             if (dgvEmployees.CurrentRow == null) return;
 
             var empIdObj = dgvEmployees.CurrentRow.Cells["EmployeeID"].Value;
@@ -500,7 +512,7 @@ namespace EmployeeTrainingTracker
 
             if (userIdObj == null || userIdObj == DBNull.Value)
             {
-                MessageBox.Show("Please select a valid employee.");
+                MessageBox.Show("Please select a valid user row.");
                 return;
             }
 
@@ -509,31 +521,24 @@ namespace EmployeeTrainingTracker
                 ? (int?)null
                 : Convert.ToInt32(empIdObj);
 
-            // 1. Gather Input
+            // 2. Gather Input Data
             string fullName = txtFullName.Text.Trim();
-            string email = txtUsername.Text.Trim(); // Assuming txtUsername holds the Email
+            string email = txtUsername.Text.Trim(); // Assuming this is the email/username field
             string role = cmbRole.SelectedItem?.ToString() ?? "Employee";
             string department = string.IsNullOrEmpty(cmbDept.Text.Trim()) ? "Unknown" : cmbDept.Text.Trim();
             string jobTitle = string.IsNullOrEmpty(txtJobTitle.Text.Trim()) ? "Unknown" : txtJobTitle.Text.Trim();
 
-            // NEW: Get the password
-            string newPassword = txtPassword.Text.Trim(); // Ensure your textbox is named 'txtPassword'
-
-            // 2. Validate Password (if user typed one)
-            // We only validate length if the box is NOT empty. If empty, we ignore it (keep old password).
-            if (!string.IsNullOrEmpty(newPassword) && newPassword.Length < 6)
-            {
-                MessageBox.Show("Password must be at least 6 characters.");
-                return; // Stop the update
-            }
+            // Get Password Input
+            string newPassword = txtPassword.Text.Trim();
 
             using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
 
-                // 3. Update or Insert Employee Info (Your existing logic)
+                // 3. Handle Employee Table (Insert or Update)
                 if (employeeId.HasValue)
                 {
+                    // Update existing employee profile
                     using (var cmdEmp = new NpgsqlCommand(
                         "UPDATE Employees SET FullName=$1, Department=$2, JobTitle=$3 WHERE EmployeeID=$4", conn))
                     {
@@ -546,6 +551,7 @@ namespace EmployeeTrainingTracker
                 }
                 else
                 {
+                    // Insert new employee profile
                     using (var cmdInsertEmp = new NpgsqlCommand(
                         "INSERT INTO Employees (FullName, Department, JobTitle) VALUES ($1,$2,$3) RETURNING EmployeeID;", conn))
                     {
@@ -555,6 +561,7 @@ namespace EmployeeTrainingTracker
 
                         long newEmpId = (long)cmdInsertEmp.ExecuteScalar();
 
+                        // Link the existing User to this new Employee record
                         using (var cmdUpdateUserEmp = new NpgsqlCommand(
                             "UPDATE Users SET EmployeeID=$1 WHERE UserID=$2", conn))
                         {
@@ -565,7 +572,7 @@ namespace EmployeeTrainingTracker
                     }
                 }
 
-                // 4. Update User Role and Email (Always runs)
+                // 4. Update User Email and Role (Always runs)
                 using (var cmdUser = new NpgsqlCommand(
                     "UPDATE Users SET Email=$1, Role=$2 WHERE UserID=$3", conn))
                 {
@@ -575,35 +582,35 @@ namespace EmployeeTrainingTracker
                     cmdUser.ExecuteNonQuery();
                 }
 
-                // 5. NEW: Update Password (Only runs if text box is not empty)
+                // 5. Update Password (ONLY if the textbox is not empty)
                 if (!string.IsNullOrEmpty(newPassword))
                 {
-                    // Hash the password using the helper method to match your signup format
-                    string passwordHash = HashPassword(newPassword);
+                    // Hash the password using your helper method
+                    string hashedPassword = HashPassword(newPassword);
 
-                    // Verify your column name is 'Password' or 'PasswordHash' in your database!
                     using (var cmdPass = new NpgsqlCommand(
-                        "UPDATE Users SET Password=$1 WHERE UserID=$2", conn))
+                        "UPDATE Users SET passwordHash=$1 WHERE UserID=$2", conn))
                     {
-                        cmdPass.Parameters.AddWithValue(passwordHash);
+                        cmdPass.Parameters.AddWithValue(hashedPassword);
                         cmdPass.Parameters.AddWithValue(userId);
                         cmdPass.ExecuteNonQuery();
                     }
                 }
             }
 
+            // 6. Refresh UI
             MessageBox.Show("Employee updated successfully.");
             LoadEmployees();
 
-            // Optional: Clear the password box after update for security
+            // Clear the password box so it doesn't stay on screen
             txtPassword.Text = "";
         }
 
         private string HashPassword(string password)
         {
-            using (var sha = SHA256.Create())
+            using (var sha = System.Security.Cryptography.SHA256.Create())
             {
-                var bytes = Encoding.UTF8.GetBytes(password);
+                var bytes = System.Text.Encoding.UTF8.GetBytes(password);
                 var hash = sha.ComputeHash(bytes);
                 return BitConverter.ToString(hash).Replace("-", "").ToLower();
             }
@@ -625,22 +632,38 @@ namespace EmployeeTrainingTracker
             {
                 conn.Open();
 
-                // REMOVED: Explicit DELETE from TrainingCertificates
-                //// Delete certificates first
-                //using (var cmdCert = new NpgsqlCommand("DELETE FROM TrainingCertificates WHERE EmployeeID=$1", conn))
-                //{
-                //    cmdCert.Parameters.AddWithValue(empId.Value);
-                //    cmdCert.ExecuteNonQuery();
-                //}
+                // ---------------------------------------------------------
+                // 1. NEW: Unassign them as Manager from any Groups
+                // ---------------------------------------------------------
+                using (var cmdUnassign = new NpgsqlCommand("UPDATE Groups SET ManagerID = NULL WHERE ManagerID = $1", conn))
+                {
+                    cmdUnassign.Parameters.AddWithValue(empId.Value);
+                    cmdUnassign.ExecuteNonQuery();
+                }
+                // ---------------------------------------------------------
 
-                // Then delete user
+                // 2. Delete certificates (Uncomment this if you don't have CASCADE delete in DB)
+                using (var cmdCert = new NpgsqlCommand("DELETE FROM TrainingCertificates WHERE EmployeeID=$1", conn))
+                {
+                    cmdCert.Parameters.AddWithValue(empId.Value);
+                    cmdCert.ExecuteNonQuery();
+                }
+
+                // 3. Delete from GroupMembers (Just in case they are also a member)
+                using (var cmdMembers = new NpgsqlCommand("DELETE FROM GroupMembers WHERE EmployeeID=$1", conn))
+                {
+                    cmdMembers.Parameters.AddWithValue(empId.Value);
+                    cmdMembers.ExecuteNonQuery();
+                }
+
+                // 4. Delete user account
                 using (var cmdUser = new NpgsqlCommand("DELETE FROM Users WHERE EmployeeID=$1", conn))
                 {
                     cmdUser.Parameters.AddWithValue(empId.Value);
                     cmdUser.ExecuteNonQuery();
                 }
 
-                // Finally, delete the employee record
+                // 5. Finally, delete the employee record
                 using (var cmdEmp = new NpgsqlCommand("DELETE FROM Employees WHERE EmployeeID=$1", conn))
                 {
                     cmdEmp.Parameters.AddWithValue(empId.Value);
@@ -736,10 +759,6 @@ namespace EmployeeTrainingTracker
                 LoadPlannedTraining(); // refresh grid
             }
         }
-
-
-        //CRUD for Groups
-       
 
         // Reporting and Exports
         private void btnGenerateReport_Click(object sender, EventArgs e)
@@ -974,12 +993,10 @@ namespace EmployeeTrainingTracker
                     int employeeId = Convert.ToInt32(rowView["EmployeeID"]);
                     string certName = txtCertName.Text;
 
-                    
                 }
             }
             catch (Exception ex)
             {
-                //chkAddToTrainingFolder.Checked = false;
                 Console.WriteLine($"Error checking Excel: {ex.Message}");
             }
         }
@@ -1020,13 +1037,13 @@ namespace EmployeeTrainingTracker
 
                 // Enable/Disable buttons
                 bool employeeSelected = (empId != 0);
-                btnAdd.Enabled = employeeSelected;
                 btnEdit.Enabled = employeeSelected;
                 btnDelete.Enabled = employeeSelected;
 
                 tabCertificates.Enabled = true;
             }
         }
+
 
         private void dgvPlannedTraining_SelectionChanged(object sender, EventArgs e)
         {
@@ -1059,49 +1076,40 @@ namespace EmployeeTrainingTracker
             if (dgvCertificates.Rows[e.RowIndex].DataBoundItem is not DataRowView rowView)
                 return;
 
-            string? path = rowView["FilePath"]?.ToString()?.Trim('"').Trim();
+            // Grab the S3Key instead of the old FilePath
+            string? s3Key = rowView["S3Key"]?.ToString();
 
-            if (string.IsNullOrEmpty(path))
+            if (string.IsNullOrEmpty(s3Key))
             {
-                MessageBox.Show("No file linked for this certificate.");
-                return;
-            }
-
-            // Allowed extensions
-            string[] allowedExtensions = { ".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx" };
-            string ext = System.IO.Path.GetExtension(path).ToLower();
-
-            if (!System.IO.File.Exists(path))
-            {
-                MessageBox.Show($"File not found:\n{path}");
-                return;
-            }
-
-            if (!allowedExtensions.Contains(ext))
-            {
-                MessageBox.Show($"Unsupported file type: {ext}");
+                MessageBox.Show("No cloud file linked for this certificate.", "File Not Found", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
             try
             {
+                // 1. Generate the secure Presigned URL from AWS
+                string secureUrl = S3Service.GetSecureViewUrl(s3Key);
+
+                // 2. Open the URL in the default web browser
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
-                    FileName = path,
+                    FileName = secureUrl,
                     UseShellExecute = true
                 });
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Could not open file:\n{ex.Message}");
+                MessageBox.Show($"Could not open the file from the cloud:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         private void UpdateCertificateButtons()
         {
-            // Always enable all certificate buttons if an employee is selected
-            bool employeeSelected = dgvEmployees.CurrentRow != null;
-            btnAdd.Enabled = employeeSelected;
+            // Check if an employee is selected in the grid AND the dropdown is NOT set to "All" (0)
+            bool employeeSelected = dgvEmployees.CurrentRow != null &&
+                                    cmbCurrentEmployee.SelectedValue != null &&
+                                    Convert.ToInt32(cmbCurrentEmployee.SelectedValue) != 0;
+
             btnEdit.Enabled = employeeSelected;
             btnDelete.Enabled = employeeSelected;
         }
@@ -1120,36 +1128,6 @@ namespace EmployeeTrainingTracker
             }
         }
 
-        private void dgvPlannedTraining_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
-        {
-            if (dgvPlannedTraining.Columns[e.ColumnIndex].Name == "Status" && e.Value != null)
-            {
-                string status = e.Value.ToString()!.Trim().ToLower();
-
-                switch (status)
-                {
-                    case "completed":
-                        e.CellStyle.BackColor = Color.LightGreen;
-                        e.CellStyle.ForeColor = Color.Black;
-                        break;
-
-                    case "planned":
-                        e.CellStyle.BackColor = Color.Khaki;
-                        e.CellStyle.ForeColor = Color.Black;
-                        break;
-
-                    case "cancelled":
-                        e.CellStyle.BackColor = Color.LightCoral;
-                        e.CellStyle.ForeColor = Color.White;
-                        break;
-
-                    default:
-                        e.CellStyle.BackColor = dgvPlannedTraining.DefaultCellStyle.BackColor;
-                        e.CellStyle.ForeColor = dgvPlannedTraining.DefaultCellStyle.ForeColor;
-                        break;
-                }
-            }
-        }
 
         // Helper Functions
 
@@ -1160,13 +1138,16 @@ namespace EmployeeTrainingTracker
             UIHelpers.StyleDataGridView(dgvCertificates);
             UIHelpers.StyleDataGridView(dgvEmployees);
             UIHelpers.StyleDataGridView(dgvReportResults);
-        
+            //UIHelpers.StyleDataGridView(dgvGroups);
+            //UIHelpers.StyleDataGridView(dgvGroupMembers);
 
             UIHelpers.RenameColumns(dgvPlannedTraining);
             UIHelpers.RenameColumns(dgvCertificates);
             UIHelpers.RenameColumns(dgvEmployees);
             UIHelpers.RenameColumns(dgvReportResults);
-         
+            //UIHelpers.RenameColumns(dgvGroups);
+            //UIHelpers.RenameColumns(dgvGroupMembers);
+
             foreach (TabPage tab in tabControl.TabPages)
             {
                 //tab.BackColor = Color.Gray; // or Color.Gainsboro / Color.WhiteSmoke / LightGray
@@ -1209,6 +1190,52 @@ namespace EmployeeTrainingTracker
             }
 
             return selectedIds.Distinct().ToList(); // remove duplicates in case multiple groups overlap
+        }
+
+        private void dgvCertificates_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        {
+            // Check if the column being drawn is our FileLink column
+            if (dgvCertificates.Columns[e.ColumnIndex].Name == "FileLink" && e.Value != null)
+            {
+                string fullS3Key = e.Value.ToString() ?? "";
+
+                // System.IO.Path.GetFileName automatically strips off the folder path!
+                string cleanFileName = System.IO.Path.GetFileName(fullS3Key);
+
+                e.Value = cleanFileName;
+                e.FormattingApplied = true;
+            }
+        }
+
+        private void dgvPlannedTraining_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        {
+            if (dgvPlannedTraining.Columns[e.ColumnIndex].Name == "Status" && e.Value != null)
+            {
+                string status = e.Value.ToString()!.Trim().ToLower();
+
+                switch (status)
+                {
+                    case "completed":
+                        e.CellStyle.BackColor = Color.LightGreen;
+                        e.CellStyle.ForeColor = Color.Black;
+                        break;
+
+                    case "planned":
+                        e.CellStyle.BackColor = Color.Khaki;
+                        e.CellStyle.ForeColor = Color.Black;
+                        break;
+
+                    case "cancelled":
+                        e.CellStyle.BackColor = Color.LightCoral;
+                        e.CellStyle.ForeColor = Color.White;
+                        break;
+
+                    default:
+                        e.CellStyle.BackColor = dgvPlannedTraining.DefaultCellStyle.BackColor;
+                        e.CellStyle.ForeColor = dgvPlannedTraining.DefaultCellStyle.ForeColor;
+                        break;
+                }
+            }
         }
     }
 
