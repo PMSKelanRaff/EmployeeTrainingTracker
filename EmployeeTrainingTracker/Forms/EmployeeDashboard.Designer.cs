@@ -31,6 +31,8 @@
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(EmployeeDashboard));
             tabControl = new TabControl();
             tabPage1 = new TabPage();
+            btnRequestDelete = new Button();
+            btnUpload = new Button();
             label7 = new Label();
             label6 = new Label();
             label5 = new Label();
@@ -47,7 +49,6 @@
             dataGridView1 = new DataGridView();
             tabPage2 = new TabPage();
             dgvPlannedTraining = new DataGridView();
-            btnUpload = new Button();
             tabControl.SuspendLayout();
             tabPage1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dataGridView1).BeginInit();
@@ -67,6 +68,7 @@
             // 
             // tabPage1
             // 
+            tabPage1.Controls.Add(btnRequestDelete);
             tabPage1.Controls.Add(btnUpload);
             tabPage1.Controls.Add(label7);
             tabPage1.Controls.Add(label6);
@@ -89,6 +91,26 @@
             tabPage1.TabIndex = 0;
             tabPage1.Text = "Certificates";
             tabPage1.UseVisualStyleBackColor = true;
+            // 
+            // btnRequestDelete
+            // 
+            btnRequestDelete.Location = new Point(812, 416);
+            btnRequestDelete.Name = "btnRequestDelete";
+            btnRequestDelete.Size = new Size(104, 23);
+            btnRequestDelete.TabIndex = 71;
+            btnRequestDelete.Text = "Request Deletion";
+            btnRequestDelete.UseVisualStyleBackColor = true;
+            btnRequestDelete.Click += btnRequestDelete_Click;
+            // 
+            // btnUpload
+            // 
+            btnUpload.Location = new Point(922, 287);
+            btnUpload.Name = "btnUpload";
+            btnUpload.Size = new Size(75, 23);
+            btnUpload.TabIndex = 70;
+            btnUpload.Text = "Upload";
+            btnUpload.UseVisualStyleBackColor = true;
+            btnUpload.Click += btnUpload_Click;
             // 
             // label7
             // 
@@ -169,7 +191,7 @@
             // 
             // btnEdit
             // 
-            btnEdit.Location = new Point(850, 417);
+            btnEdit.Location = new Point(922, 416);
             btnEdit.Name = "btnEdit";
             btnEdit.Size = new Size(75, 23);
             btnEdit.TabIndex = 9;
@@ -229,16 +251,6 @@
             dgvPlannedTraining.Size = new Size(994, 430);
             dgvPlannedTraining.TabIndex = 4;
             // 
-            // btnUpload
-            // 
-            btnUpload.Location = new Point(922, 287);
-            btnUpload.Name = "btnUpload";
-            btnUpload.Size = new Size(75, 23);
-            btnUpload.TabIndex = 70;
-            btnUpload.Text = "Upload";
-            btnUpload.UseVisualStyleBackColor = true;
-            btnUpload.Click += btnUpload_Click;
-            // 
             // EmployeeDashboard
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -282,5 +294,6 @@
         private DataGridView dataGridView1;
         private DataGridView dgvPlannedTraining;
         private Button btnUpload;
+        private Button btnRequestDelete;
     }
 }

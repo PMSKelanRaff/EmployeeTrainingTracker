@@ -36,6 +36,7 @@ namespace EmployeeTrainingTracker
                 LoadGroupsForReports();
                 LoadEmployeeList();
                 LoadPlannedTraining();
+                LoadDeletionTasks();
                 tabCertificates.Enabled = false;
                 LoadReportSettings();
                 StyleAllDGVs();
@@ -412,6 +413,48 @@ namespace EmployeeTrainingTracker
 
             // Disable the button if no one is available to add
             btnAddMemberDirect.Enabled = dt.Rows.Count > 0;
+        }
+
+        private void LoadDeletionTasks()
+        {
+            try
+            {
+                DataTable pendingDeletions = CertificateService.GetPendingDeletions();
+
+                dgvTasks.Columns.Clear();
+                dgvTasks.AutoGenerateColumns = false;
+
+                // Hidden ID
+                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "CertificateID", DataPropertyName = "CertificateID", Visible = false });
+
+                // Employee Name (Crucial for the Admin to see)
+                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "EmployeeName", DataPropertyName = "EmployeeName", HeaderText = "Employee Name" });
+
+                // Certificate Details
+                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "CertificateName", DataPropertyName = "CertificateName", HeaderText = "Certificate Name" });
+                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "Key", DataPropertyName = "Key", HeaderText = "Training Key" });
+                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "HRS", DataPropertyName = "HRS", HeaderText = "CPD Hrs" });
+                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "Provider", DataPropertyName = "Provider", HeaderText = "Provider" });
+
+                // Dates
+                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "IssueDate", DataPropertyName = "IssueDate", HeaderText = "Issue Date", DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } });
+                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "ExpiryDate", DataPropertyName = "ExpiryDate", HeaderText = "Expiry Date", DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } });
+
+                // File Link
+                dgvTasks.Columns.Add(new DataGridViewLinkColumn { Name = "FileLink", DataPropertyName = "S3Key", HeaderText = "Certificate File", TrackVisitedState = true, Width = 200 });
+
+                // Notified Date
+                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "LastNotifiedDate", DataPropertyName = "LastNotifiedDate", HeaderText = "Last Notified" });
+
+                dgvTasks.DataSource = pendingDeletions;
+
+                dgvTasks.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+                UIHelpers.StyleDataGridView(dgvTasks);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading tasks: {ex.Message}", "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
 
@@ -1253,6 +1296,81 @@ namespace EmployeeTrainingTracker
             dtpEnd.MaxDate = DateTime.Today;
         }
 
+        // Tasks
+        private async void btnApproveDeletion_Click(object sender, EventArgs e)
+        {
+            if (dgvTasks.CurrentRow == null)
+            {
+                MessageBox.Show("Please select a task to approve.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            int certId = Convert.ToInt32(dgvTasks.CurrentRow.Cells["CertificateID"].Value);
+            string certName = dgvTasks.CurrentRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
+            string s3Key = dgvTasks.CurrentRow.Cells["FileLink"].Value?.ToString();
+
+            var confirm = MessageBox.Show($"Are you sure you want to PERMANENTLY delete '{certName}'?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            if (confirm == DialogResult.No) return;
+
+            try
+            {
+                // 1. Delete the physical file from S3 Cloud (Reusing your existing logic)
+                if (!string.IsNullOrEmpty(s3Key))
+                {
+                    await S3Service.DeleteCertificateAsync(s3Key);
+                }
+
+                // 2. Delete the record from the database
+                CertificateService.DeleteCertificate(certId);
+
+                MessageBox.Show("Certificate permanently deleted.");
+
+                // 3. Refresh the grids
+                LoadDeletionTasks();
+
+                // Optional: Refresh the main employee cert grid if that specific employee happens to be selected
+                int? currentEmp = GetSelectedEmployeeId();
+                if (currentEmp != null) LoadCertificates(currentEmp.Value);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error approving deletion: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void btnRejectDeletion_Click(object sender, EventArgs e)
+        {
+            if (dgvTasks.CurrentRow == null)
+            {
+                MessageBox.Show("Please select a task to reject.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            int certId = Convert.ToInt32(dgvTasks.CurrentRow.Cells["CertificateID"].Value);
+            string certName = dgvTasks.CurrentRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
+
+            var confirm = MessageBox.Show($"Reject deletion request for '{certName}'? It will be restored to the employee's active dashboard.", "Confirm Reject", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+            if (confirm == DialogResult.No) return;
+
+            try
+            {
+                // Un-flag it in the database
+                CertificateService.UnmarkCertificateForDeletion(certId);
+
+                MessageBox.Show("Deletion request rejected. Certificate restored.");
+
+                // Refresh the grids
+                LoadDeletionTasks();
+
+                int? currentEmp = GetSelectedEmployeeId();
+                if (currentEmp != null) LoadCertificates(currentEmp.Value);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error rejecting deletion: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
 
         // Events
         private void dgvEmployees_SelectionChanged(object sender, EventArgs e)
@@ -1670,6 +1788,50 @@ namespace EmployeeTrainingTracker
 
                 e.Value = cleanFileName;
                 e.FormattingApplied = true;
+            }
+        }
+
+        private void dgvTasks_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        {
+            // Clean up the S3 File Name exactly like the other grids
+            if (dgvTasks.Columns[e.ColumnIndex].Name == "FileLink" && e.Value != null)
+            {
+                string fullS3Key = e.Value.ToString() ?? "";
+                e.Value = System.IO.Path.GetFileName(fullS3Key);
+                e.FormattingApplied = true;
+            }
+        }
+
+        private void dgvTasks_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+
+            if (dgvTasks.Columns[e.ColumnIndex].Name == "FileLink")
+            {
+                if (dgvTasks.Rows[e.RowIndex].DataBoundItem is not DataRowView rowView) return;
+
+                string? s3Key = rowView["S3Key"]?.ToString();
+
+                if (string.IsNullOrEmpty(s3Key))
+                {
+                    MessageBox.Show("No cloud file linked for this certificate.", "File Not Found", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                try
+                {
+                    // Open the file securely
+                    string secureUrl = S3Service.GetSecureViewUrl(s3Key);
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = secureUrl,
+                        UseShellExecute = true
+                    });
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Could not open the file from the cloud:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
     }

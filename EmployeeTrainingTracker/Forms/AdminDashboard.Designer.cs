@@ -122,6 +122,10 @@ namespace EmployeeTrainingTracker
             btnEditGroup = new Button();
             btnAddGroup = new Button();
             dgvGroups = new DataGridView();
+            Tasks = new TabPage();
+            btnRejectDeletion = new Button();
+            btnApproveDeletion = new Button();
+            dgvTasks = new DataGridView();
             ((System.ComponentModel.ISupportInitialize)dgvEmployees).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvCertificates).BeginInit();
             tabControl.SuspendLayout();
@@ -134,6 +138,8 @@ namespace EmployeeTrainingTracker
             Groups.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dgvGroupMembers).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvGroups).BeginInit();
+            Tasks.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)dgvTasks).BeginInit();
             SuspendLayout();
             // 
             // dgvEmployees
@@ -163,6 +169,7 @@ namespace EmployeeTrainingTracker
             tabControl.Controls.Add(Reports);
             tabControl.Controls.Add(Planning);
             tabControl.Controls.Add(Groups);
+            tabControl.Controls.Add(Tasks);
             tabControl.Dock = DockStyle.Fill;
             tabControl.Location = new Point(0, 0);
             tabControl.Name = "tabControl";
@@ -1119,6 +1126,46 @@ namespace EmployeeTrainingTracker
             dgvGroups.TabIndex = 4;
             dgvGroups.SelectionChanged += dgvGroups_SelectionChanged;
             // 
+            // Tasks
+            // 
+            Tasks.Controls.Add(btnRejectDeletion);
+            Tasks.Controls.Add(btnApproveDeletion);
+            Tasks.Controls.Add(dgvTasks);
+            Tasks.Location = new Point(4, 24);
+            Tasks.Name = "Tasks";
+            Tasks.Size = new Size(1011, 455);
+            Tasks.TabIndex = 5;
+            Tasks.Text = "Tasks";
+            Tasks.UseVisualStyleBackColor = true;
+            // 
+            // btnRejectDeletion
+            // 
+            btnRejectDeletion.Location = new Point(895, 396);
+            btnRejectDeletion.Name = "btnRejectDeletion";
+            btnRejectDeletion.Size = new Size(108, 23);
+            btnRejectDeletion.TabIndex = 4;
+            btnRejectDeletion.Text = "Reject Deletion";
+            btnRejectDeletion.UseVisualStyleBackColor = true;
+            btnRejectDeletion.Click += btnRejectDeletion_Click;
+            // 
+            // btnApproveDeletion
+            // 
+            btnApproveDeletion.Location = new Point(895, 425);
+            btnApproveDeletion.Name = "btnApproveDeletion";
+            btnApproveDeletion.Size = new Size(110, 23);
+            btnApproveDeletion.TabIndex = 3;
+            btnApproveDeletion.Text = "Approve Deletion";
+            btnApproveDeletion.UseVisualStyleBackColor = true;
+            btnApproveDeletion.Click += btnApproveDeletion_Click;
+            // 
+            // dgvTasks
+            // 
+            dgvTasks.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dgvTasks.Location = new Point(3, 3);
+            dgvTasks.Name = "dgvTasks";
+            dgvTasks.Size = new Size(886, 396);
+            dgvTasks.TabIndex = 1;
+            // 
             // AdminDashboard
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -1146,6 +1193,8 @@ namespace EmployeeTrainingTracker
             Groups.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)dgvGroupMembers).EndInit();
             ((System.ComponentModel.ISupportInitialize)dgvGroups).EndInit();
+            Tasks.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)dgvTasks).EndInit();
             ResumeLayout(false);
         }
 
@@ -1246,5 +1295,9 @@ namespace EmployeeTrainingTracker
         private Label lbl_FullName;
         private TextBox txtFullName;
         private Button btnUpload;
+        private TabPage Tasks;
+        private DataGridView dgvTasks;
+        private Button btnRejectDeletion;
+        private Button btnApproveDeletion;
     }
 }

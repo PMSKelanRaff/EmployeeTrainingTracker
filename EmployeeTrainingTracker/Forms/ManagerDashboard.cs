@@ -38,6 +38,8 @@ namespace EmployeeTrainingTracker
             currentEmployeeName = employeeName;
         }
 
+
+        //Load event for the Manager Dashboard
         private void ManagerDashboard_Load(object sender, EventArgs e)
         {
             try
@@ -61,6 +63,10 @@ namespace EmployeeTrainingTracker
                 LoadEmployees(); // Now uses the restricted version below
                 LoadEmployeeList();
                 LoadPlannedTraining();
+
+                LoadDeletionTasks();
+                dgvTasks.CellFormatting += dgvTasks_CellFormatting;
+                dgvTasks.CellContentClick += dgvTasks_CellContentClick;
 
                 tabCertificates.Enabled = false;
                 LoadReportSettings();
@@ -255,6 +261,46 @@ namespace EmployeeTrainingTracker
             }
         }
 
+        private void LoadDeletionTasks()
+        {
+            try
+            {
+                // Notice we are passing _managerId here!
+                DataTable pendingDeletions = CertificateService.GetPendingDeletionsForManager(_managerId);
+
+                dgvTasks.Columns.Clear();
+                dgvTasks.AutoGenerateColumns = false;
+
+                // Populate DGV with the pending deletions for this manager's employees
+                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "CertificateID", DataPropertyName = "CertificateID", Visible = false });
+                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "EmployeeName", DataPropertyName = "EmployeeName", HeaderText = "Employee Name" });
+                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "CertificateName", DataPropertyName = "CertificateName", HeaderText = "Certificate Name" });
+                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "Key", DataPropertyName = "Key", HeaderText = "Training Key" });
+                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "HRS", DataPropertyName = "HRS", HeaderText = "CPD Hrs" });
+                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "Provider", DataPropertyName = "Provider", HeaderText = "Provider" });
+                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "IssueDate", DataPropertyName = "IssueDate", HeaderText = "Issue Date", DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } });
+                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "ExpiryDate", DataPropertyName = "ExpiryDate", HeaderText = "Expiry Date", DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } });
+                dgvTasks.Columns.Add(new DataGridViewLinkColumn { Name = "FileLink", DataPropertyName = "S3Key", HeaderText = "Certificate File", TrackVisitedState = true, Width = 200 });
+                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "LastNotifiedDate", DataPropertyName = "LastNotifiedDate", HeaderText = "Last Notified" });
+
+                dgvTasks.DataSource = pendingDeletions;
+
+                // Force the column to hide after data binding ---
+                if (dgvTasks.Columns["CertificateID"] != null)
+                {
+                    dgvTasks.Columns["CertificateID"].Visible = false;
+                }
+               
+
+                dgvTasks.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+                UIHelpers.StyleDataGridView(dgvTasks);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading tasks: {ex.Message}", "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
 
         // CRUD for certificates
         private void btnEditCert_Click(object sender, EventArgs e)
@@ -291,7 +337,7 @@ namespace EmployeeTrainingTracker
             txtKeyCertsTab.SelectedIndex = -1;
 
             MessageBox.Show("Certificate updated successfully!");
-            
+
         }
 
         private async void btnDeleteCert_Click(object sender, EventArgs e)
@@ -891,6 +937,96 @@ namespace EmployeeTrainingTracker
             dtpEnd.MaxDate = DateTime.Today;
         }
 
+        //Tasks
+        private async void btnApproveDeletion_Click(object sender, EventArgs e)
+        {
+            if (dgvTasks.CurrentRow == null) return;
+
+            int certId = Convert.ToInt32(dgvTasks.CurrentRow.Cells["CertificateID"].Value);
+            string certName = dgvTasks.CurrentRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
+
+            // FIXED: Using "FileLink" instead of "S3Key" to avoid the crash
+            string s3Key = dgvTasks.CurrentRow.Cells["FileLink"].Value?.ToString();
+
+            var confirm = MessageBox.Show($"Permanently delete '{certName}'?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            if (confirm == DialogResult.No) return;
+
+            try
+            {
+                if (!string.IsNullOrEmpty(s3Key))
+                {
+                    await S3Service.DeleteCertificateAsync(s3Key);
+                }
+
+                CertificateService.DeleteCertificate(certId);
+
+                MessageBox.Show("Certificate permanently deleted.");
+                LoadDeletionTasks();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error approving deletion: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void btnRejectDeletion_Click(object sender, EventArgs e)
+        {
+            if (dgvTasks.CurrentRow == null) return;
+
+            int certId = Convert.ToInt32(dgvTasks.CurrentRow.Cells["CertificateID"].Value);
+            string certName = dgvTasks.CurrentRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
+
+            var confirm = MessageBox.Show($"Reject deletion request for '{certName}'? It will be restored to the employee's dashboard.", "Confirm Reject", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+            if (confirm == DialogResult.No) return;
+
+            CertificateService.UnmarkCertificateForDeletion(certId);
+
+            MessageBox.Show("Deletion request rejected. Certificate restored.");
+            LoadDeletionTasks();
+        }
+
+        private void dgvTasks_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        {
+            if (dgvTasks.Columns[e.ColumnIndex].Name == "FileLink" && e.Value != null)
+            {
+                string fullS3Key = e.Value.ToString() ?? "";
+                e.Value = System.IO.Path.GetFileName(fullS3Key);
+                e.FormattingApplied = true;
+            }
+        }
+
+        private void dgvTasks_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+
+            if (dgvTasks.Columns[e.ColumnIndex].Name == "FileLink")
+            {
+                if (dgvTasks.Rows[e.RowIndex].DataBoundItem is not DataRowView rowView) return;
+
+                string? s3Key = rowView["S3Key"]?.ToString();
+
+                if (string.IsNullOrEmpty(s3Key))
+                {
+                    MessageBox.Show("No cloud file linked for this certificate.", "File Not Found", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                try
+                {
+                    string secureUrl = S3Service.GetSecureViewUrl(s3Key);
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = secureUrl,
+                        UseShellExecute = true
+                    });
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Could not open the file from the cloud:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
 
         // Events
         private void dgvEmployees_SelectionChanged(object sender, EventArgs e)
@@ -1237,6 +1373,7 @@ namespace EmployeeTrainingTracker
                 }
             }
         }
+
     }
 
 }

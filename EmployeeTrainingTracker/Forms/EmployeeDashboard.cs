@@ -22,6 +22,9 @@ namespace EmployeeTrainingTracker
         {
             try
             {
+                dataGridView1.DataBindingComplete += DataGridView1_DataBindingComplete;
+                dataGridView1.CellFormatting += dataGridView1_CellFormatting;
+
                 LoadCertificates(employeeId);
                 LoadPlannedTraining(employeeId);
 
@@ -29,6 +32,9 @@ namespace EmployeeTrainingTracker
                 UIHelpers.RenameColumns(dataGridView1);
                 UIHelpers.StyleDataGridView(dgvPlannedTraining);
                 UIHelpers.RenameColumns(dgvPlannedTraining);
+
+                dataGridView1.DataBindingComplete += DataGridView1_DataBindingComplete;
+                dataGridView1.CellFormatting += dataGridView1_CellFormatting;
             }
             catch (Exception ex)
             {
@@ -120,6 +126,16 @@ namespace EmployeeTrainingTracker
                 HeaderText = "Last Notified"
             });
 
+            // Marked for deletion (necessary for deletion approval functionality)
+            dataGridView1.Columns.Add(new DataGridViewCheckBoxColumn
+            {
+                Name = "IsMarkedForDeletion",
+                DataPropertyName = "IsMarkedForDeletion",
+                HeaderText = "Pending Deletion",
+                Visible = false // Keep it hidden, we only need it for the formatting trigger
+            });
+
+            table.DefaultView.Sort = "ismarkedfordeletion ASC, CertificateName ASC";
             // Bind DataSource last
             dataGridView1.DataSource = table;
 
@@ -276,42 +292,44 @@ namespace EmployeeTrainingTracker
         {
             if (dataGridView1.CurrentRow == null)
             {
-                MessageBox.Show("Please select a certificate to mark for deletion.");
+                MessageBox.Show("Please select a certificate.");
                 return;
             }
 
             int certId = Convert.ToInt32(dataGridView1.CurrentRow.Cells["CertificateID"].Value);
+            bool isMarked = false;
 
-            // Update the message to reflect it's a request, not an immediate action
-            var confirm = MessageBox.Show("Request manager approval to delete this certificate?", "Confirm Request", MessageBoxButtons.YesNo);
-            if (confirm == DialogResult.No) return;
+            // Check the current status of the selected row
+            if (dataGridView1.CurrentRow.DataBoundItem is DataRowView rowView &&
+                rowView.Row.Table.Columns.Contains("ismarkedfordeletion"))
+            {
+                isMarked = rowView["ismarkedfordeletion"] != DBNull.Value &&
+                           Convert.ToBoolean(rowView["ismarkedfordeletion"]);
+            }
 
-            // Call the new marking method instead of the hard delete
-            CertificateService.MarkCertificateForDeletion(certId);
+            if (isMarked)
+            {
+                // Execute Revoke Logic
+                var confirm = MessageBox.Show("Cancel your deletion request and keep this certificate?", "Revoke Request", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                if (confirm == DialogResult.No) return;
 
-            MessageBox.Show("Certificate flagged for deletion. It will be removed once a manager approves.");
+                CertificateService.UnmarkCertificateForDeletion(certId);
+                MessageBox.Show("Deletion request revoked. The certificate is active again.");
+            }
+            else
+            {
+                // Execute Deletion Request Logic
+                var confirm = MessageBox.Show("Request manager approval to delete this certificate?", "Confirm Request", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (confirm == DialogResult.No) return;
 
-            LoadCertificates(employeeId); // Refresh to show updated status
+                CertificateService.MarkCertificateForDeletion(certId);
+                MessageBox.Show("Certificate flagged for deletion. It will be removed once a manager approves.");
+            }
+
+            // Refresh UI
+            LoadCertificates(employeeId);
             ClearInputs();
         }
-
-        //private void btnDelete_Click(object sender, EventArgs e)
-        //{
-        //    if (dataGridView1.CurrentRow == null)
-        //    {
-        //        MessageBox.Show("Please select a certificate to delete.");
-        //        return;
-        //    }
-
-        //    int certId = Convert.ToInt32(dataGridView1.CurrentRow.Cells["CertificateID"].Value);
-
-        //    var confirm = MessageBox.Show("Are you sure you want to delete this certificate?", "Confirm", MessageBoxButtons.YesNo);
-        //    if (confirm == DialogResult.No) return;
-
-        //    CertificateService.DeleteCertificate(certId);
-        //    LoadCertificates(employeeId);
-        //    ClearInputs();
-        //}
 
 
         private void ClearInputs()
@@ -361,6 +379,7 @@ namespace EmployeeTrainingTracker
         {
             if (dataGridView1.CurrentRow == null || dataGridView1.CurrentRow.IsNewRow)
             {
+                // Reset inputs
                 txtCertName.Text = "";
                 txtKey.Text = "";
                 txtHrs.Text = "";
@@ -368,11 +387,15 @@ namespace EmployeeTrainingTracker
                 dtpIssueDate.Value = DateTime.Today;
                 dtpExpiryDate.Value = DateTime.Today;
                 txtFilePath.Text = "";
+
+                // Reset Button
+                btnRequestDelete.Text = "Request Deletion";
                 return;
             }
 
             if (dataGridView1.CurrentRow.DataBoundItem is not DataRowView rowView) return;
 
+            // Populate inputs
             txtCertName.Text = rowView["CertificateName"]?.ToString() ?? "";
             txtKey.Text = rowView["Key"]?.ToString() ?? "";
             txtHrs.Text = rowView["HRS"]?.ToString() ?? "";
@@ -388,21 +411,22 @@ namespace EmployeeTrainingTracker
             else
                 dtpExpiryDate.Value = DateTime.Today;
 
+            // TOGGLE BUTTON TEXT LOGIC
+            if (rowView.Row.Table.Columns.Contains("ismarkedfordeletion"))
+            {
+                bool isMarked = rowView["ismarkedfordeletion"] != DBNull.Value &&
+                                Convert.ToBoolean(rowView["ismarkedfordeletion"]);
+
+                btnRequestDelete.Text = isMarked ? "Revoke Deletion" : "Request Deletion";
+            }
         }
 
         private void dataGridView1_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
         {
-            // 1. Handle the Red Deletion Flag Background
-            if (dataGridView1.Columns[e.ColumnIndex].Name == "IsMarkedForDeletion")
-            {
-                if (e.Value != null && (bool)e.Value == true)
-                {
-                    dataGridView1.Rows[e.RowIndex].DefaultCellStyle.BackColor = Color.MistyRose;
-                    dataGridView1.Rows[e.RowIndex].DefaultCellStyle.ForeColor = Color.Gray;
-                }
-            }
+            // Ignore header rows or out-of-bounds rows
+            if (e.RowIndex < 0 || e.RowIndex >= dataGridView1.Rows.Count) return;
 
-            // 2. Handle the Clean S3 File Names
+            // Handle the Clean S3 File Names
             if (dataGridView1.Columns[e.ColumnIndex].Name == "FileLink" && e.Value != null)
             {
                 string fullS3Key = e.Value.ToString() ?? "";
@@ -411,5 +435,10 @@ namespace EmployeeTrainingTracker
             }
         }
 
+        private void DataGridView1_DataBindingComplete(object sender, DataGridViewBindingCompleteEventArgs e)
+        {
+            // Call your new centralized helper!
+            UIHelpers.ApplyDeletionRowStyling((DataGridView)sender);
+        }
     }
 }

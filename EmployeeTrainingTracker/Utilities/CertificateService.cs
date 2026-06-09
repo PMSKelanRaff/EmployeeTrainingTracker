@@ -20,44 +20,44 @@ namespace EmployeeTrainingTracker.Utilities
 
             if (employeeId == 0)
             {
-                // "All Employees" - Join to get the employee's name and show all
-                cmd = new NpgsqlCommand(@"
-    SELECT 
-        tc.CertificateID, 
-        tc.CertificateName, 
-        tc.Key, 
-        tc.HRS, 
-        tc.Provider, 
-        tc.IssueDate, 
-        tc.ExpiryDate, 
-        tc.FilePath, 
-        tc.S3Key, /* <--- ADDED HERE */
-        tc.LastNotifiedDate,
-        COALESCE(e.FullName, 'Unknown') AS EmployeeName
-    FROM TrainingCertificates tc
-    LEFT JOIN Employees e ON tc.EmployeeID = e.EmployeeID
-    ORDER BY e.FullName ASC, tc.IssueDate DESC", conn);
+                // "All Employees" - Added tc.ismarkedfordeletion
+                cmd = new NpgsqlCommand(@"SELECT 
+            tc.CertificateID, 
+            tc.CertificateName, 
+            tc.Key, 
+            tc.HRS, 
+            tc.Provider, 
+            tc.IssueDate, 
+            tc.ExpiryDate, 
+            tc.FilePath, 
+            tc.S3Key, 
+            tc.LastNotifiedDate, 
+            tc.ismarkedfordeletion, 
+            COALESCE(e.FullName, 'Unknown') AS EmployeeName
+        FROM TrainingCertificates tc
+        LEFT JOIN Employees e ON tc.EmployeeID = e.EmployeeID
+        ORDER BY e.FullName ASC, tc.IssueDate DESC", conn);
             }
             else
             {
-                // Specific Employee
-                cmd = new NpgsqlCommand(@"
-    SELECT 
-        tc.CertificateID, 
-        tc.CertificateName, 
-        tc.Key, 
-        tc.HRS, 
-        tc.Provider, 
-        tc.IssueDate, 
-        tc.ExpiryDate, 
-        tc.FilePath, 
-        tc.S3Key, /* <--- ADDED HERE */
-        tc.LastNotifiedDate,
-        COALESCE(e.FullName, 'Unknown') AS EmployeeName
-    FROM TrainingCertificates tc
-    LEFT JOIN Employees e ON tc.EmployeeID = e.EmployeeID
-    WHERE tc.EmployeeID = $1
-    ORDER BY tc.IssueDate DESC", conn);
+                // Specific Employee - Added tc.ismarkedfordeletion
+                cmd = new NpgsqlCommand(@"SELECT 
+            tc.CertificateID, 
+            tc.CertificateName, 
+            tc.Key, 
+            tc.HRS, 
+            tc.Provider, 
+            tc.IssueDate, 
+            tc.ExpiryDate, 
+            tc.FilePath, 
+            tc.S3Key, 
+            tc.LastNotifiedDate, 
+            tc.ismarkedfordeletion, 
+            COALESCE(e.FullName, 'Unknown') AS EmployeeName
+        FROM TrainingCertificates tc
+        LEFT JOIN Employees e ON tc.EmployeeID = e.EmployeeID
+        WHERE tc.EmployeeID = $1
+        ORDER BY tc.IssueDate DESC", conn);
 
                 cmd.Parameters.AddWithValue(employeeId);
             }
@@ -206,6 +206,81 @@ namespace EmployeeTrainingTracker.Utilities
                     cmd.ExecuteNonQuery();
                 }
             }
+        }
+
+        // Fetches all certificates flagged for deletion for the Admin Tasks Tab
+        public static DataTable GetPendingDeletions()
+        {
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+
+            string sql = @"
+        SELECT 
+            tc.CertificateID, 
+            e.FullName AS EmployeeName, 
+            tc.CertificateName, 
+            tc.Key,
+            tc.HRS,
+            tc.Provider,
+            tc.IssueDate, 
+            tc.ExpiryDate,
+            tc.S3Key,
+            tc.LastNotifiedDate
+        FROM TrainingCertificates tc
+        JOIN Employees e ON tc.EmployeeID = e.EmployeeID
+        WHERE tc.ismarkedfordeletion = TRUE
+        ORDER BY tc.IssueDate DESC";
+
+            using var cmd = new NpgsqlCommand(sql, conn);
+            using var reader = cmd.ExecuteReader();
+            DataTable table = new DataTable();
+            table.Load(reader);
+            return table;
+        }
+
+        public static DataTable GetPendingDeletionsForManager(int managerId)
+        {
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+
+            // This query joins the Groups and GroupMembers tables to ensure 
+            // the manager only sees requests from employees they manage.
+            string sql = @"
+        SELECT DISTINCT
+            tc.CertificateID, 
+            e.FullName AS EmployeeName, 
+            tc.CertificateName, 
+            tc.Key,
+            tc.HRS,
+            tc.Provider,
+            tc.IssueDate, 
+            tc.ExpiryDate,
+            tc.S3Key,
+            tc.LastNotifiedDate
+        FROM TrainingCertificates tc
+        JOIN Employees e ON tc.EmployeeID = e.EmployeeID
+        JOIN GroupMembers gm ON e.EmployeeID = gm.EmployeeID
+        JOIN Groups g ON gm.GroupID = g.GroupID
+        WHERE tc.ismarkedfordeletion = TRUE AND g.ManagerID = @managerId
+        ORDER BY tc.IssueDate DESC";
+
+            using var cmd = new NpgsqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("managerId", managerId);
+
+            using var reader = cmd.ExecuteReader();
+            DataTable table = new DataTable();
+            table.Load(reader);
+            return table;
+        }
+
+        // Un-flags a certificate if the Admin rejects the deletion
+        public static void UnmarkCertificateForDeletion(int certificateId)
+        {
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+            using var cmd = new NpgsqlCommand("UPDATE TrainingCertificates SET IsMarkedForDeletion = FALSE WHERE CertificateID = @id", conn);
+            cmd.Parameters.AddWithValue("id", certificateId);
+            cmd.ExecuteNonQuery();
         }
     }
 }

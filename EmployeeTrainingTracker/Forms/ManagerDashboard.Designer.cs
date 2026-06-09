@@ -105,6 +105,10 @@ namespace EmployeeTrainingTracker
             btnEditSession = new Button();
             btnAddSession = new Button();
             dgvPlannedTraining = new DataGridView();
+            tabPage1 = new TabPage();
+            btnRejectDeletion = new Button();
+            btnApproveDeletion = new Button();
+            dgvTasks = new DataGridView();
             ((System.ComponentModel.ISupportInitialize)dgvEmployees).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvCertificates).BeginInit();
             tabControl.SuspendLayout();
@@ -114,6 +118,8 @@ namespace EmployeeTrainingTracker
             ((System.ComponentModel.ISupportInitialize)dgvReportResults).BeginInit();
             Planning.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dgvPlannedTraining).BeginInit();
+            tabPage1.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)dgvTasks).BeginInit();
             SuspendLayout();
             // 
             // dgvEmployees
@@ -142,6 +148,7 @@ namespace EmployeeTrainingTracker
             tabControl.Controls.Add(tabCertificates);
             tabControl.Controls.Add(Reports);
             tabControl.Controls.Add(Planning);
+            tabControl.Controls.Add(tabPage1);
             tabControl.Dock = DockStyle.Fill;
             tabControl.Location = new Point(0, 0);
             tabControl.Name = "tabControl";
@@ -918,6 +925,47 @@ namespace EmployeeTrainingTracker
             dgvPlannedTraining.TabIndex = 3;
             dgvPlannedTraining.SelectionChanged += dgvPlannedTraining_SelectionChanged;
             // 
+            // tabPage1
+            // 
+            tabPage1.Controls.Add(btnRejectDeletion);
+            tabPage1.Controls.Add(btnApproveDeletion);
+            tabPage1.Controls.Add(dgvTasks);
+            tabPage1.Location = new Point(4, 24);
+            tabPage1.Name = "tabPage1";
+            tabPage1.Padding = new Padding(3);
+            tabPage1.Size = new Size(1011, 455);
+            tabPage1.TabIndex = 4;
+            tabPage1.Text = "Tasks";
+            tabPage1.UseVisualStyleBackColor = true;
+            // 
+            // btnRejectDeletion
+            // 
+            btnRejectDeletion.Location = new Point(895, 397);
+            btnRejectDeletion.Name = "btnRejectDeletion";
+            btnRejectDeletion.Size = new Size(108, 23);
+            btnRejectDeletion.TabIndex = 2;
+            btnRejectDeletion.Text = "Reject Deletion";
+            btnRejectDeletion.UseVisualStyleBackColor = true;
+            btnRejectDeletion.Click += btnRejectDeletion_Click;
+            // 
+            // btnApproveDeletion
+            // 
+            btnApproveDeletion.Location = new Point(895, 426);
+            btnApproveDeletion.Name = "btnApproveDeletion";
+            btnApproveDeletion.Size = new Size(110, 23);
+            btnApproveDeletion.TabIndex = 1;
+            btnApproveDeletion.Text = "Approve Deletion";
+            btnApproveDeletion.UseVisualStyleBackColor = true;
+            btnApproveDeletion.Click += btnApproveDeletion_Click;
+            // 
+            // dgvTasks
+            // 
+            dgvTasks.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dgvTasks.Location = new Point(6, 6);
+            dgvTasks.Name = "dgvTasks";
+            dgvTasks.Size = new Size(883, 396);
+            dgvTasks.TabIndex = 0;
+            // 
             // ManagerDashboard
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -941,6 +989,8 @@ namespace EmployeeTrainingTracker
             Planning.ResumeLayout(false);
             Planning.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)dgvPlannedTraining).EndInit();
+            tabPage1.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)dgvTasks).EndInit();
             ResumeLayout(false);
         }
 
@@ -1024,5 +1074,9 @@ namespace EmployeeTrainingTracker
         private Label lbl_FullName;
         private TextBox txtFullName;
         private Button btnUpload;
+        private TabPage tabPage1;
+        private DataGridView dgvTasks;
+        private Button btnApproveDeletion;
+        private Button btnRejectDeletion;
     }
 }
