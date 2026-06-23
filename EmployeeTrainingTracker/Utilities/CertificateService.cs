@@ -20,44 +20,48 @@ namespace EmployeeTrainingTracker.Utilities
 
             if (employeeId == 0)
             {
-                // "All Employees" - Added tc.ismarkedfordeletion
-                cmd = new NpgsqlCommand(@"SELECT 
-            tc.CertificateID, 
-            tc.CertificateName, 
-            tc.Key, 
-            tc.HRS, 
-            tc.Provider, 
-            tc.IssueDate, 
-            tc.ExpiryDate, 
-            tc.FilePath, 
-            tc.S3Key, 
-            tc.LastNotifiedDate, 
-            tc.ismarkedfordeletion, 
-            COALESCE(e.FullName, 'Unknown') AS EmployeeName
-        FROM TrainingCertificates tc
-        LEFT JOIN Employees e ON tc.EmployeeID = e.EmployeeID
-        ORDER BY e.FullName ASC, tc.IssueDate DESC", conn);
+                // "All Employees" - Added tc.status!
+                cmd = new NpgsqlCommand(@"
+            SELECT 
+                tc.CertificateID, 
+                tc.CertificateName, 
+                tc.Key, 
+                tc.HRS, 
+                tc.Provider, 
+                tc.IssueDate, 
+                tc.ExpiryDate, 
+                tc.FilePath, 
+                tc.S3Key, 
+                tc.LastNotifiedDate, 
+                tc.ismarkedfordeletion, 
+                tc.status, 
+                COALESCE(e.FullName, 'Unknown') AS EmployeeName    
+            FROM TrainingCertificates tc    
+            LEFT JOIN Employees e ON tc.EmployeeID = e.EmployeeID    
+            ORDER BY e.FullName ASC, tc.IssueDate DESC", conn);
             }
             else
             {
-                // Specific Employee - Added tc.ismarkedfordeletion
-                cmd = new NpgsqlCommand(@"SELECT 
-            tc.CertificateID, 
-            tc.CertificateName, 
-            tc.Key, 
-            tc.HRS, 
-            tc.Provider, 
-            tc.IssueDate, 
-            tc.ExpiryDate, 
-            tc.FilePath, 
-            tc.S3Key, 
-            tc.LastNotifiedDate, 
-            tc.ismarkedfordeletion, 
-            COALESCE(e.FullName, 'Unknown') AS EmployeeName
-        FROM TrainingCertificates tc
-        LEFT JOIN Employees e ON tc.EmployeeID = e.EmployeeID
-        WHERE tc.EmployeeID = $1
-        ORDER BY tc.IssueDate DESC", conn);
+                // Specific Employee - Added tc.status!
+                cmd = new NpgsqlCommand(@"
+            SELECT 
+                tc.CertificateID, 
+                tc.CertificateName, 
+                tc.Key, 
+                tc.HRS, 
+                tc.Provider, 
+                tc.IssueDate, 
+                tc.ExpiryDate, 
+                tc.FilePath, 
+                tc.S3Key, 
+                tc.LastNotifiedDate, 
+                tc.ismarkedfordeletion, 
+                tc.status, 
+                COALESCE(e.FullName, 'Unknown') AS EmployeeName    
+            FROM TrainingCertificates tc    
+            LEFT JOIN Employees e ON tc.EmployeeID = e.EmployeeID    
+            WHERE tc.EmployeeID = $1    
+            ORDER BY tc.IssueDate DESC", conn);
 
                 cmd.Parameters.AddWithValue(employeeId);
             }
@@ -280,6 +284,55 @@ namespace EmployeeTrainingTracker.Utilities
             conn.Open();
             using var cmd = new NpgsqlCommand("UPDATE TrainingCertificates SET IsMarkedForDeletion = FALSE WHERE CertificateID = @id", conn);
             cmd.Parameters.AddWithValue("id", certificateId);
+            cmd.ExecuteNonQuery();
+        }
+
+        public static DataTable GetPendingCertificateApprovals(int managerId)
+        {
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+
+            string sql = @"
+        SELECT 
+            tc.CertificateID, 
+            e.FullName AS employeename,
+            tc.CertificateName AS trainingtopic, 
+            tc.HRS AS hours, 
+            tc.IssueDate AS trainingdate, 
+            tc.S3Key,
+            '' AS trainername
+        FROM trainingcertificates tc
+        JOIN employees e ON tc.EmployeeID = e.EmployeeID
+        JOIN GroupMembers gm ON e.EmployeeID = gm.EmployeeID
+        JOIN Groups g ON gm.GroupID = g.GroupID
+        WHERE g.ManagerID = @manId AND tc.status = 'Pending'
+        ORDER BY tc.CertificateID ASC";
+
+            using var cmd = new NpgsqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("manId", managerId);
+
+            using var reader = cmd.ExecuteReader();
+            DataTable table = new DataTable();
+            table.Load(reader);
+            return table;
+        }
+
+        public static void ApproveCertificate(int certificateId, string trainerName)
+        {
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+
+            string sql = @"
+        UPDATE trainingcertificates 
+        SET status = 'Completed', 
+            trainername = @trainer, 
+            trainersignedat = CURRENT_TIMESTAMP 
+        WHERE CertificateID = @certId";
+
+            using var cmd = new NpgsqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("trainer", trainerName);
+            cmd.Parameters.AddWithValue("certId", certificateId);
+
             cmd.ExecuteNonQuery();
         }
     }

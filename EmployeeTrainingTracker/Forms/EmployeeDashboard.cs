@@ -386,7 +386,8 @@ namespace EmployeeTrainingTracker
                 txtProvider.Text = "";
                 dtpIssueDate.Value = DateTime.Today;
                 dtpExpiryDate.Value = DateTime.Today;
-                txtFilePath.Text = "";
+
+                // DELETED: txtFilePath.Text = ""; <-- This was causing the crash!
 
                 // Reset Button
                 btnRequestDelete.Text = "Request Deletion";
@@ -410,6 +411,8 @@ namespace EmployeeTrainingTracker
                 dtpExpiryDate.Value = expiry;
             else
                 dtpExpiryDate.Value = DateTime.Today;
+
+            // DELETED: txtFilePath.Text = rowView["FilePath"]?.ToString() ?? ""; <-- This would have crashed too!
 
             // TOGGLE BUTTON TEXT LOGIC
             if (rowView.Row.Table.Columns.Contains("ismarkedfordeletion"))
@@ -437,102 +440,42 @@ namespace EmployeeTrainingTracker
 
         private void DataGridView1_DataBindingComplete(object sender, DataGridViewBindingCompleteEventArgs e)
         {
-            // Call your new centralized helper!
+            // 1. Call your centralized helper first (handles the red deletion rows)
             UIHelpers.ApplyDeletionRowStyling((DataGridView)sender);
-        }
 
-        private void LoadAcknowledgements()
-        {
-            try
+            // 2. Add the yellow highlight for Pending items
+            foreach (DataGridViewRow row in dataGridView1.Rows)
             {
-                DataTable acks = AcknowledgementService.GetEmployeeAcknowledgements(employeeId);
+                // Safety check to ensure it's a real data row
+                if (row.IsNewRow || row.DataBoundItem is not DataRowView rowView) continue;
 
-                dgvAcknowledgements.Columns.Clear();
-                dgvAcknowledgements.AutoGenerateColumns = false;
-
-                dgvAcknowledgements.Columns.Add(new DataGridViewTextBoxColumn { Name = "acknowledgementid", DataPropertyName = "acknowledgementid", Visible = false });
-                dgvAcknowledgements.Columns.Add(new DataGridViewTextBoxColumn { Name = "trainingtopic", DataPropertyName = "trainingtopic", HeaderText = "Topic / SOP" });
-                dgvAcknowledgements.Columns.Add(new DataGridViewTextBoxColumn { Name = "hours", DataPropertyName = "hours", HeaderText = "Hours" });
-                dgvAcknowledgements.Columns.Add(new DataGridViewTextBoxColumn { Name = "trainingdate", DataPropertyName = "trainingdate", HeaderText = "Date", DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } });
-                dgvAcknowledgements.Columns.Add(new DataGridViewTextBoxColumn { Name = "status", DataPropertyName = "status", Visible = false }); // Hidden for color coding
-                dgvAcknowledgements.Columns.Add(new DataGridViewTextBoxColumn { Name = "trainername", DataPropertyName = "trainername", HeaderText = "Trainer" });
-
-                dgvAcknowledgements.DataSource = acks;
-                dgvAcknowledgements.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-                UIHelpers.StyleDataGridView(dgvAcknowledgements);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error loading TARs: {ex.Message}");
-            }
-        }
-
-        // Wire this up to the DataBindingComplete event of dgvAcknowledgements
-        private void dgvAcknowledgements_DataBindingComplete(object sender, DataGridViewBindingCompleteEventArgs e)
-        {
-            foreach (DataGridViewRow row in dgvAcknowledgements.Rows)
-            {
-                if (row.DataBoundItem is DataRowView rowView && rowView.Row.Table.Columns.Contains("status"))
+                // Check if flagged for deletion
+                bool isMarked = false;
+                if (rowView.Row.Table.Columns.Contains("ismarkedfordeletion"))
                 {
-                    string status = rowView["status"].ToString();
+                    isMarked = rowView["ismarkedfordeletion"] != DBNull.Value &&
+                               Convert.ToBoolean(rowView["ismarkedfordeletion"]);
+                }
 
-                    if (status == "Pending Manager")
+                // Only apply yellow if it's NOT marked for deletion
+                if (!isMarked && rowView.Row.Table.Columns.Contains("status"))
+                {
+                    string status = rowView["status"]?.ToString().Trim().ToLower() ?? "";
+
+                    if (status == "pending")
                     {
+                        // Turn it yellow
                         row.DefaultCellStyle.BackColor = Color.LightYellow;
-                        row.DefaultCellStyle.ForeColor = Color.Black;
                     }
-                    else if (status == "Completed")
+                    else
                     {
-                        row.DefaultCellStyle.BackColor = Color.LightGreen;
-                        row.DefaultCellStyle.ForeColor = Color.Black;
+                        // Ensure completed ones are normal
+                        row.DefaultCellStyle.BackColor = Color.White;
                     }
                 }
             }
         }
 
-        private void btnSubmitAck_Click(object sender, EventArgs e)
-        {
-            string topic = txtTopic.Text.Trim();
 
-            if (string.IsNullOrEmpty(topic))
-            {
-                MessageBox.Show("Please enter a Training Topic / SOP.");
-                return;
-            }
-
-            if (!double.TryParse(txtAckHours.Text.Trim(), out double hours))
-            {
-                MessageBox.Show("Please enter a valid number for Hours.");
-                return;
-            }
-
-            // Automatically find the manager
-            int? managerId = AcknowledgementService.GetEmployeeManagerId(employeeId);
-            if (managerId == null)
-            {
-                MessageBox.Show("You do not have an assigned manager in the system. Cannot route for approval.", "Routing Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            var confirm = MessageBox.Show("Sign and submit this TAR for manager approval?", "Confirm Signature", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
-            if (confirm == DialogResult.No) return;
-
-            try
-            {
-                // Removed revNo from the method call
-                AcknowledgementService.SubmitAcknowledgement(employeeId, managerId.Value, topic, hours, dtpAckDate.Value.Date);
-
-                MessageBox.Show("Record signed and submitted!");
-
-                txtTopic.Clear();
-                txtAckHours.Clear();
-
-                LoadAcknowledgements(); // Refresh grid
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error submitting: {ex.Message}");
-            }
-        }
     }
 }

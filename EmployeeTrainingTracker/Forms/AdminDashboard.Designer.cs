@@ -127,6 +127,7 @@ namespace EmployeeTrainingTracker
             btnRejectDeletion = new Button();
             dgvTasks = new DataGridView();
             btnApproveDeletion = new Button();
+            btnRejectAck = new Button();
             btnApproveAck = new Button();
             dgvPendingAcks = new DataGridView();
             tabAcknowledgements = new TabPage();
@@ -1161,6 +1162,7 @@ namespace EmployeeTrainingTracker
             // 
             // splitContainer1.Panel2
             // 
+            splitContainer1.Panel2.Controls.Add(btnRejectAck);
             splitContainer1.Panel2.Controls.Add(btnApproveAck);
             splitContainer1.Panel2.Controls.Add(dgvPendingAcks);
             splitContainer1.Size = new Size(1011, 455);
@@ -1195,9 +1197,19 @@ namespace EmployeeTrainingTracker
             btnApproveDeletion.UseVisualStyleBackColor = true;
             btnApproveDeletion.Click += btnApproveDeletion_Click;
             // 
+            // btnRejectAck
+            // 
+            btnRejectAck.Location = new Point(895, 168);
+            btnRejectAck.Name = "btnRejectAck";
+            btnRejectAck.Size = new Size(110, 23);
+            btnRejectAck.TabIndex = 9;
+            btnRejectAck.Text = "Reject";
+            btnRejectAck.UseVisualStyleBackColor = true;
+            btnRejectAck.Click += btnRejectAck_Click;
+            // 
             // btnApproveAck
             // 
-            btnApproveAck.Location = new Point(893, 193);
+            btnApproveAck.Location = new Point(893, 197);
             btnApproveAck.Name = "btnApproveAck";
             btnApproveAck.Size = new Size(110, 23);
             btnApproveAck.TabIndex = 8;
@@ -1365,5 +1377,6 @@ namespace EmployeeTrainingTracker
         private Button btnApproveDeletion;
         private DataGridView dgvPendingAcks;
         private Button btnApproveAck;
+        private Button btnRejectAck;
     }
 }

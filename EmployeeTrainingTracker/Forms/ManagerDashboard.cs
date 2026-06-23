@@ -67,6 +67,9 @@ namespace EmployeeTrainingTracker
                 LoadDeletionTasks();
                 dgvTasks.CellFormatting += dgvTasks_CellFormatting;
                 dgvTasks.CellContentClick += dgvTasks_CellContentClick;
+                dgvCertificates.CellFormatting += dgvCertificates_CellFormatting;
+                dgvPlannedTraining.CellFormatting += dgvPlannedTraining_CellFormatting;
+                dgvCertificates.DataBindingComplete += dgvCertificates_DataBindingComplete;
 
                 LoadPendingApprovals();
 
@@ -301,6 +304,58 @@ namespace EmployeeTrainingTracker
             {
                 MessageBox.Show($"Error loading tasks: {ex.Message}", "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void LoadPendingApprovals()
+        {
+            try
+            {
+                // 1. Point this to our NEW Certificate method
+                DataTable pendingAcks = CertificateService.GetPendingCertificateApprovals(_managerId); // Use loggedInUserId for AdminDashboard
+
+                dgvPendingAcks.Columns.Clear();
+                dgvPendingAcks.AutoGenerateColumns = false;
+                dgvPendingAcks.AllowUserToAddRows = false;
+
+                // Hidden ID
+                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "CertificateID", DataPropertyName = "CertificateID", Visible = false });
+
+                // Read-only columns 
+                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "employeename", DataPropertyName = "employeename", HeaderText = "Employee Name", ReadOnly = true });
+                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "trainingtopic", DataPropertyName = "trainingtopic", HeaderText = "Certificate / Topic", ReadOnly = true });
+                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "hours", DataPropertyName = "hours", HeaderText = "Hours", ReadOnly = true });
+                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "trainingdate", DataPropertyName = "trainingdate", HeaderText = "Date", ReadOnly = true, DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } });
+
+                // ADDED: The clickable PDF link!
+                dgvPendingAcks.Columns.Add(new DataGridViewLinkColumn { Name = "FileLink", DataPropertyName = "S3Key", HeaderText = "View Document", TrackVisitedState = true });
+
+                // EDITABLE COLUMN: Trainer Name
+                var trainerCol = new DataGridViewTextBoxColumn
+                {
+                    Name = "trainername",
+                    DataPropertyName = "trainername",
+                    HeaderText = "Trainer Name",
+                    ReadOnly = false
+                };
+                trainerCol.DefaultCellStyle.BackColor = Color.LightYellow;
+                dgvPendingAcks.Columns.Add(trainerCol);
+
+                dgvPendingAcks.DataSource = pendingAcks;
+                dgvPendingAcks.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+                UIHelpers.StyleDataGridView(dgvPendingAcks);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading pending approvals: {ex.Message}");
+            }
+        }
+
+        private void LoadReportSettings()
+        {
+            dtpStart.Enabled = false;
+            dtpEnd.Enabled = false;
+            dtpStart.MinDate = new DateTime(2000, 1, 1);
+            dtpEnd.MaxDate = DateTime.Today;
         }
 
 
@@ -747,6 +802,8 @@ namespace EmployeeTrainingTracker
         }
 
 
+
+
         //CRUD for Planning
         private void btnAddSession_Click(object sender, EventArgs e)
         {
@@ -931,14 +988,6 @@ namespace EmployeeTrainingTracker
             }
         }
 
-        private void LoadReportSettings()
-        {
-            dtpStart.Enabled = false;
-            dtpEnd.Enabled = false;
-            dtpStart.MinDate = new DateTime(2000, 1, 1);
-            dtpEnd.MaxDate = DateTime.Today;
-        }
-
         //Tasks
         private async void btnApproveDeletion_Click(object sender, EventArgs e)
         {
@@ -1029,57 +1078,19 @@ namespace EmployeeTrainingTracker
             }
         }
 
-        private void LoadPendingApprovals()
-        {
-            try
-            {
-                // Your _managerId is already perfectly set up at the top of the file!
-                DataTable pendingAcks = AcknowledgementService.GetPendingApprovals(_managerId);
-
-                dgvPendingAcks.Columns.Clear();
-                dgvPendingAcks.AutoGenerateColumns = false;
-                dgvPendingAcks.AllowUserToAddRows = false;
-
-                // Hidden ID
-                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "acknowledgementid", DataPropertyName = "acknowledgementid", Visible = false });
-
-                // Read-only columns 
-                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "employeename", DataPropertyName = "employeename", HeaderText = "Employee Name", ReadOnly = true });
-                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "trainingtopic", DataPropertyName = "trainingtopic", HeaderText = "Topic / SOP", ReadOnly = true });
-                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "hours", DataPropertyName = "hours", HeaderText = "Hours", ReadOnly = true });
-                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "trainingdate", DataPropertyName = "trainingdate", HeaderText = "Date", ReadOnly = true, DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } });
-
-                // EDITABLE COLUMN: Trainer Name
-                var trainerCol = new DataGridViewTextBoxColumn
-                {
-                    Name = "trainername",
-                    DataPropertyName = "trainername",
-                    HeaderText = "Trainer Name (Edit if 3rd Party)",
-                    ReadOnly = false // MANAGER CAN TYPE HERE!
-                };
-                trainerCol.DefaultCellStyle.BackColor = Color.LightYellow;
-                dgvPendingAcks.Columns.Add(trainerCol);
-
-                dgvPendingAcks.DataSource = pendingAcks;
-                dgvPendingAcks.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-                UIHelpers.StyleDataGridView(dgvPendingAcks);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error loading pending approvals: {ex.Message}");
-            }
-        }
-
         private void btnApproveAck_Click(object sender, EventArgs e)
         {
-            if (dgvPendingAcks.SelectedRows.Count == 0)
+            // Changed to check CurrentRow instead of SelectedRows
+            if (dgvPendingAcks.CurrentRow == null)
             {
                 MessageBox.Show("Please select a record to approve.", "Selection Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            DataGridViewRow selectedRow = dgvPendingAcks.SelectedRows[0];
-            int ackId = Convert.ToInt32(selectedRow.Cells["acknowledgementid"].Value);
+            // Grab the row the user is currently clicked into
+            DataGridViewRow selectedRow = dgvPendingAcks.CurrentRow;
+
+            int ackId = Convert.ToInt32(selectedRow.Cells["CertificateID"].Value);
 
             // Grab the typed-in Trainer Name (if any)
             string trainerName = selectedRow.Cells["trainername"].Value?.ToString() ?? "";
@@ -1094,14 +1105,61 @@ namespace EmployeeTrainingTracker
             {
                 try
                 {
-                    AcknowledgementService.ApproveAcknowledgement(ackId, trainerName);
+                    // Note: Make sure this uses CertificateService!
+                    CertificateService.ApproveCertificate(ackId, trainerName);
                     MessageBox.Show("Record Approved Successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
-                    LoadPendingApprovals(); // Refresh the bottom grid
+                    LoadPendingApprovals(); // Refresh the grid
                 }
                 catch (Exception ex)
                 {
                     MessageBox.Show($"Error approving record: {ex.Message}");
+                }
+            }
+        }
+
+        private async void btnRejectAck_Click(object sender, EventArgs e)
+        {
+            // Changed to check CurrentRow
+            if (dgvPendingAcks.CurrentRow == null)
+            {
+                MessageBox.Show("Please select a record to reject.", "Selection Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Grab the row the user is currently clicked into
+            DataGridViewRow selectedRow = dgvPendingAcks.CurrentRow;
+
+            int certId = Convert.ToInt32(selectedRow.Cells["CertificateID"].Value);
+            string topic = selectedRow.Cells["trainingtopic"].Value?.ToString() ?? "Unknown";
+            string? s3Key = selectedRow.Cells["FileLink"].Value?.ToString();
+
+            var confirm = MessageBox.Show(
+                $"Are you sure you want to REJECT and DELETE the pending certificate for '{topic}'?",
+                "Confirm Rejection",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (confirm == DialogResult.Yes)
+            {
+                try
+                {
+                    // 1. Delete the bad file from the S3 Cloud
+                    if (!string.IsNullOrEmpty(s3Key))
+                    {
+                        await S3Service.DeleteCertificateAsync(s3Key);
+                    }
+
+                    // 2. Delete the record from the database
+                    CertificateService.DeleteCertificate(certId);
+
+                    MessageBox.Show("Record Rejected and Deleted Successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                    LoadPendingApprovals(); // Refresh the grid
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error rejecting record: {ex.Message}");
                 }
             }
         }
@@ -1213,6 +1271,44 @@ namespace EmployeeTrainingTracker
             catch (Exception ex)
             {
                 Console.WriteLine($"Error checking Excel: {ex.Message}");
+            }
+        }
+
+        private void dgvCertificates_DataBindingComplete(object sender, DataGridViewBindingCompleteEventArgs e)
+        {
+            // 1. Call your centralized helper first (handles the red deletion rows)
+            UIHelpers.ApplyDeletionRowStyling((DataGridView)sender);
+
+            // 2. Add the yellow highlight for Pending items
+            foreach (DataGridViewRow row in dgvCertificates.Rows)
+            {
+                // Safety check to ensure it's a real data row
+                if (row.IsNewRow || row.DataBoundItem is not DataRowView rowView) continue;
+
+                // Check if flagged for deletion
+                bool isMarked = false;
+                if (rowView.Row.Table.Columns.Contains("ismarkedfordeletion"))
+                {
+                    isMarked = rowView["ismarkedfordeletion"] != DBNull.Value &&
+                               Convert.ToBoolean(rowView["ismarkedfordeletion"]);
+                }
+
+                // Only apply yellow if it's NOT marked for deletion
+                if (!isMarked && rowView.Row.Table.Columns.Contains("status"))
+                {
+                    string status = rowView["status"]?.ToString().Trim().ToLower() ?? "";
+
+                    if (status == "pending")
+                    {
+                        // Turn it yellow
+                        row.DefaultCellStyle.BackColor = Color.LightYellow;
+                    }
+                    else
+                    {
+                        // Ensure completed ones are normal
+                        row.DefaultCellStyle.BackColor = Color.White;
+                    }
+                }
             }
         }
 
@@ -1409,15 +1505,11 @@ namespace EmployeeTrainingTracker
 
         private void dgvCertificates_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
         {
-            // Check if the column being drawn is our FileLink column
+            // Only handle the clean S3 File Names here!
             if (dgvCertificates.Columns[e.ColumnIndex].Name == "FileLink" && e.Value != null)
             {
                 string fullS3Key = e.Value.ToString() ?? "";
-
-                // System.IO.Path.GetFileName automatically strips off the folder path!
-                string cleanFileName = System.IO.Path.GetFileName(fullS3Key);
-
-                e.Value = cleanFileName;
+                e.Value = System.IO.Path.GetFileName(fullS3Key);
                 e.FormattingApplied = true;
             }
         }
@@ -1452,6 +1544,7 @@ namespace EmployeeTrainingTracker
                 }
             }
         }
+
 
     }
 

@@ -111,6 +111,8 @@ namespace EmployeeTrainingTracker
             dgvTasks = new DataGridView();
             btnApproveDeletion = new Button();
             dgvPendingAcks = new DataGridView();
+            btnRejectAck = new Button();
+            btnApproveAck = new Button();
             ((System.ComponentModel.ISupportInitialize)dgvEmployees).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvCertificates).BeginInit();
             tabControl.SuspendLayout();
@@ -958,6 +960,8 @@ namespace EmployeeTrainingTracker
             // 
             // splitContainer1.Panel2
             // 
+            splitContainer1.Panel2.Controls.Add(btnRejectAck);
+            splitContainer1.Panel2.Controls.Add(btnApproveAck);
             splitContainer1.Panel2.Controls.Add(dgvPendingAcks);
             splitContainer1.Size = new Size(1005, 449);
             splitContainer1.SplitterDistance = 224;
@@ -998,6 +1002,26 @@ namespace EmployeeTrainingTracker
             dgvPendingAcks.Name = "dgvPendingAcks";
             dgvPendingAcks.Size = new Size(884, 217);
             dgvPendingAcks.TabIndex = 8;
+            // 
+            // btnRejectAck
+            // 
+            btnRejectAck.Location = new Point(893, 165);
+            btnRejectAck.Name = "btnRejectAck";
+            btnRejectAck.Size = new Size(110, 23);
+            btnRejectAck.TabIndex = 11;
+            btnRejectAck.Text = "Reject";
+            btnRejectAck.UseVisualStyleBackColor = true;
+            btnRejectAck.Click += btnRejectAck_Click;
+            // 
+            // btnApproveAck
+            // 
+            btnApproveAck.Location = new Point(891, 194);
+            btnApproveAck.Name = "btnApproveAck";
+            btnApproveAck.Size = new Size(110, 23);
+            btnApproveAck.TabIndex = 10;
+            btnApproveAck.Text = "Acknowledge";
+            btnApproveAck.UseVisualStyleBackColor = true;
+            btnApproveAck.Click += btnApproveAck_Click;
             // 
             // ManagerDashboard
             // 
@@ -1118,5 +1142,7 @@ namespace EmployeeTrainingTracker
         private DataGridView dgvTasks;
         private Button btnApproveDeletion;
         private DataGridView dgvPendingAcks;
+        private Button btnRejectAck;
+        private Button btnApproveAck;
     }
 }
