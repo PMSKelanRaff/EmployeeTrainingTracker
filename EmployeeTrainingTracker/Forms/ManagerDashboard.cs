@@ -68,6 +68,8 @@ namespace EmployeeTrainingTracker
                 dgvTasks.CellFormatting += dgvTasks_CellFormatting;
                 dgvTasks.CellContentClick += dgvTasks_CellContentClick;
 
+                LoadPendingApprovals();
+
                 tabCertificates.Enabled = false;
                 LoadReportSettings();
                 StyleAllDGVs();
@@ -1023,6 +1025,83 @@ namespace EmployeeTrainingTracker
                 catch (Exception ex)
                 {
                     MessageBox.Show($"Could not open the file from the cloud:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private void LoadPendingApprovals()
+        {
+            try
+            {
+                // Your _managerId is already perfectly set up at the top of the file!
+                DataTable pendingAcks = AcknowledgementService.GetPendingApprovals(_managerId);
+
+                dgvPendingAcks.Columns.Clear();
+                dgvPendingAcks.AutoGenerateColumns = false;
+                dgvPendingAcks.AllowUserToAddRows = false;
+
+                // Hidden ID
+                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "acknowledgementid", DataPropertyName = "acknowledgementid", Visible = false });
+
+                // Read-only columns 
+                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "employeename", DataPropertyName = "employeename", HeaderText = "Employee Name", ReadOnly = true });
+                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "trainingtopic", DataPropertyName = "trainingtopic", HeaderText = "Topic / SOP", ReadOnly = true });
+                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "hours", DataPropertyName = "hours", HeaderText = "Hours", ReadOnly = true });
+                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "trainingdate", DataPropertyName = "trainingdate", HeaderText = "Date", ReadOnly = true, DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } });
+
+                // EDITABLE COLUMN: Trainer Name
+                var trainerCol = new DataGridViewTextBoxColumn
+                {
+                    Name = "trainername",
+                    DataPropertyName = "trainername",
+                    HeaderText = "Trainer Name (Edit if 3rd Party)",
+                    ReadOnly = false // MANAGER CAN TYPE HERE!
+                };
+                trainerCol.DefaultCellStyle.BackColor = Color.LightYellow;
+                dgvPendingAcks.Columns.Add(trainerCol);
+
+                dgvPendingAcks.DataSource = pendingAcks;
+                dgvPendingAcks.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+                UIHelpers.StyleDataGridView(dgvPendingAcks);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading pending approvals: {ex.Message}");
+            }
+        }
+
+        private void btnApproveAck_Click(object sender, EventArgs e)
+        {
+            if (dgvPendingAcks.SelectedRows.Count == 0)
+            {
+                MessageBox.Show("Please select a record to approve.", "Selection Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            DataGridViewRow selectedRow = dgvPendingAcks.SelectedRows[0];
+            int ackId = Convert.ToInt32(selectedRow.Cells["acknowledgementid"].Value);
+
+            // Grab the typed-in Trainer Name (if any)
+            string trainerName = selectedRow.Cells["trainername"].Value?.ToString() ?? "";
+
+            var confirm = MessageBox.Show(
+                "Are you sure you want to approve this training record? This will digitally sign it as Completed.",
+                "Confirm Approval",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Information);
+
+            if (confirm == DialogResult.Yes)
+            {
+                try
+                {
+                    AcknowledgementService.ApproveAcknowledgement(ackId, trainerName);
+                    MessageBox.Show("Record Approved Successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                    LoadPendingApprovals(); // Refresh the bottom grid
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error approving record: {ex.Message}");
                 }
             }
         }

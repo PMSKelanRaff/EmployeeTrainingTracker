@@ -135,17 +135,17 @@ namespace EmployeeTrainingTracker
                 return;
             }
 
-            if (role == "Admin")
+            if (role == "Admin" && employeeId.HasValue)
             {
-                // 1. Assign the form to the property
-                this.MainFormToRun = new AdminDashboard();
+                // 1. Assign the form and pass the ID!
+                this.MainFormToRun = new AdminDashboard(employeeId.Value);
             }
             else if (role == "Employee" && employeeId.HasValue)
             {
                 // 1. Assign the form to the property
                 this.MainFormToRun = new EmployeeDashboard(employeeId.Value);
             }
-            // Case 3: Manager (THIS WAS MISSING)
+            // Case 3: Manager 
             else if (role == "Manager" && employeeId.HasValue)
             {
                 this.MainFormToRun = new ManagerDashboard(employeeId.Value);

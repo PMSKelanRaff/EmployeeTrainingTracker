@@ -440,5 +440,99 @@ namespace EmployeeTrainingTracker
             // Call your new centralized helper!
             UIHelpers.ApplyDeletionRowStyling((DataGridView)sender);
         }
+
+        private void LoadAcknowledgements()
+        {
+            try
+            {
+                DataTable acks = AcknowledgementService.GetEmployeeAcknowledgements(employeeId);
+
+                dgvAcknowledgements.Columns.Clear();
+                dgvAcknowledgements.AutoGenerateColumns = false;
+
+                dgvAcknowledgements.Columns.Add(new DataGridViewTextBoxColumn { Name = "acknowledgementid", DataPropertyName = "acknowledgementid", Visible = false });
+                dgvAcknowledgements.Columns.Add(new DataGridViewTextBoxColumn { Name = "trainingtopic", DataPropertyName = "trainingtopic", HeaderText = "Topic / SOP" });
+                dgvAcknowledgements.Columns.Add(new DataGridViewTextBoxColumn { Name = "hours", DataPropertyName = "hours", HeaderText = "Hours" });
+                dgvAcknowledgements.Columns.Add(new DataGridViewTextBoxColumn { Name = "trainingdate", DataPropertyName = "trainingdate", HeaderText = "Date", DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } });
+                dgvAcknowledgements.Columns.Add(new DataGridViewTextBoxColumn { Name = "status", DataPropertyName = "status", Visible = false }); // Hidden for color coding
+                dgvAcknowledgements.Columns.Add(new DataGridViewTextBoxColumn { Name = "trainername", DataPropertyName = "trainername", HeaderText = "Trainer" });
+
+                dgvAcknowledgements.DataSource = acks;
+                dgvAcknowledgements.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+                UIHelpers.StyleDataGridView(dgvAcknowledgements);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading TARs: {ex.Message}");
+            }
+        }
+
+        // Wire this up to the DataBindingComplete event of dgvAcknowledgements
+        private void dgvAcknowledgements_DataBindingComplete(object sender, DataGridViewBindingCompleteEventArgs e)
+        {
+            foreach (DataGridViewRow row in dgvAcknowledgements.Rows)
+            {
+                if (row.DataBoundItem is DataRowView rowView && rowView.Row.Table.Columns.Contains("status"))
+                {
+                    string status = rowView["status"].ToString();
+
+                    if (status == "Pending Manager")
+                    {
+                        row.DefaultCellStyle.BackColor = Color.LightYellow;
+                        row.DefaultCellStyle.ForeColor = Color.Black;
+                    }
+                    else if (status == "Completed")
+                    {
+                        row.DefaultCellStyle.BackColor = Color.LightGreen;
+                        row.DefaultCellStyle.ForeColor = Color.Black;
+                    }
+                }
+            }
+        }
+
+        private void btnSubmitAck_Click(object sender, EventArgs e)
+        {
+            string topic = txtTopic.Text.Trim();
+
+            if (string.IsNullOrEmpty(topic))
+            {
+                MessageBox.Show("Please enter a Training Topic / SOP.");
+                return;
+            }
+
+            if (!double.TryParse(txtAckHours.Text.Trim(), out double hours))
+            {
+                MessageBox.Show("Please enter a valid number for Hours.");
+                return;
+            }
+
+            // Automatically find the manager
+            int? managerId = AcknowledgementService.GetEmployeeManagerId(employeeId);
+            if (managerId == null)
+            {
+                MessageBox.Show("You do not have an assigned manager in the system. Cannot route for approval.", "Routing Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            var confirm = MessageBox.Show("Sign and submit this TAR for manager approval?", "Confirm Signature", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+            if (confirm == DialogResult.No) return;
+
+            try
+            {
+                // Removed revNo from the method call
+                AcknowledgementService.SubmitAcknowledgement(employeeId, managerId.Value, topic, hours, dtpAckDate.Value.Date);
+
+                MessageBox.Show("Record signed and submitted!");
+
+                txtTopic.Clear();
+                txtAckHours.Clear();
+
+                LoadAcknowledgements(); // Refresh grid
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error submitting: {ex.Message}");
+            }
+        }
     }
 }

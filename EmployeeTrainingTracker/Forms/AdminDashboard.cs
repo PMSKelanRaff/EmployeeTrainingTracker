@@ -11,15 +11,22 @@ namespace EmployeeTrainingTracker
 {
     public partial class AdminDashboard : Form
     {
-
         private string currentEmployeeName = "None";
-
         private bool _loadingManagerCombo = false;
-        private bool _isSyncingSelection = false; // Add this line
+        private bool _isSyncingSelection = false;
+        private int loggedInUserId;
+        
 
         private void SetCurrentEmployeeName(string employeeName)
         {
             currentEmployeeName = employeeName;
+        }
+
+        
+        public AdminDashboard(int userId)
+        {
+            InitializeComponent();
+            loggedInUserId = userId; // Save the ID when the form opens
         }
 
         public AdminDashboard()
@@ -32,11 +39,17 @@ namespace EmployeeTrainingTracker
         {
             try
             {
+                // Perfectly divide the split container in half dynamically
+                splitContainer1.SplitterDistance = splitContainer1.Height / 2;
+
                 LoadEmployees();
                 LoadGroupsForReports();
                 LoadEmployeeList();
                 LoadPlannedTraining();
                 LoadDeletionTasks();
+
+                LoadPendingApprovals();
+
                 tabCertificates.Enabled = false;
                 LoadReportSettings();
                 StyleAllDGVs();
@@ -457,7 +470,48 @@ namespace EmployeeTrainingTracker
             }
         }
 
+        private void LoadPendingApprovals()
+        {
+            try
+            {
+                // We skip the conversion because loggedInUserId IS the Employee ID!
+                DataTable pendingAcks = AcknowledgementService.GetPendingApprovals(loggedInUserId);
 
+                dgvPendingAcks.Columns.Clear();
+                dgvPendingAcks.AutoGenerateColumns = false;
+                dgvPendingAcks.AllowUserToAddRows = false;
+
+                // Hidden ID
+                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "acknowledgementid", DataPropertyName = "acknowledgementid", Visible = false });
+
+                // Read-only columns 
+                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "employeename", DataPropertyName = "employeename", HeaderText = "Employee Name", ReadOnly = true });
+                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "trainingtopic", DataPropertyName = "trainingtopic", HeaderText = "Topic / SOP", ReadOnly = true });
+                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "hours", DataPropertyName = "hours", HeaderText = "Hours", ReadOnly = true });
+                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "trainingdate", DataPropertyName = "trainingdate", HeaderText = "Date", ReadOnly = true, DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } });
+
+                // EDITABLE COLUMN: Trainer Name
+                var trainerCol = new DataGridViewTextBoxColumn
+                {
+                    Name = "trainername",
+                    DataPropertyName = "trainername",
+                    HeaderText = "Trainer Name (Edit if 3rd Party)",
+                    ReadOnly = false // Admin can type here!
+                };
+                trainerCol.DefaultCellStyle.BackColor = Color.LightYellow;
+                dgvPendingAcks.Columns.Add(trainerCol);
+
+                dgvPendingAcks.DataSource = pendingAcks;
+                dgvPendingAcks.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+                UIHelpers.StyleDataGridView(dgvPendingAcks);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading pending approvals: {ex.Message}");
+            }
+        }
+
+        
         // CRUD for certificates
         private void btnEditCert_Click(object sender, EventArgs e)
         {
@@ -1371,6 +1425,45 @@ namespace EmployeeTrainingTracker
             }
         }
 
+        private void btnApproveAck_Click(object sender, EventArgs e)
+        {
+            if (dgvPendingAcks.SelectedRows.Count == 0)
+            {
+                MessageBox.Show("Please select a record to approve.", "Selection Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Get the selected row
+            DataGridViewRow selectedRow = dgvPendingAcks.SelectedRows[0];
+            int ackId = Convert.ToInt32(selectedRow.Cells["acknowledgementid"].Value);
+
+            // Grab the typed-in Trainer Name (if any)
+            string trainerName = selectedRow.Cells["trainername"].Value?.ToString() ?? "";
+
+            var confirm = MessageBox.Show(
+                "Are you sure you want to approve this training record? This will digitally sign it as Completed.",
+                "Confirm Approval",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Information);
+
+            if (confirm == DialogResult.Yes)
+            {
+                try
+                {
+                    AcknowledgementService.ApproveAcknowledgement(ackId, trainerName);
+                    MessageBox.Show("Record Approved Successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                    LoadPendingApprovals(); // Refresh the grid to remove the approved row
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error approving record: {ex.Message}");
+                }
+            }
+        }
+
+
+
 
         // Events
         private void dgvEmployees_SelectionChanged(object sender, EventArgs e)
@@ -1524,7 +1617,7 @@ namespace EmployeeTrainingTracker
             }
         }
 
-        private void cbManager_SelectedIndexChanged(object sender, EventArgs e)
+        private void cbManager_SelectedIndexChanged(object? sender, EventArgs e)
         {
             if (_loadingManagerCombo) return; // skip if combo is still loading
             if (dgvGroups.SelectedRows.Count == 0) return;

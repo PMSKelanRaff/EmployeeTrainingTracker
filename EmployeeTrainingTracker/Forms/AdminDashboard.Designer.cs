@@ -123,9 +123,13 @@ namespace EmployeeTrainingTracker
             btnAddGroup = new Button();
             dgvGroups = new DataGridView();
             Tasks = new TabPage();
+            splitContainer1 = new SplitContainer();
             btnRejectDeletion = new Button();
-            btnApproveDeletion = new Button();
             dgvTasks = new DataGridView();
+            btnApproveDeletion = new Button();
+            btnApproveAck = new Button();
+            dgvPendingAcks = new DataGridView();
+            tabAcknowledgements = new TabPage();
             ((System.ComponentModel.ISupportInitialize)dgvEmployees).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvCertificates).BeginInit();
             tabControl.SuspendLayout();
@@ -139,7 +143,12 @@ namespace EmployeeTrainingTracker
             ((System.ComponentModel.ISupportInitialize)dgvGroupMembers).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvGroups).BeginInit();
             Tasks.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
+            splitContainer1.Panel1.SuspendLayout();
+            splitContainer1.Panel2.SuspendLayout();
+            splitContainer1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dgvTasks).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)dgvPendingAcks).BeginInit();
             SuspendLayout();
             // 
             // dgvEmployees
@@ -170,6 +179,7 @@ namespace EmployeeTrainingTracker
             tabControl.Controls.Add(Planning);
             tabControl.Controls.Add(Groups);
             tabControl.Controls.Add(Tasks);
+            tabControl.Controls.Add(tabAcknowledgements);
             tabControl.Dock = DockStyle.Fill;
             tabControl.Location = new Point(0, 0);
             tabControl.Name = "tabControl";
@@ -1128,9 +1138,7 @@ namespace EmployeeTrainingTracker
             // 
             // Tasks
             // 
-            Tasks.Controls.Add(btnRejectDeletion);
-            Tasks.Controls.Add(btnApproveDeletion);
-            Tasks.Controls.Add(dgvTasks);
+            Tasks.Controls.Add(splitContainer1);
             Tasks.Location = new Point(4, 24);
             Tasks.Name = "Tasks";
             Tasks.Size = new Size(1011, 455);
@@ -1138,33 +1146,82 @@ namespace EmployeeTrainingTracker
             Tasks.Text = "Tasks";
             Tasks.UseVisualStyleBackColor = true;
             // 
+            // splitContainer1
+            // 
+            splitContainer1.Dock = DockStyle.Fill;
+            splitContainer1.Location = new Point(0, 0);
+            splitContainer1.Name = "splitContainer1";
+            splitContainer1.Orientation = Orientation.Horizontal;
+            // 
+            // splitContainer1.Panel1
+            // 
+            splitContainer1.Panel1.Controls.Add(btnRejectDeletion);
+            splitContainer1.Panel1.Controls.Add(dgvTasks);
+            splitContainer1.Panel1.Controls.Add(btnApproveDeletion);
+            // 
+            // splitContainer1.Panel2
+            // 
+            splitContainer1.Panel2.Controls.Add(btnApproveAck);
+            splitContainer1.Panel2.Controls.Add(dgvPendingAcks);
+            splitContainer1.Size = new Size(1011, 455);
+            splitContainer1.SplitterDistance = 227;
+            splitContainer1.TabIndex = 5;
+            // 
             // btnRejectDeletion
             // 
-            btnRejectDeletion.Location = new Point(895, 396);
+            btnRejectDeletion.Location = new Point(895, 173);
             btnRejectDeletion.Name = "btnRejectDeletion";
             btnRejectDeletion.Size = new Size(108, 23);
-            btnRejectDeletion.TabIndex = 4;
+            btnRejectDeletion.TabIndex = 7;
             btnRejectDeletion.Text = "Reject Deletion";
             btnRejectDeletion.UseVisualStyleBackColor = true;
             btnRejectDeletion.Click += btnRejectDeletion_Click;
-            // 
-            // btnApproveDeletion
-            // 
-            btnApproveDeletion.Location = new Point(895, 425);
-            btnApproveDeletion.Name = "btnApproveDeletion";
-            btnApproveDeletion.Size = new Size(110, 23);
-            btnApproveDeletion.TabIndex = 3;
-            btnApproveDeletion.Text = "Approve Deletion";
-            btnApproveDeletion.UseVisualStyleBackColor = true;
-            btnApproveDeletion.Click += btnApproveDeletion_Click;
             // 
             // dgvTasks
             // 
             dgvTasks.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgvTasks.Location = new Point(3, 3);
             dgvTasks.Name = "dgvTasks";
-            dgvTasks.Size = new Size(886, 396);
-            dgvTasks.TabIndex = 1;
+            dgvTasks.Size = new Size(884, 217);
+            dgvTasks.TabIndex = 5;
+            // 
+            // btnApproveDeletion
+            // 
+            btnApproveDeletion.Location = new Point(893, 197);
+            btnApproveDeletion.Name = "btnApproveDeletion";
+            btnApproveDeletion.Size = new Size(110, 23);
+            btnApproveDeletion.TabIndex = 6;
+            btnApproveDeletion.Text = "Approve Deletion";
+            btnApproveDeletion.UseVisualStyleBackColor = true;
+            btnApproveDeletion.Click += btnApproveDeletion_Click;
+            // 
+            // btnApproveAck
+            // 
+            btnApproveAck.Location = new Point(893, 193);
+            btnApproveAck.Name = "btnApproveAck";
+            btnApproveAck.Size = new Size(110, 23);
+            btnApproveAck.TabIndex = 8;
+            btnApproveAck.Text = "Acknowledge";
+            btnApproveAck.UseVisualStyleBackColor = true;
+            btnApproveAck.Click += btnApproveAck_Click;
+            // 
+            // dgvPendingAcks
+            // 
+            dgvPendingAcks.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dgvPendingAcks.Location = new Point(3, 3);
+            dgvPendingAcks.Name = "dgvPendingAcks";
+            dgvPendingAcks.Size = new Size(884, 217);
+            dgvPendingAcks.TabIndex = 8;
+            // 
+            // tabAcknowledgements
+            // 
+            tabAcknowledgements.Location = new Point(4, 24);
+            tabAcknowledgements.Name = "tabAcknowledgements";
+            tabAcknowledgements.Padding = new Padding(3);
+            tabAcknowledgements.Size = new Size(1011, 455);
+            tabAcknowledgements.TabIndex = 6;
+            tabAcknowledgements.Text = "Acknowledgements";
+            tabAcknowledgements.UseVisualStyleBackColor = true;
             // 
             // AdminDashboard
             // 
@@ -1194,7 +1251,12 @@ namespace EmployeeTrainingTracker
             ((System.ComponentModel.ISupportInitialize)dgvGroupMembers).EndInit();
             ((System.ComponentModel.ISupportInitialize)dgvGroups).EndInit();
             Tasks.ResumeLayout(false);
+            splitContainer1.Panel1.ResumeLayout(false);
+            splitContainer1.Panel2.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)splitContainer1).EndInit();
+            splitContainer1.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)dgvTasks).EndInit();
+            ((System.ComponentModel.ISupportInitialize)dgvPendingAcks).EndInit();
             ResumeLayout(false);
         }
 
@@ -1296,8 +1358,12 @@ namespace EmployeeTrainingTracker
         private TextBox txtFullName;
         private Button btnUpload;
         private TabPage Tasks;
-        private DataGridView dgvTasks;
+        private TabPage tabAcknowledgements;
+        private SplitContainer splitContainer1;
         private Button btnRejectDeletion;
+        private DataGridView dgvTasks;
         private Button btnApproveDeletion;
+        private DataGridView dgvPendingAcks;
+        private Button btnApproveAck;
     }
 }
