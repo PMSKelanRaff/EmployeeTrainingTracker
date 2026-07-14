@@ -8,7 +8,7 @@ namespace EmployeeTrainingTracker
 {
     public static class LegacyExcelService
     {
-        
+
         public static void GenerateHTSF13(int employeeId, string employeeName, string templatePath, string savePath)
         {
             ExcelPackage.License.SetNonCommercialOrganization("Student");
@@ -43,14 +43,11 @@ namespace EmployeeTrainingTracker
                     string hrs = row["HRS"]?.ToString() ?? "0";
                     string trainerSig = row["TrainerName"]?.ToString() ?? "Auto";
 
-                    // 3. SAFELY HANDLE SIGNATURES
+                    // 3. SAFELY HANDLE SIGNATURES (Updated: Name only, no date)
                     string traineeSig = "KR"; // Default fallback
-                    if (row["Traineesignedat"] != DBNull.Value)
+                    if (row["Traineesignedat"] != DBNull.Value && !string.IsNullOrWhiteSpace(row["Traineesignedat"].ToString()))
                     {
-                        if (DateTime.TryParse(row["Traineesignedat"].ToString(), out DateTime sigDate))
-                        {
-                            traineeSig = $"{employeeName} ({sigDate:yy-MM-dd})";
-                        }
+                        traineeSig = employeeName;
                     }
 
                     // Map to Excel
@@ -95,22 +92,36 @@ namespace EmployeeTrainingTracker
             return table;
         }
 
-        public static DataTable GetEmployeesForExport(int loggedInUserId, bool isAdmin)
+        public static DataTable GetEmployeesForExport(int loggedInEmployeeId, bool isAdmin)
         {
             using var conn = DatabaseHelper.GetConnection();
             conn.Open();
 
-            // If Admin, grab everyone. If Manager, grab only their team.
-            // (Note: Update "ManagerID" to match whatever column you use to link employees to managers in your DB!)
-            string sql = isAdmin
-                ? "SELECT EmployeeID, FullName FROM Employees"
-                : "SELECT EmployeeID, FullName FROM Employees WHERE ManagerID = @userId";
+            string sql;
+
+            if (isAdmin)
+            {
+                // Admins just grab absolutely everyone in the company
+                sql = "SELECT employeeid, fullname FROM employees ORDER BY fullname ASC";
+            }
+            else
+            {
+                // Managers only grab employees who belong to a group that they manage
+                sql = @"
+            SELECT DISTINCT e.employeeid, e.fullname 
+            FROM employees e
+            JOIN groupmembers gm ON e.employeeid = gm.employeeid
+            JOIN groups g ON gm.groupid = g.groupid
+            WHERE g.managerid = @managerId
+            ORDER BY e.fullname ASC";
+            }
 
             using var cmd = new NpgsqlCommand(sql, conn);
 
             if (!isAdmin)
             {
-                cmd.Parameters.AddWithValue("userId", loggedInUserId);
+                // We pass in the logged-in manager's EmployeeID here
+                cmd.Parameters.AddWithValue("managerId", loggedInEmployeeId);
             }
 
             using var reader = cmd.ExecuteReader();

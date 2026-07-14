@@ -50,8 +50,8 @@ namespace EmployeeTrainingTracker
             txtPassword = new TextBox();
             txtUsername = new TextBox();
             tabCertificates = new TabPage();
-            btnExportAllHTSF13_Click = new Button();
-            btnExportHTSF13_Click = new Button();
+            btnExportAllHTSF13 = new Button();
+            btnExportHTSF13 = new Button();
             btnUpload = new Button();
             label10 = new Label();
             label11 = new Label();
@@ -362,8 +362,8 @@ namespace EmployeeTrainingTracker
             // 
             // tabCertificates
             // 
-            tabCertificates.Controls.Add(btnExportAllHTSF13_Click);
-            tabCertificates.Controls.Add(btnExportHTSF13_Click);
+            tabCertificates.Controls.Add(btnExportAllHTSF13);
+            tabCertificates.Controls.Add(btnExportHTSF13);
             tabCertificates.Controls.Add(btnUpload);
             tabCertificates.Controls.Add(label10);
             tabCertificates.Controls.Add(label11);
@@ -392,25 +392,25 @@ namespace EmployeeTrainingTracker
             tabCertificates.Text = "Certificates";
             tabCertificates.UseVisualStyleBackColor = true;
             // 
-            // btnExportAllHTSF13_Click
+            // btnExportAllHTSF13
             // 
-            btnExportAllHTSF13_Click.Location = new Point(604, 424);
-            btnExportAllHTSF13_Click.Name = "btnExportAllHTSF13_Click";
-            btnExportAllHTSF13_Click.Size = new Size(101, 23);
-            btnExportAllHTSF13_Click.TabIndex = 53;
-            btnExportAllHTSF13_Click.Text = "Export All TAR's";
-            btnExportAllHTSF13_Click.UseVisualStyleBackColor = true;
-            btnExportAllHTSF13_Click.Click += btnExportAllHTSF13_Click_Click;
+            btnExportAllHTSF13.Location = new Point(604, 424);
+            btnExportAllHTSF13.Name = "btnExportAllHTSF13";
+            btnExportAllHTSF13.Size = new Size(101, 23);
+            btnExportAllHTSF13.TabIndex = 53;
+            btnExportAllHTSF13.Text = "Export All TAR's";
+            btnExportAllHTSF13.UseVisualStyleBackColor = true;
+            btnExportAllHTSF13.Click += btnExportAllHTSF13_Click;
             // 
-            // btnExportHTSF13_Click
+            // btnExportHTSF13
             // 
-            btnExportHTSF13_Click.Location = new Point(711, 424);
-            btnExportHTSF13_Click.Name = "btnExportHTSF13_Click";
-            btnExportHTSF13_Click.Size = new Size(75, 23);
-            btnExportHTSF13_Click.TabIndex = 52;
-            btnExportHTSF13_Click.Text = "Export TAR";
-            btnExportHTSF13_Click.UseVisualStyleBackColor = true;
-            btnExportHTSF13_Click.Click += btnExportHTSF13_Click_Click;
+            btnExportHTSF13.Location = new Point(711, 424);
+            btnExportHTSF13.Name = "btnExportHTSF13";
+            btnExportHTSF13.Size = new Size(75, 23);
+            btnExportHTSF13.TabIndex = 52;
+            btnExportHTSF13.Text = "Export TAR";
+            btnExportHTSF13.UseVisualStyleBackColor = true;
+            btnExportHTSF13.Click += btnExportHTSF13_Click;
             // 
             // btnUpload
             // 
@@ -1294,6 +1294,8 @@ namespace EmployeeTrainingTracker
         private TabControl tabControl;
         private TabPage tabEmployees;
         private TabPage tabCertificates;
+        private Button btnExportAllHTSF13;
+        private Button btnExportHTSF13;
         private Button btnEdit;
         private Button btnDelete;
         private ComboBox cmbRole;
@@ -1391,7 +1393,5 @@ namespace EmployeeTrainingTracker
         private DataGridView dgvPendingAcks;
         private Button btnApproveAck;
         private Button btnRejectAck;
-        private Button btnExportHTSF13_Click;
-        private Button btnExportAllHTSF13_Click;
     }
 }

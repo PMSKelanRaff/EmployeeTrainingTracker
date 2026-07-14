@@ -295,7 +295,7 @@ namespace EmployeeTrainingTracker
                 {
                     dgvTasks.Columns["CertificateID"].Visible = false;
                 }
-               
+
 
                 dgvTasks.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
                 UIHelpers.StyleDataGridView(dgvTasks);
@@ -1545,7 +1545,114 @@ namespace EmployeeTrainingTracker
             }
         }
 
+        private void btnExportHTSF13_Click(object sender, EventArgs e)
+        {
+            // 1. Ensure an employee is selected
+            int? currentEmployeeId = GetSelectedEmployeeId();
+            if (currentEmployeeId == null || currentEmployeeId == 0)
+            {
+                MessageBox.Show("Please select a specific employee to generate their record.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
 
+            // 2. Locate your blank template file 
+            // (Put your blank template in the same folder as your .exe, or hardcode your desktop path here if preferred)
+            string templatePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "HTSF13_Template.xlsx");
+
+            if (!System.IO.File.Exists(templatePath))
+            {
+                MessageBox.Show($"Could not find the blank template file at:\n{templatePath}", "Template Missing", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            // 3. Ask the user where they want to save the new file
+            using (SaveFileDialog sfd = new SaveFileDialog())
+            {
+                sfd.Filter = "Excel Workbook (*.xlsx)|*.xlsx";
+                sfd.FileName = $"{currentEmployeeName.Replace(" ", "_")}_HTSF13_Record_{DateTime.Now:yyyyMMdd}.xlsx";
+                sfd.Title = "Save HTSF13 Record";
+
+                if (sfd.ShowDialog() == DialogResult.OK)
+                {
+                    try
+                    {
+                        // Generate!
+                        LegacyExcelService.GenerateHTSF13(currentEmployeeId.Value, currentEmployeeName, templatePath, sfd.FileName);
+
+                        MessageBox.Show("HTSF13 Record generated successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                        // Open the file immediately so they can see it
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = sfd.FileName,
+                            UseShellExecute = true
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Error generating Excel file:\n{ex.Message}", "Export Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
+        }
+
+        private void btnExportAllHTSF13_Click(object sender, EventArgs e)
+        {
+            string templatePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "HTSF13_Template.xlsx");
+
+            if (!System.IO.File.Exists(templatePath))
+            {
+                MessageBox.Show($"Could not find the template at:\n{templatePath}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            using (FolderBrowserDialog fbd = new FolderBrowserDialog())
+            {
+                fbd.Description = "Select a folder to save ALL company HTSF13 Records";
+
+                if (fbd.ShowDialog() == DialogResult.OK)
+                {
+                    string saveFolder = fbd.SelectedPath;
+
+                    try
+                    {
+                        // ADMIN SETTINGS: Set to true so it grabs the entire company!
+                        bool isAdmin = false;
+                        int managerEmployeeId = _managerId;
+
+                        DataTable employeesToExport = LegacyExcelService.GetEmployeesForExport(managerEmployeeId, isAdmin);
+
+                        if (employeesToExport.Rows.Count == 0)
+                        {
+                            MessageBox.Show("No employees found in the database.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            return;
+                        }
+
+                        int count = 0;
+
+                        foreach (DataRow row in employeesToExport.Rows)
+                        {
+                            int empId = Convert.ToInt32(row["EmployeeID"]);
+                            string empName = row["FullName"].ToString();
+                            string safeName = empName.Replace(" ", "_");
+
+                            string savePath = System.IO.Path.Combine(saveFolder, $"{safeName}_HTSF13_{DateTime.Now:yyyyMMdd}.xlsx");
+
+                            LegacyExcelService.GenerateHTSF13(empId, empName, templatePath, savePath);
+                            count++;
+                        }
+
+                        MessageBox.Show($"Success! Generated {count} HTSF13 records.", "Export Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                        System.Diagnostics.Process.Start("explorer.exe", saveFolder);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"A bulk export error occurred:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
+        }
     }
 
 }

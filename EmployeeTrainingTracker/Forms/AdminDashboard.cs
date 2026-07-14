@@ -7,6 +7,7 @@ using System.Data;
 using System.Security.Cryptography;
 using System.Text;
 using System.Windows.Forms;
+using static System.ComponentModel.Design.ObjectSelectorEditor;
 
 namespace EmployeeTrainingTracker
 {
@@ -1977,7 +1978,7 @@ namespace EmployeeTrainingTracker
             }
         }
 
-        private void btnExportHTSF13_Click_Click(object sender, EventArgs e)
+        private void btnExportHTSF13_Click(object sender, EventArgs e)
         {
             // 1. Ensure an employee is selected
             int? currentEmployeeId = GetSelectedEmployeeId();
@@ -2028,9 +2029,8 @@ namespace EmployeeTrainingTracker
             }
         }
 
-        private void btnExportAllHTSF13_Click_Click(object sender, EventArgs e)
+        private void btnExportAllHTSF13_Click(object sender, EventArgs e)
         {
-            // 1. Locate the template
             string templatePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "HTSF13_Template.xlsx");
 
             if (!System.IO.File.Exists(templatePath))
@@ -2039,10 +2039,9 @@ namespace EmployeeTrainingTracker
                 return;
             }
 
-            // 2. Ask the user for a FOLDER to save all these files into
             using (FolderBrowserDialog fbd = new FolderBrowserDialog())
             {
-                fbd.Description = "Select a folder to save all the HTSF13 Records";
+                fbd.Description = "Select a folder to save ALL company HTSF13 Records";
 
                 if (fbd.ShowDialog() == DialogResult.OK)
                 {
@@ -2050,33 +2049,34 @@ namespace EmployeeTrainingTracker
 
                     try
                     {
-                        // 3. Determine if the user is an admin (Change these variables to match how you track logins!)
-                        // Example: bool isAdmin = CurrentUser.Role == "Admin";
-                        bool isAdmin = true; // <-- UPDATE THIS based on your login system
-                        int loggedInUserId = 1; // <-- UPDATE THIS to the currently logged in user's ID
+                        // ADMIN SETTINGS: Set to true so it grabs the entire company!
+                        bool isAdmin = true;
+                        int dummyUserId = 0; // The query ignores this when isAdmin is true
 
-                        // 4. Fetch the correct list of employees
-                        DataTable employeesToExport = LegacyExcelService.GetEmployeesForExport(loggedInUserId, isAdmin);
+                        DataTable employeesToExport = LegacyExcelService.GetEmployeesForExport(dummyUserId, isAdmin);
+
+                        if (employeesToExport.Rows.Count == 0)
+                        {
+                            MessageBox.Show("No employees found in the database.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            return;
+                        }
+
                         int count = 0;
 
-                        // 5. Loop through them and generate!
                         foreach (DataRow row in employeesToExport.Rows)
                         {
                             int empId = Convert.ToInt32(row["EmployeeID"]);
                             string empName = row["FullName"].ToString();
-                            string safeName = empName.Replace(" ", "_"); // Make the name safe for a file
+                            string safeName = empName.Replace(" ", "_");
 
-                            // Build the save path for this specific person
                             string savePath = System.IO.Path.Combine(saveFolder, $"{safeName}_HTSF13_{DateTime.Now:yyyyMMdd}.xlsx");
 
-                            // Leverage the exact same generation logic we already built!
                             LegacyExcelService.GenerateHTSF13(empId, empName, templatePath, savePath);
                             count++;
                         }
 
                         MessageBox.Show($"Success! Generated {count} HTSF13 records.", "Export Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
-                        // Pop open the folder automatically so they can see the files!
                         System.Diagnostics.Process.Start("explorer.exe", saveFolder);
                     }
                     catch (Exception ex)

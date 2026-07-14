@@ -110,9 +110,11 @@ namespace EmployeeTrainingTracker
             btnRejectDeletion = new Button();
             dgvTasks = new DataGridView();
             btnApproveDeletion = new Button();
-            dgvPendingAcks = new DataGridView();
             btnRejectAck = new Button();
             btnApproveAck = new Button();
+            dgvPendingAcks = new DataGridView();
+            btnExportAllHTSF13 = new Button();
+            btnExportHTSF13 = new Button();
             ((System.ComponentModel.ISupportInitialize)dgvEmployees).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvCertificates).BeginInit();
             tabControl.SuspendLayout();
@@ -339,6 +341,8 @@ namespace EmployeeTrainingTracker
             // 
             // tabCertificates
             // 
+            tabCertificates.Controls.Add(btnExportAllHTSF13);
+            tabCertificates.Controls.Add(btnExportHTSF13);
             tabCertificates.Controls.Add(btnUpload);
             tabCertificates.Controls.Add(label10);
             tabCertificates.Controls.Add(label11);
@@ -995,14 +999,6 @@ namespace EmployeeTrainingTracker
             btnApproveDeletion.UseVisualStyleBackColor = true;
             btnApproveDeletion.Click += btnApproveDeletion_Click;
             // 
-            // dgvPendingAcks
-            // 
-            dgvPendingAcks.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dgvPendingAcks.Location = new Point(3, 3);
-            dgvPendingAcks.Name = "dgvPendingAcks";
-            dgvPendingAcks.Size = new Size(884, 217);
-            dgvPendingAcks.TabIndex = 8;
-            // 
             // btnRejectAck
             // 
             btnRejectAck.Location = new Point(893, 165);
@@ -1022,6 +1018,34 @@ namespace EmployeeTrainingTracker
             btnApproveAck.Text = "Acknowledge";
             btnApproveAck.UseVisualStyleBackColor = true;
             btnApproveAck.Click += btnApproveAck_Click;
+            // 
+            // dgvPendingAcks
+            // 
+            dgvPendingAcks.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dgvPendingAcks.Location = new Point(3, 3);
+            dgvPendingAcks.Name = "dgvPendingAcks";
+            dgvPendingAcks.Size = new Size(884, 217);
+            dgvPendingAcks.TabIndex = 8;
+            // 
+            // btnExportAllHTSF13
+            // 
+            btnExportAllHTSF13.Location = new Point(602, 426);
+            btnExportAllHTSF13.Name = "btnExportAllHTSF13";
+            btnExportAllHTSF13.Size = new Size(101, 23);
+            btnExportAllHTSF13.TabIndex = 55;
+            btnExportAllHTSF13.Text = "Export All TAR's";
+            btnExportAllHTSF13.UseVisualStyleBackColor = true;
+            btnExportAllHTSF13.Click += btnExportAllHTSF13_Click;
+            // 
+            // btnExportHTSF13
+            // 
+            btnExportHTSF13.Location = new Point(709, 426);
+            btnExportHTSF13.Name = "btnExportHTSF13";
+            btnExportHTSF13.Size = new Size(75, 23);
+            btnExportHTSF13.TabIndex = 54;
+            btnExportHTSF13.Text = "Export TAR";
+            btnExportHTSF13.UseVisualStyleBackColor = true;
+            btnExportHTSF13.Click += btnExportHTSF13_Click;
             // 
             // ManagerDashboard
             // 
@@ -1144,5 +1168,7 @@ namespace EmployeeTrainingTracker
         private DataGridView dgvPendingAcks;
         private Button btnRejectAck;
         private Button btnApproveAck;
+        private Button btnExportAllHTSF13;
+        private Button btnExportHTSF13;
     }
 }
