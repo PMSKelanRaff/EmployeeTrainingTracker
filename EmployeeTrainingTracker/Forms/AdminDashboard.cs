@@ -16,14 +16,14 @@ namespace EmployeeTrainingTracker
         private bool _loadingManagerCombo = false;
         private bool _isSyncingSelection = false;
         private int loggedInUserId;
-        
+
 
         private void SetCurrentEmployeeName(string employeeName)
         {
             currentEmployeeName = employeeName;
         }
 
-        
+
         public AdminDashboard(int userId)
         {
             InitializeComponent();
@@ -58,7 +58,6 @@ namespace EmployeeTrainingTracker
                 dgvCertificates.DataBindingComplete += dgvCertificates_DataBindingComplete;
                 LoadPendingApprovals();
 
-                tabCertificates.Enabled = false;
                 LoadReportSettings();
                 StyleAllDGVs();
                 LoadManagers();
@@ -558,7 +557,7 @@ namespace EmployeeTrainingTracker
             txtKeyCertsTab.SelectedIndex = -1;
 
             MessageBox.Show("Certificate updated successfully!");
-            
+
         }
 
         private async void btnDeleteCert_Click(object sender, EventArgs e)
@@ -599,6 +598,7 @@ namespace EmployeeTrainingTracker
                 MessageBox.Show($"An error occurred while deleting:\n{ex.Message}", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
 
         private async void btnUpload_Click(object sender, EventArgs e)
         {
@@ -667,95 +667,6 @@ namespace EmployeeTrainingTracker
             }
         }
 
-
-        //public static async Task MigrateOldCertificatesAsync()
-        //{
-        //    int successCount = 0;
-        //    int failCount = 0;
-
-        //    using (var conn = DatabaseHelper.GetConnection())
-        //    {
-        //        await conn.OpenAsync();
-
-        //        string selectSql = @"
-        //    SELECT tc.CertificateID, tc.EmployeeID, tc.FilePath, e.FullName 
-        //    FROM TrainingCertificates tc
-        //    JOIN Employees e ON tc.EmployeeID = e.EmployeeID
-        //    WHERE tc.S3Key IS NULL AND tc.FilePath IS NOT NULL";
-
-        //        using (var cmd = new NpgsqlCommand(selectSql, conn))
-        //        using (var reader = await cmd.ExecuteReaderAsync())
-        //        {
-        //            var recordsToMigrate = new List<(int CertId, int EmpId, string Path, string EmpName)>();
-        //            while (await reader.ReadAsync())
-        //            {
-        //                recordsToMigrate.Add((
-        //                    reader.GetInt32(0),
-        //                    reader.GetInt32(1),
-        //                    reader.GetString(2),
-        //                    reader.GetString(3)
-        //                ));
-        //            }
-        //            reader.Close();
-
-        //            foreach (var record in recordsToMigrate)
-        //            {
-        //                string actualPath = record.Path;
-
-        //                // 1. Check if the file exists at the exact database path
-        //                if (!System.IO.File.Exists(actualPath))
-        //                {
-        //                    // FALLBACK: Did someone move it to the "Obsolete" folder?
-        //                    string directory = System.IO.Path.GetDirectoryName(record.Path);
-        //                    string fileName = System.IO.Path.GetFileName(record.Path);
-        //                    string obsoletePath = System.IO.Path.Combine(directory, "Obsolete", fileName);
-
-        //                    if (System.IO.File.Exists(obsoletePath))
-        //                    {
-        //                        // We found it! Update the path so we upload the right file.
-        //                        actualPath = obsoletePath;
-        //                    }
-        //                    else
-        //                    {
-        //                        // It's genuinely missing from both places. Skip it.
-        //                        failCount++;
-        //                        continue;
-        //                    }
-        //                }
-
-        //                // Now use 'actualPath' for the rest of the logic
-        //                string finalFileName = System.IO.Path.GetFileName(actualPath);
-        //                string cleanName = record.EmpName.Replace(" ", "_");
-        //                string s3Key = $"{cleanName}_{record.EmpId}/{finalFileName}";
-
-        //                // 2. Try to upload to S3 using the corrected path
-        //                bool uploaded = await S3Service.UploadCertificateAsync(actualPath, s3Key);
-
-        //                if (uploaded)
-        //                {
-        //                    using (var updateCmd = new NpgsqlCommand("UPDATE TrainingCertificates SET S3Key = @key WHERE CertificateID = @id", conn))
-        //                    {
-        //                        updateCmd.Parameters.AddWithValue("key", s3Key);
-        //                        updateCmd.Parameters.AddWithValue("id", record.CertId);
-        //                        await updateCmd.ExecuteNonQueryAsync();
-        //                    }
-        //                    successCount++;
-        //                }
-        //                else
-        //                {
-        //                    System.Windows.Forms.MessageBox.Show(
-        //                        $"Migration stopped.\n\nThe file exists locally, but the S3 Upload failed for:\n{actualPath}",
-        //                        "Diagnostic: S3 Upload Failed");
-        //                    return;
-        //                }
-        //            }
-        //        }
-        //    }
-
-        //    System.Windows.Forms.MessageBox.Show($"Migration Complete!\nSuccess: {successCount}\nFailed/Missing: {failCount}");
-        //}
-
-        // CRUD for employees
 
         private void btnAddEmployee_Click(object sender, EventArgs e)
         {
@@ -2063,6 +1974,116 @@ namespace EmployeeTrainingTracker
                 string fullS3Key = e.Value.ToString() ?? "";
                 e.Value = System.IO.Path.GetFileName(fullS3Key);
                 e.FormattingApplied = true;
+            }
+        }
+
+        private void btnExportHTSF13_Click_Click(object sender, EventArgs e)
+        {
+            // 1. Ensure an employee is selected
+            int? currentEmployeeId = GetSelectedEmployeeId();
+            if (currentEmployeeId == null || currentEmployeeId == 0)
+            {
+                MessageBox.Show("Please select a specific employee to generate their record.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // 2. Locate your blank template file 
+            // (Put your blank template in the same folder as your .exe, or hardcode your desktop path here if preferred)
+            string templatePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "HTSF13_Template.xlsx");
+
+            if (!System.IO.File.Exists(templatePath))
+            {
+                MessageBox.Show($"Could not find the blank template file at:\n{templatePath}", "Template Missing", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            // 3. Ask the user where they want to save the new file
+            using (SaveFileDialog sfd = new SaveFileDialog())
+            {
+                sfd.Filter = "Excel Workbook (*.xlsx)|*.xlsx";
+                sfd.FileName = $"{currentEmployeeName.Replace(" ", "_")}_HTSF13_Record_{DateTime.Now:yyyyMMdd}.xlsx";
+                sfd.Title = "Save HTSF13 Record";
+
+                if (sfd.ShowDialog() == DialogResult.OK)
+                {
+                    try
+                    {
+                        // Generate!
+                        LegacyExcelService.GenerateHTSF13(currentEmployeeId.Value, currentEmployeeName, templatePath, sfd.FileName);
+
+                        MessageBox.Show("HTSF13 Record generated successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                        // Open the file immediately so they can see it
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = sfd.FileName,
+                            UseShellExecute = true
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Error generating Excel file:\n{ex.Message}", "Export Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
+        }
+
+        private void btnExportAllHTSF13_Click_Click(object sender, EventArgs e)
+        {
+            // 1. Locate the template
+            string templatePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "HTSF13_Template.xlsx");
+
+            if (!System.IO.File.Exists(templatePath))
+            {
+                MessageBox.Show($"Could not find the template at:\n{templatePath}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            // 2. Ask the user for a FOLDER to save all these files into
+            using (FolderBrowserDialog fbd = new FolderBrowserDialog())
+            {
+                fbd.Description = "Select a folder to save all the HTSF13 Records";
+
+                if (fbd.ShowDialog() == DialogResult.OK)
+                {
+                    string saveFolder = fbd.SelectedPath;
+
+                    try
+                    {
+                        // 3. Determine if the user is an admin (Change these variables to match how you track logins!)
+                        // Example: bool isAdmin = CurrentUser.Role == "Admin";
+                        bool isAdmin = true; // <-- UPDATE THIS based on your login system
+                        int loggedInUserId = 1; // <-- UPDATE THIS to the currently logged in user's ID
+
+                        // 4. Fetch the correct list of employees
+                        DataTable employeesToExport = LegacyExcelService.GetEmployeesForExport(loggedInUserId, isAdmin);
+                        int count = 0;
+
+                        // 5. Loop through them and generate!
+                        foreach (DataRow row in employeesToExport.Rows)
+                        {
+                            int empId = Convert.ToInt32(row["EmployeeID"]);
+                            string empName = row["FullName"].ToString();
+                            string safeName = empName.Replace(" ", "_"); // Make the name safe for a file
+
+                            // Build the save path for this specific person
+                            string savePath = System.IO.Path.Combine(saveFolder, $"{safeName}_HTSF13_{DateTime.Now:yyyyMMdd}.xlsx");
+
+                            // Leverage the exact same generation logic we already built!
+                            LegacyExcelService.GenerateHTSF13(empId, empName, templatePath, savePath);
+                            count++;
+                        }
+
+                        MessageBox.Show($"Success! Generated {count} HTSF13 records.", "Export Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                        // Pop open the folder automatically so they can see the files!
+                        System.Diagnostics.Process.Start("explorer.exe", saveFolder);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"A bulk export error occurred:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
             }
         }
     }

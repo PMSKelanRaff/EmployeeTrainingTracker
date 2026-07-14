@@ -50,6 +50,8 @@ namespace EmployeeTrainingTracker
             txtPassword = new TextBox();
             txtUsername = new TextBox();
             tabCertificates = new TabPage();
+            btnExportAllHTSF13_Click = new Button();
+            btnExportHTSF13_Click = new Button();
             btnUpload = new Button();
             label10 = new Label();
             label11 = new Label();
@@ -130,7 +132,6 @@ namespace EmployeeTrainingTracker
             btnRejectAck = new Button();
             btnApproveAck = new Button();
             dgvPendingAcks = new DataGridView();
-            tabAcknowledgements = new TabPage();
             ((System.ComponentModel.ISupportInitialize)dgvEmployees).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvCertificates).BeginInit();
             tabControl.SuspendLayout();
@@ -180,7 +181,6 @@ namespace EmployeeTrainingTracker
             tabControl.Controls.Add(Planning);
             tabControl.Controls.Add(Groups);
             tabControl.Controls.Add(Tasks);
-            tabControl.Controls.Add(tabAcknowledgements);
             tabControl.Dock = DockStyle.Fill;
             tabControl.Location = new Point(0, 0);
             tabControl.Name = "tabControl";
@@ -362,6 +362,8 @@ namespace EmployeeTrainingTracker
             // 
             // tabCertificates
             // 
+            tabCertificates.Controls.Add(btnExportAllHTSF13_Click);
+            tabCertificates.Controls.Add(btnExportHTSF13_Click);
             tabCertificates.Controls.Add(btnUpload);
             tabCertificates.Controls.Add(label10);
             tabCertificates.Controls.Add(label11);
@@ -389,6 +391,26 @@ namespace EmployeeTrainingTracker
             tabCertificates.TabIndex = 1;
             tabCertificates.Text = "Certificates";
             tabCertificates.UseVisualStyleBackColor = true;
+            // 
+            // btnExportAllHTSF13_Click
+            // 
+            btnExportAllHTSF13_Click.Location = new Point(604, 424);
+            btnExportAllHTSF13_Click.Name = "btnExportAllHTSF13_Click";
+            btnExportAllHTSF13_Click.Size = new Size(101, 23);
+            btnExportAllHTSF13_Click.TabIndex = 53;
+            btnExportAllHTSF13_Click.Text = "Export All TAR's";
+            btnExportAllHTSF13_Click.UseVisualStyleBackColor = true;
+            btnExportAllHTSF13_Click.Click += btnExportAllHTSF13_Click_Click;
+            // 
+            // btnExportHTSF13_Click
+            // 
+            btnExportHTSF13_Click.Location = new Point(711, 424);
+            btnExportHTSF13_Click.Name = "btnExportHTSF13_Click";
+            btnExportHTSF13_Click.Size = new Size(75, 23);
+            btnExportHTSF13_Click.TabIndex = 52;
+            btnExportHTSF13_Click.Text = "Export TAR";
+            btnExportHTSF13_Click.UseVisualStyleBackColor = true;
+            btnExportHTSF13_Click.Click += btnExportHTSF13_Click_Click;
             // 
             // btnUpload
             // 
@@ -1184,6 +1206,7 @@ namespace EmployeeTrainingTracker
             dgvTasks.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgvTasks.Location = new Point(3, 3);
             dgvTasks.Name = "dgvTasks";
+            dgvTasks.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvTasks.Size = new Size(884, 217);
             dgvTasks.TabIndex = 5;
             // 
@@ -1203,7 +1226,7 @@ namespace EmployeeTrainingTracker
             btnRejectAck.Name = "btnRejectAck";
             btnRejectAck.Size = new Size(110, 23);
             btnRejectAck.TabIndex = 9;
-            btnRejectAck.Text = "Reject";
+            btnRejectAck.Text = "Reject Cert";
             btnRejectAck.UseVisualStyleBackColor = true;
             btnRejectAck.Click += btnRejectAck_Click;
             // 
@@ -1213,7 +1236,7 @@ namespace EmployeeTrainingTracker
             btnApproveAck.Name = "btnApproveAck";
             btnApproveAck.Size = new Size(110, 23);
             btnApproveAck.TabIndex = 8;
-            btnApproveAck.Text = "Acknowledge";
+            btnApproveAck.Text = "Approve Cert";
             btnApproveAck.UseVisualStyleBackColor = true;
             btnApproveAck.Click += btnApproveAck_Click;
             // 
@@ -1222,18 +1245,9 @@ namespace EmployeeTrainingTracker
             dgvPendingAcks.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgvPendingAcks.Location = new Point(3, 3);
             dgvPendingAcks.Name = "dgvPendingAcks";
+            dgvPendingAcks.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvPendingAcks.Size = new Size(884, 217);
             dgvPendingAcks.TabIndex = 8;
-            // 
-            // tabAcknowledgements
-            // 
-            tabAcknowledgements.Location = new Point(4, 24);
-            tabAcknowledgements.Name = "tabAcknowledgements";
-            tabAcknowledgements.Padding = new Padding(3);
-            tabAcknowledgements.Size = new Size(1011, 455);
-            tabAcknowledgements.TabIndex = 6;
-            tabAcknowledgements.Text = "Acknowledgements";
-            tabAcknowledgements.UseVisualStyleBackColor = true;
             // 
             // AdminDashboard
             // 
@@ -1370,7 +1384,6 @@ namespace EmployeeTrainingTracker
         private TextBox txtFullName;
         private Button btnUpload;
         private TabPage Tasks;
-        private TabPage tabAcknowledgements;
         private SplitContainer splitContainer1;
         private Button btnRejectDeletion;
         private DataGridView dgvTasks;
@@ -1378,5 +1391,7 @@ namespace EmployeeTrainingTracker
         private DataGridView dgvPendingAcks;
         private Button btnApproveAck;
         private Button btnRejectAck;
+        private Button btnExportHTSF13_Click;
+        private Button btnExportAllHTSF13_Click;
     }
 }
