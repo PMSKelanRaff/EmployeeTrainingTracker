@@ -1361,7 +1361,6 @@ namespace EmployeeTrainingTracker
         private Button btnCompleteTraining;
         private ComboBox textStatusPlan;
         private Label label8;
-        private CheckedListBox checkedListBox1;
         private CheckedListBox clbEmployees;
         private TabPage Groups;
         private DataGridView dgvGroups;
@@ -1371,7 +1370,6 @@ namespace EmployeeTrainingTracker
         private DataGridView dgvGroupMembers;
         private Button btnRemoveMember;
         private Button btnSaveManager;
-        private TextBox txtSearchGroups;
         private Label lblGroups;
         private Label lblGroupName;
         private TextBox txtDescription;
