@@ -20,6 +20,7 @@ namespace EmployeeTrainingTracker
         public ManagerDashboard(int managerId)
         {
             InitializeComponent();
+            ResponsiveScaler.Attach(this);
             _managerId = managerId;
         }
 

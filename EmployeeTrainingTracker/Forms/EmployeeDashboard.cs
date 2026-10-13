@@ -14,6 +14,7 @@ namespace EmployeeTrainingTracker
         public EmployeeDashboard(int empId)
         {
             InitializeComponent();
+            ResponsiveScaler.Attach(this);
             employeeId = empId;
 
         }

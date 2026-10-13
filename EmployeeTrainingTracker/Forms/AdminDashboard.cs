@@ -28,12 +28,14 @@ namespace EmployeeTrainingTracker
         public AdminDashboard(int userId)
         {
             InitializeComponent();
+            ResponsiveScaler.Attach(this);
             loggedInUserId = userId; // Save the ID when the form opens
         }
 
         public AdminDashboard()
         {
             InitializeComponent();
+            ResponsiveScaler.Attach(this);
 
         }
 

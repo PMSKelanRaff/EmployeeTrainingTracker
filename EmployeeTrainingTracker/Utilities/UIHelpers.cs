@@ -17,11 +17,9 @@ namespace EmployeeTrainingTracker.Utilities
             // Header style
             dgv.ColumnHeadersDefaultCellStyle.BackColor = Color.SteelBlue;
             dgv.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            dgv.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
             dgv.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
 
             // Default cell style
-            dgv.DefaultCellStyle.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
             dgv.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
             dgv.DefaultCellStyle.Padding = new Padding(3, 2, 3, 2);
             dgv.DefaultCellStyle.SelectionBackColor = Color.LightSteelBlue;
@@ -38,6 +36,18 @@ namespace EmployeeTrainingTracker.Utilities
             dgv.BorderStyle = BorderStyle.None;
             dgv.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
             dgv.RowHeadersVisible = false;
+
+            ApplyGridFonts(dgv, ResponsiveScaler.GetScale(dgv));
+        }
+
+        // Grid fonts at the given window scale; only touches grids styled by StyleDataGridView
+        public static void ApplyGridFonts(DataGridView dgv, float scale)
+        {
+            if (dgv.EnableHeadersVisualStyles)
+                return;
+
+            dgv.ColumnHeadersDefaultCellStyle.Font = ResponsiveScaler.ScaledFont("Segoe UI", 10F, FontStyle.Bold, scale);
+            dgv.DefaultCellStyle.Font = ResponsiveScaler.ScaledFont("Segoe UI", 9F, FontStyle.Regular, scale);
         }
 
         public static void RenameColumns(DataGridView dgv)

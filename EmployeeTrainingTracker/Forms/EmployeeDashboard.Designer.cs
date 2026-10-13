@@ -69,6 +69,7 @@
             // 
             // dgvPlannedTraining
             // 
+            dgvPlannedTraining.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             dgvPlannedTraining.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             dgvPlannedTraining.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgvPlannedTraining.Location = new Point(6, 6);
@@ -104,6 +105,7 @@
             // 
             // dataGridView1
             // 
+            dataGridView1.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dataGridView1.Location = new Point(0, 0);
             dataGridView1.Name = "dataGridView1";
@@ -114,6 +116,7 @@
             // 
             // txtCertName
             // 
+            txtCertName.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             txtCertName.Location = new Point(797, 22);
             txtCertName.Name = "txtCertName";
             txtCertName.Size = new Size(200, 23);
@@ -121,6 +124,7 @@
             // 
             // dtpIssueDate
             // 
+            dtpIssueDate.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             dtpIssueDate.Location = new Point(797, 192);
             dtpIssueDate.Name = "dtpIssueDate";
             dtpIssueDate.Size = new Size(200, 23);
@@ -128,6 +132,7 @@
             // 
             // dtpExpiryDate
             // 
+            dtpExpiryDate.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             dtpExpiryDate.Location = new Point(797, 249);
             dtpExpiryDate.Name = "dtpExpiryDate";
             dtpExpiryDate.ShowCheckBox = true;
@@ -136,6 +141,7 @@
             // 
             // btnEdit
             // 
+            btnEdit.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             btnEdit.Location = new Point(922, 416);
             btnEdit.Name = "btnEdit";
             btnEdit.Size = new Size(75, 23);
@@ -146,6 +152,7 @@
             // 
             // lbl_Certname
             // 
+            lbl_Certname.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             lbl_Certname.AutoSize = true;
             lbl_Certname.Location = new Point(797, 4);
             lbl_Certname.Name = "lbl_Certname";
@@ -155,6 +162,7 @@
             // 
             // lbl_IssueDate
             // 
+            lbl_IssueDate.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             lbl_IssueDate.AutoSize = true;
             lbl_IssueDate.Location = new Point(797, 174);
             lbl_IssueDate.Name = "lbl_IssueDate";
@@ -164,6 +172,7 @@
             // 
             // lbl_ExpiryDate
             // 
+            lbl_ExpiryDate.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             lbl_ExpiryDate.AutoSize = true;
             lbl_ExpiryDate.Location = new Point(797, 231);
             lbl_ExpiryDate.Name = "lbl_ExpiryDate";
@@ -173,6 +182,7 @@
             // 
             // txtKey
             // 
+            txtKey.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             txtKey.FormattingEnabled = true;
             txtKey.Items.AddRange(new object[] { "Training", "Retraining", "Proficiency" });
             txtKey.Location = new Point(797, 80);
@@ -182,6 +192,7 @@
             // 
             // txtHrs
             // 
+            txtHrs.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             txtHrs.Location = new Point(897, 80);
             txtHrs.Name = "txtHrs";
             txtHrs.Size = new Size(100, 23);
@@ -189,6 +200,7 @@
             // 
             // txtProvider
             // 
+            txtProvider.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             txtProvider.Location = new Point(797, 129);
             txtProvider.Name = "txtProvider";
             txtProvider.Size = new Size(200, 23);
@@ -196,6 +208,7 @@
             // 
             // label5
             // 
+            label5.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             label5.AutoSize = true;
             label5.Location = new Point(797, 62);
             label5.Name = "label5";
@@ -205,6 +218,7 @@
             // 
             // label6
             // 
+            label6.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             label6.AutoSize = true;
             label6.Location = new Point(897, 62);
             label6.Name = "label6";
@@ -214,6 +228,7 @@
             // 
             // label7
             // 
+            label7.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             label7.AutoSize = true;
             label7.Location = new Point(797, 111);
             label7.Name = "label7";
@@ -223,6 +238,7 @@
             // 
             // btnUpload
             // 
+            btnUpload.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             btnUpload.Location = new Point(922, 287);
             btnUpload.Name = "btnUpload";
             btnUpload.Size = new Size(75, 23);
@@ -233,6 +249,7 @@
             // 
             // btnRequestDelete
             // 
+            btnRequestDelete.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             btnRequestDelete.Location = new Point(812, 416);
             btnRequestDelete.Name = "btnRequestDelete";
             btnRequestDelete.Size = new Size(104, 23);
@@ -245,6 +262,7 @@
             // 
             tabControl.Controls.Add(tabCertificates);
             tabControl.Controls.Add(tabTraining);
+            tabControl.Dock = DockStyle.Fill;
             tabControl.Location = new Point(3, -1);
             tabControl.Name = "tabControl";
             tabControl.SelectedIndex = 0;
