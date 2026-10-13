@@ -1,10 +1,9 @@
 ﻿using EmployeeTrainingTracker.Forms;
+using EmployeeTrainingTracker.Utilities;
 using Npgsql;
 using System;
 using System.Data;
-using System.Security.Cryptography;
 using System.Security.Principal; // for WindowsIdentity if needed
-using System.Text;
 using System.Windows.Forms;
 
 namespace EmployeeTrainingTracker
@@ -29,7 +28,7 @@ namespace EmployeeTrainingTracker
                 return;
             }
 
-            string hashed = HashPassword(password);
+            string hashed = SecurityHelper.HashPassword(password);
 
             // Using NpgsqlConnection
             using (var conn = DatabaseHelper.GetConnection())
@@ -169,16 +168,6 @@ namespace EmployeeTrainingTracker
             signupForm.ShowDialog(); // modal
         }
 
-
-        private static string HashPassword(string password)
-        {
-            using (var sha = SHA256.Create())
-            {
-                byte[] bytes = Encoding.UTF8.GetBytes(password ?? "");
-                byte[] hash = sha.ComputeHash(bytes);
-                return BitConverter.ToString(hash).Replace("-", "").ToLower();
-            }
-        }
 
         //toggle hide password
         private void login_hidePasswordCheckBox_CheckedChanged(object sender, EventArgs e)

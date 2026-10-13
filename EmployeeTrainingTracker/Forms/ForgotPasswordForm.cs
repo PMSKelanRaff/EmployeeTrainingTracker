@@ -2,7 +2,7 @@
 using System.Windows.Forms;
 using Npgsql;
 using System.Security.Cryptography;
-using System.Text;
+using EmployeeTrainingTracker.Utilities;
 
 namespace EmployeeTrainingTracker.Forms
 {
@@ -46,7 +46,7 @@ namespace EmployeeTrainingTracker.Forms
             }
 
             string rawToken = RandomNumberGenerator.GetInt32(100000, 999999).ToString();
-            string hashedToken = HashString(rawToken);
+            string hashedToken = SecurityHelper.HashPassword(rawToken);
 
             try
             {
@@ -105,8 +105,8 @@ namespace EmployeeTrainingTracker.Forms
             }
 
             // Hash the inputs once they pass the basic length checks
-            string hashedInput = HashString(inputToken);
-            string hashedNewPass = HashString(newPass);
+            string hashedInput = SecurityHelper.HashPassword(inputToken);
+            string hashedNewPass = SecurityHelper.HashPassword(newPass);
 
             using (var conn = DatabaseHelper.GetConnection())
             {
@@ -156,14 +156,5 @@ namespace EmployeeTrainingTracker.Forms
             newPasswordTxt.Visible = newPasswordLbl.Visible = show;
         }
 
-        // SHA256 hashing to match your login form
-        private string HashString(string input)
-        {
-            using (var sha = System.Security.Cryptography.SHA256.Create())
-            {
-                byte[] hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(input));
-                return BitConverter.ToString(hash).Replace("-", "").ToLower();
-            }
-        }
     }
 }

@@ -13,6 +13,14 @@
     <Content Include="favicon.ico" />
   </ItemGroup>
 
+  <!-- Keep the standalone DataExportTool console project out of this WinForms assembly's build -->
+  <ItemGroup>
+    <Compile Remove="Tools\**" />
+    <Content Remove="Tools\**" />
+    <None Remove="Tools\**" />
+    <EmbeddedResource Remove="Tools\**" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="AWSSDK.S3" Version="4.0.19" />
     <PackageReference Include="EPPlus" Version="8.2.0" />

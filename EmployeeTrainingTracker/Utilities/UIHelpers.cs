@@ -62,10 +62,16 @@ namespace EmployeeTrainingTracker.Utilities
             { "FullName", "Full Name" },
             { "ManagerEmail", "Manager Email" },
             { "JobTitle", "Job Title" },
-            { "GroupName", "Group Name" },
+            { "GroupName", "Department" },
             { "ManagerName", "Manager Name" },
             { "employeename", "Name" },
             { "EmployeeID", "Emp ID" },
+            { "groupname", "Department" },
+            { "description", "Description" },
+            { "managername", "Manager Name" },
+            { "employeeid", "Emp ID" },
+            { "fullname", "Full Name" },
+            { "jobtitle", "Job Title" },
 
         };
 

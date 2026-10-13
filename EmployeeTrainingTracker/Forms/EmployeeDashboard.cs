@@ -48,104 +48,7 @@ namespace EmployeeTrainingTracker
         private void LoadCertificates(int employeeId)
         {
             DataTable table = CertificateService.GetCertificates(employeeId);
-
-            dataGridView1.Columns.Clear();
-            dataGridView1.AutoGenerateColumns = false;
-
-            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "CertificateID",
-                DataPropertyName = "CertificateID",
-                HeaderText = "ID",
-                Visible = false
-            });
-
-            // Certificate Name
-            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "CertificateName",
-                DataPropertyName = "CertificateName",
-                HeaderText = "Certificate Name"
-            });
-
-            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "Key",
-                DataPropertyName = "Key",
-                HeaderText = "Training Key"
-            });
-
-            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "HRS",
-                DataPropertyName = "HRS",
-                HeaderText = "CPD Hrs"
-            });
-
-            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "Provider",
-                DataPropertyName = "Provider",
-                HeaderText = "Provider"
-            });
-
-            // Issue Date
-            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "IssueDate",
-                DataPropertyName = "IssueDate",
-                HeaderText = "Issue Date",
-                DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } // <--- ADD THIS LINE
-            });
-
-            // Expiry Date
-            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "ExpiryDate",
-                DataPropertyName = "ExpiryDate",
-                HeaderText = "Expiry Date",
-                DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } // <--- ADD THIS LINE
-            });
-
-            // FileLink
-            dataGridView1.Columns.Add(new DataGridViewLinkColumn
-            {
-                Name = "FileLink",
-                DataPropertyName = "S3Key", // <--- CHANGED THIS TO S3Key
-                HeaderText = "Certificate File",
-                TrackVisitedState = true,
-                UseColumnTextForLinkValue = false,
-                Width = 200
-            });
-
-            // Last Notified
-            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "LastNotifiedDate",
-                DataPropertyName = "LastNotifiedDate",
-                HeaderText = "Last Notified"
-            });
-
-            // Marked for deletion (necessary for deletion approval functionality)
-            dataGridView1.Columns.Add(new DataGridViewCheckBoxColumn
-            {
-                Name = "IsMarkedForDeletion",
-                DataPropertyName = "IsMarkedForDeletion",
-                HeaderText = "Pending Deletion",
-                Visible = false // Keep it hidden, we only need it for the formatting trigger
-            });
-
-            table.DefaultView.Sort = "ismarkedfordeletion ASC, CertificateName ASC";
-            // Bind DataSource last
-            dataGridView1.DataSource = table;
-
-            if (dataGridView1.Columns.Contains("CertificateID"))
-            {
-                dataGridView1.Columns["CertificateID"].Visible = false;
-            }
-
-            // Apply consistent styling
-            UIHelpers.StyleDataGridView(dataGridView1);
+            DashboardHelper.BindCertificates(dataGridView1, table, includeDeletionFlagColumn: true, sortPendingDeletionLast: true);
         }
 
         private void LoadPlannedTraining(int employeeId)
@@ -344,36 +247,7 @@ namespace EmployeeTrainingTracker
 
         // Events
         private void dataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e)
-        {
-            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
-
-            if (dataGridView1.Columns[e.ColumnIndex].Name == "FileLink")
-            {
-                if (dataGridView1.Rows[e.RowIndex].DataBoundItem is not DataRowView rowView) return;
-
-                string? s3Key = rowView["S3Key"]?.ToString();
-
-                if (string.IsNullOrEmpty(s3Key))
-                {
-                    MessageBox.Show("No cloud file linked for this certificate.");
-                    return;
-                }
-
-                try
-                {
-                    string secureUrl = S3Service.GetSecureViewUrl(s3Key);
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = secureUrl,
-                        UseShellExecute = true
-                    });
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Could not open file:\n{ex.Message}");
-                }
-            }
-        }
+            => DashboardHelper.FileLinkCellClick(sender, e);
 
         private void dataGridView1_SelectionChanged(object sender, EventArgs e)
         {
@@ -425,56 +299,10 @@ namespace EmployeeTrainingTracker
         }
 
         private void dataGridView1_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
-        {
-            // Ignore header rows or out-of-bounds rows
-            if (e.RowIndex < 0 || e.RowIndex >= dataGridView1.Rows.Count) return;
-
-            // Handle the Clean S3 File Names
-            if (dataGridView1.Columns[e.ColumnIndex].Name == "FileLink" && e.Value != null)
-            {
-                string fullS3Key = e.Value.ToString() ?? "";
-                e.Value = System.IO.Path.GetFileName(fullS3Key);
-                e.FormattingApplied = true;
-            }
-        }
+            => DashboardHelper.FileLinkCellFormatting(sender, e);
 
         private void DataGridView1_DataBindingComplete(object sender, DataGridViewBindingCompleteEventArgs e)
-        {
-            // 1. Call your centralized helper first (handles the red deletion rows)
-            UIHelpers.ApplyDeletionRowStyling((DataGridView)sender);
-
-            // 2. Add the yellow highlight for Pending items
-            foreach (DataGridViewRow row in dataGridView1.Rows)
-            {
-                // Safety check to ensure it's a real data row
-                if (row.IsNewRow || row.DataBoundItem is not DataRowView rowView) continue;
-
-                // Check if flagged for deletion
-                bool isMarked = false;
-                if (rowView.Row.Table.Columns.Contains("ismarkedfordeletion"))
-                {
-                    isMarked = rowView["ismarkedfordeletion"] != DBNull.Value &&
-                               Convert.ToBoolean(rowView["ismarkedfordeletion"]);
-                }
-
-                // Only apply yellow if it's NOT marked for deletion
-                if (!isMarked && rowView.Row.Table.Columns.Contains("status"))
-                {
-                    string status = rowView["status"]?.ToString().Trim().ToLower() ?? "";
-
-                    if (status == "pending")
-                    {
-                        // Turn it yellow
-                        row.DefaultCellStyle.BackColor = Color.LightYellow;
-                    }
-                    else
-                    {
-                        // Ensure completed ones are normal
-                        row.DefaultCellStyle.BackColor = Color.White;
-                    }
-                }
-            }
-        }
+            => DashboardHelper.ApplyStandardRowStyling((DataGridView)sender);
 
 
     }

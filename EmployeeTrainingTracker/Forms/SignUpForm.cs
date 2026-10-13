@@ -1,11 +1,9 @@
 ﻿using System;
-using System.ComponentModel; 
-using System.Text;
-using System.Text.RegularExpressions; 
-using System.Threading.Tasks;
+using System.ComponentModel;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using Npgsql;
-using System.Security.Cryptography;
+using EmployeeTrainingTracker.Utilities;
 
 namespace EmployeeTrainingTracker
 {
@@ -142,7 +140,7 @@ namespace EmployeeTrainingTracker
                                 VALUES ($1, $2, $3, $4, $5)";
 
                             cmd.Parameters.AddWithValue(username);
-                            cmd.Parameters.AddWithValue(HashPassword(password));
+                            cmd.Parameters.AddWithValue(SecurityHelper.HashPassword(password));
                             cmd.Parameters.AddWithValue("Employee");
                             cmd.Parameters.AddWithValue((object?)employeeId ?? DBNull.Value);
                             cmd.Parameters.AddWithValue((object?)windowsUser ?? DBNull.Value);
@@ -166,16 +164,6 @@ namespace EmployeeTrainingTracker
                         }
                     }
                 }
-            }
-        }
-
-        private string HashPassword(string password)
-        {
-            using (var sha = SHA256.Create())
-            {
-                var bytes = Encoding.UTF8.GetBytes(password);
-                var hash = sha.ComputeHash(bytes);
-                return BitConverter.ToString(hash).Replace("-", "").ToLower();
             }
         }
 

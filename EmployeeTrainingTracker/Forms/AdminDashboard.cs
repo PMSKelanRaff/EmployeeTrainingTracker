@@ -65,6 +65,9 @@ namespace EmployeeTrainingTracker
                 LoadGroups();
 
                 cbManager.SelectedIndexChanged += cbManager_SelectedIndexChanged;
+                tabControl.SelectedIndexChanged += tabControl_SelectedIndexChanged_Refresh;
+                dgvGroups.DataBindingComplete += dgvGroupGrids_DataBindingComplete;
+                dgvGroupMembers.DataBindingComplete += dgvGroupGrids_DataBindingComplete;
 
                 var plannedSessions = PlannedTrainingService.GetPlannedTraining();
                 if (plannedSessions.Rows.Count > 0)
@@ -149,91 +152,7 @@ namespace EmployeeTrainingTracker
         private void LoadCertificates(int employeeId)
         {
             DataTable table = CertificateService.GetCertificates(employeeId);
-
-            dgvCertificates.Columns.Clear();
-            dgvCertificates.AutoGenerateColumns = false;
-
-            // Hidden ID column (needed for editing/deleting)
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "CertificateID",
-                DataPropertyName = "CertificateID",
-                HeaderText = "ID",
-                Visible = false
-            });
-            // Certificate Name
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "CertificateName",
-                DataPropertyName = "CertificateName",
-                HeaderText = "Certificate Name"
-            });
-
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "Key",
-                DataPropertyName = "Key",
-                HeaderText = "Training Key"
-            });
-
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "HRS",
-                DataPropertyName = "HRS",  // or CPDHrs depending on your DB
-                HeaderText = "CPD Hrs"
-            });
-
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "Provider",
-                DataPropertyName = "Provider",
-                HeaderText = "Provider"
-            });
-
-            // Issue Date
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "IssueDate",
-                DataPropertyName = "IssueDate",
-                HeaderText = "Issue Date",
-                DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } // <--- ADD THIS LINE
-            });
-
-            // Expiry Date
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "ExpiryDate",
-                DataPropertyName = "ExpiryDate",
-                HeaderText = "Expiry Date",
-                DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } // <--- ADD THIS LINE
-            });
-
-            // Inside LoadCertificates(int employeeId)
-            dgvCertificates.Columns.Add(new DataGridViewLinkColumn
-            {
-                Name = "FileLink",
-                DataPropertyName = "S3Key",
-                HeaderText = "Certificate File",
-                TrackVisitedState = true,
-                Width = 200
-            });
-
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "LastNotifiedDate",
-                DataPropertyName = "LastNotifiedDate",
-                HeaderText = "Last Notified"
-            });
-
-
-
-            // Set DataSource last
-            dgvCertificates.DataSource = table;
-
-            if (dgvCertificates.Columns.Contains("CertificateID"))
-            {
-                dgvCertificates.Columns["CertificateID"].Visible = false;
-            }
+            DashboardHelper.BindCertificates(dgvCertificates, table);
 
             // update buttons correctly
             UpdateCertificateButtons();
@@ -304,6 +223,7 @@ namespace EmployeeTrainingTracker
             DataTable dtGroups = GroupService.GetAllGroups();
 
             dgvGroups.AutoGenerateColumns = true;
+            dgvGroups.AllowUserToAddRows = true;    // empty bottom row = "new department" (fill the boxes, then click Add)
             dgvGroups.DataSource = dtGroups;
 
             // Format DGV
@@ -318,8 +238,46 @@ namespace EmployeeTrainingTracker
                 dgvGroups.Columns["ManagerID"].Visible = false;
 
             // Optional: pre-select first row if you want auto-population
+            ApplyGroupGridHeaders();
+
             if (dgvGroups.Rows.Count > 0)
                 dgvGroups.Rows[0].Selected = true;
+        }
+
+        // Re-reads everything that depends on the employee list (groups, members,
+        // manager names, report pickers) so the other tabs never show stale data.
+        private void RefreshEmployeeDependentTabs()
+        {
+            int? selectedGroupId = null;
+            if (dgvGroups.SelectedRows.Count > 0 && dgvGroups.Columns.Contains("GroupID")
+                && dgvGroups.SelectedRows[0].Cells["GroupID"].Value is not (null or DBNull))
+                selectedGroupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
+
+            LoadGroups();   // re-selects row 0, which reloads members + manager combo
+
+            if (selectedGroupId.HasValue)
+            {
+                foreach (DataGridViewRow row in dgvGroups.Rows)
+                {
+                    if (Convert.ToInt32(row.Cells["GroupID"].Value) == selectedGroupId.Value)
+                    {
+                        dgvGroups.ClearSelection();
+                        row.Selected = true;
+                        dgvGroups.CurrentCell = row.Cells["GroupName"];
+                        break;
+                    }
+                }
+            }
+
+            LoadEmployeeList();
+            LoadGroupsForReports();
+        }
+
+        private void tabControl_SelectedIndexChanged_Refresh(object? sender, EventArgs e)
+        {
+            // Departments tab: always show fresh data when the user switches to it
+            if (tabControl.SelectedTab == Groups)
+                RefreshEmployeeDependentTabs();
         }
 
         private void LoadManagers()
@@ -360,7 +318,39 @@ namespace EmployeeTrainingTracker
 
             foreach (DataGridViewColumn col in dgvGroupMembers.Columns)
                 col.ReadOnly = true;
+
+            ApplyGroupGridHeaders();
         }
+
+        // Friendly headers for the Departments tab grids. Matches column names
+        // case-insensitively (Postgres returns them lowercase) and is re-applied
+        // after every data bind so a refresh can never put the raw names back.
+        private void ApplyGroupGridHeaders()
+        {
+            var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "GroupName", "Department" },
+                { "Description", "Description" },
+                { "ManagerName", "Manager Name" },
+                { "EmployeeID", "Emp ID" },
+                { "FullName", "Full Name" },
+                { "Department", "Department" },
+                { "JobTitle", "Job Title" },
+            };
+
+            foreach (var grid in new[] { dgvGroups, dgvGroupMembers })
+            {
+                foreach (DataGridViewColumn col in grid.Columns)
+                {
+                    if (headers.TryGetValue(col.Name, out var text) ||
+                        (!string.IsNullOrEmpty(col.DataPropertyName) && headers.TryGetValue(col.DataPropertyName, out text)))
+                        col.HeaderText = text;
+                }
+            }
+        }
+
+        private void dgvGroupGrids_DataBindingComplete(object? sender, DataGridViewBindingCompleteEventArgs e)
+            => ApplyGroupGridHeaders();
 
         private void LoadEmployeesForPlanning(int sessionId)
         {
@@ -441,36 +431,7 @@ namespace EmployeeTrainingTracker
             try
             {
                 DataTable pendingDeletions = CertificateService.GetPendingDeletions();
-
-                dgvTasks.Columns.Clear();
-                dgvTasks.AutoGenerateColumns = false;
-
-                // Hidden ID
-                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "CertificateID", DataPropertyName = "CertificateID", Visible = false });
-
-                // Employee Name (Crucial for the Admin to see)
-                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "EmployeeName", DataPropertyName = "EmployeeName", HeaderText = "Employee Name" });
-
-                // Certificate Details
-                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "CertificateName", DataPropertyName = "CertificateName", HeaderText = "Certificate Name" });
-                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "Key", DataPropertyName = "Key", HeaderText = "Training Key" });
-                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "HRS", DataPropertyName = "HRS", HeaderText = "CPD Hrs" });
-                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "Provider", DataPropertyName = "Provider", HeaderText = "Provider" });
-
-                // Dates
-                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "IssueDate", DataPropertyName = "IssueDate", HeaderText = "Issue Date", DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } });
-                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "ExpiryDate", DataPropertyName = "ExpiryDate", HeaderText = "Expiry Date", DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } });
-
-                // File Link
-                dgvTasks.Columns.Add(new DataGridViewLinkColumn { Name = "FileLink", DataPropertyName = "S3Key", HeaderText = "Certificate File", TrackVisitedState = true, Width = 200 });
-
-                // Notified Date
-                dgvTasks.Columns.Add(new DataGridViewTextBoxColumn { Name = "LastNotifiedDate", DataPropertyName = "LastNotifiedDate", HeaderText = "Last Notified" });
-
-                dgvTasks.DataSource = pendingDeletions;
-
-                dgvTasks.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-                UIHelpers.StyleDataGridView(dgvTasks);
+                DashboardHelper.BindDeletionTasks(dgvTasks, pendingDeletions);
             }
             catch (Exception ex)
             {
@@ -484,37 +445,7 @@ namespace EmployeeTrainingTracker
             {
                 // 1. Point this to our NEW Certificate method
                 DataTable pendingAcks = CertificateService.GetPendingCertificateApprovals(loggedInUserId); // Use loggedInUserId for AdminDashboard
-
-                dgvPendingAcks.Columns.Clear();
-                dgvPendingAcks.AutoGenerateColumns = false;
-                dgvPendingAcks.AllowUserToAddRows = false;
-
-                // Hidden ID
-                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "CertificateID", DataPropertyName = "CertificateID", Visible = false });
-
-                // Read-only columns 
-                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "employeename", DataPropertyName = "employeename", HeaderText = "Employee Name", ReadOnly = true });
-                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "trainingtopic", DataPropertyName = "trainingtopic", HeaderText = "Certificate / Topic", ReadOnly = true });
-                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "hours", DataPropertyName = "hours", HeaderText = "Hours", ReadOnly = true });
-                dgvPendingAcks.Columns.Add(new DataGridViewTextBoxColumn { Name = "trainingdate", DataPropertyName = "trainingdate", HeaderText = "Date", ReadOnly = true, DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } });
-
-                // ADDED: The clickable PDF link!
-                dgvPendingAcks.Columns.Add(new DataGridViewLinkColumn { Name = "FileLink", DataPropertyName = "S3Key", HeaderText = "View Document", TrackVisitedState = true });
-
-                // EDITABLE COLUMN: Trainer Name
-                var trainerCol = new DataGridViewTextBoxColumn
-                {
-                    Name = "trainername",
-                    DataPropertyName = "trainername",
-                    HeaderText = "Trainer Name",
-                    ReadOnly = false
-                };
-                trainerCol.DefaultCellStyle.BackColor = Color.LightYellow;
-                dgvPendingAcks.Columns.Add(trainerCol);
-
-                dgvPendingAcks.DataSource = pendingAcks;
-                dgvPendingAcks.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-                UIHelpers.StyleDataGridView(dgvPendingAcks);
+                DashboardHelper.BindPendingApprovals(dgvPendingAcks, pendingAcks);
             }
             catch (Exception ex)
             {
@@ -692,40 +623,12 @@ namespace EmployeeTrainingTracker
                 return;
             }
 
-            // 3. Hash the password
-            string passwordHash = HashPassword(password);
-
-            long newEmpId;
-            long newUserId;
-
-            using (var conn = DatabaseHelper.GetConnection())
-            {
-                conn.Open();
-
-                // 4. Insert into Employees Table
-                using (var cmdEmp = new NpgsqlCommand(
-                    "INSERT INTO Employees (FullName, Department, JobTitle) VALUES ($1, $2, $3) RETURNING EmployeeID;", conn))
-                {
-                    cmdEmp.Parameters.AddWithValue(fullName);   // Use the variable, not the Windows User!
-                    cmdEmp.Parameters.AddWithValue(department);
-                    cmdEmp.Parameters.AddWithValue(jobTitle);
-                    newEmpId = (long)cmdEmp.ExecuteScalar();
-                }
-
-                // 5. Insert into Users Table (Now including PasswordHash)
-                using (var cmdUser = new NpgsqlCommand(
-                    "INSERT INTO Users (Email, Role, EmployeeID, passwordHash) VALUES ($1, $2, $3, $4) RETURNING UserID;", conn))
-                {
-                    cmdUser.Parameters.AddWithValue(email);     // Use the variable!
-                    cmdUser.Parameters.AddWithValue(role);
-                    cmdUser.Parameters.AddWithValue(newEmpId);
-                    cmdUser.Parameters.AddWithValue(passwordHash); // Save the hashed password
-                    newUserId = (long)cmdUser.ExecuteScalar();
-                }
-            }
+            // 3. Create the employee + linked user account
+            EmployeeAdminService.AddEmployee(fullName, email, role, department, jobTitle, password);
 
             // 6. Refresh UI
             LoadEmployees();
+            RefreshEmployeeDependentTabs();
             ClearEmployeeInputs();
             MessageBox.Show("Employee added successfully.");
 
@@ -770,89 +673,15 @@ namespace EmployeeTrainingTracker
             // Get Password Input
             string newPassword = txtPassword.Text.Trim();
 
-            using (var conn = DatabaseHelper.GetConnection())
-            {
-                conn.Open();
-
-                // 3. Handle Employee Table (Insert or Update)
-                if (employeeId.HasValue)
-                {
-                    // Update existing employee profile
-                    using (var cmdEmp = new NpgsqlCommand(
-                        "UPDATE Employees SET FullName=$1, Department=$2, JobTitle=$3 WHERE EmployeeID=$4", conn))
-                    {
-                        cmdEmp.Parameters.AddWithValue(fullName);
-                        cmdEmp.Parameters.AddWithValue(department);
-                        cmdEmp.Parameters.AddWithValue(jobTitle);
-                        cmdEmp.Parameters.AddWithValue(employeeId.Value);
-                        cmdEmp.ExecuteNonQuery();
-                    }
-                }
-                else
-                {
-                    // Insert new employee profile
-                    using (var cmdInsertEmp = new NpgsqlCommand(
-                        "INSERT INTO Employees (FullName, Department, JobTitle) VALUES ($1,$2,$3) RETURNING EmployeeID;", conn))
-                    {
-                        cmdInsertEmp.Parameters.AddWithValue(fullName);
-                        cmdInsertEmp.Parameters.AddWithValue(department);
-                        cmdInsertEmp.Parameters.AddWithValue(jobTitle);
-
-                        long newEmpId = (long)cmdInsertEmp.ExecuteScalar();
-
-                        // Link the existing User to this new Employee record
-                        using (var cmdUpdateUserEmp = new NpgsqlCommand(
-                            "UPDATE Users SET EmployeeID=$1 WHERE UserID=$2", conn))
-                        {
-                            cmdUpdateUserEmp.Parameters.AddWithValue(newEmpId);
-                            cmdUpdateUserEmp.Parameters.AddWithValue(userId);
-                            cmdUpdateUserEmp.ExecuteNonQuery();
-                        }
-                    }
-                }
-
-                // 4. Update User Email and Role (Always runs)
-                using (var cmdUser = new NpgsqlCommand(
-                    "UPDATE Users SET Email=$1, Role=$2 WHERE UserID=$3", conn))
-                {
-                    cmdUser.Parameters.AddWithValue(email);
-                    cmdUser.Parameters.AddWithValue(role);
-                    cmdUser.Parameters.AddWithValue(userId);
-                    cmdUser.ExecuteNonQuery();
-                }
-
-                // 5. Update Password (ONLY if the textbox is not empty)
-                if (!string.IsNullOrEmpty(newPassword))
-                {
-                    // Hash the password using your helper method
-                    string hashedPassword = HashPassword(newPassword);
-
-                    using (var cmdPass = new NpgsqlCommand(
-                        "UPDATE Users SET passwordHash=$1 WHERE UserID=$2", conn))
-                    {
-                        cmdPass.Parameters.AddWithValue(hashedPassword);
-                        cmdPass.Parameters.AddWithValue(userId);
-                        cmdPass.ExecuteNonQuery();
-                    }
-                }
-            }
+            EmployeeAdminService.UpdateEmployee(userId, employeeId, fullName, email, role, department, jobTitle, newPassword);
 
             // 6. Refresh UI
             MessageBox.Show("Employee updated successfully.");
             LoadEmployees();
+            RefreshEmployeeDependentTabs();
 
             // Clear the password box so it doesn't stay on screen
             txtPassword.Text = "";
-        }
-
-        private string HashPassword(string password)
-        {
-            using (var sha = System.Security.Cryptography.SHA256.Create())
-            {
-                var bytes = System.Text.Encoding.UTF8.GetBytes(password);
-                var hash = sha.ComputeHash(bytes);
-                return BitConverter.ToString(hash).Replace("-", "").ToLower();
-            }
         }
 
         private void btnDeleteEmployee_Click(object sender, EventArgs e)
@@ -867,74 +696,22 @@ namespace EmployeeTrainingTracker
             var confirm = MessageBox.Show("Delete this employee and all their certificates?", "Confirm", MessageBoxButtons.YesNo);
             if (confirm == DialogResult.No) return;
 
-            using (var conn = DatabaseHelper.GetConnection())
-            {
-                conn.Open();
-
-                // ---------------------------------------------------------
-                // 1. NEW: Unassign them as Manager from any Groups
-                // ---------------------------------------------------------
-                using (var cmdUnassign = new NpgsqlCommand("UPDATE Groups SET ManagerID = NULL WHERE ManagerID = $1", conn))
-                {
-                    cmdUnassign.Parameters.AddWithValue(empId.Value);
-                    cmdUnassign.ExecuteNonQuery();
-                }
-                // ---------------------------------------------------------
-
-                // 2. Delete certificates (Uncomment this if you don't have CASCADE delete in DB)
-                using (var cmdCert = new NpgsqlCommand("DELETE FROM TrainingCertificates WHERE EmployeeID=$1", conn))
-                {
-                    cmdCert.Parameters.AddWithValue(empId.Value);
-                    cmdCert.ExecuteNonQuery();
-                }
-
-                // 3. Delete from GroupMembers (Just in case they are also a member)
-                using (var cmdMembers = new NpgsqlCommand("DELETE FROM GroupMembers WHERE EmployeeID=$1", conn))
-                {
-                    cmdMembers.Parameters.AddWithValue(empId.Value);
-                    cmdMembers.ExecuteNonQuery();
-                }
-
-                // 4. Delete user account
-                using (var cmdUser = new NpgsqlCommand("DELETE FROM Users WHERE EmployeeID=$1", conn))
-                {
-                    cmdUser.Parameters.AddWithValue(empId.Value);
-                    cmdUser.ExecuteNonQuery();
-                }
-
-                // 5. Finally, delete the employee record
-                using (var cmdEmp = new NpgsqlCommand("DELETE FROM Employees WHERE EmployeeID=$1", conn))
-                {
-                    cmdEmp.Parameters.AddWithValue(empId.Value);
-                    cmdEmp.ExecuteNonQuery();
-                }
-            }
+            EmployeeAdminService.DeleteEmployee(empId.Value);
 
             LoadEmployees();
+            RefreshEmployeeDependentTabs();
             dgvCertificates.DataSource = null;
             tabCertificates.Enabled = false;
         }
 
         private void ClearEmployeeInputs()
         {
-            txtUsername.Text = "";
-            txtPassword.Text = "";
-            cmbRole.SelectedIndex = -1;
-            cmbDept.Text = "";
-            txtJobTitle.Text = "";
+            DashboardHelper.ClearEmployeeInputs(txtUsername, txtPassword, cmbRole, cmbDept, txtJobTitle);
         }
 
         private int? GetSelectedEmployeeId()
         {
-            if (dgvEmployees.CurrentRow == null || dgvEmployees.CurrentRow.IsNewRow)
-                return null;
-
-            var empIdObj = dgvEmployees.CurrentRow.Cells["EmployeeID"]?.Value;
-
-            if (empIdObj == null || empIdObj == DBNull.Value)
-                return null;
-
-            return Convert.ToInt32(empIdObj);
+            return DashboardHelper.GetSelectedEmployeeId(dgvEmployees);
         }
 
 
@@ -1012,9 +789,17 @@ namespace EmployeeTrainingTracker
             LoadGroups();
         }
 
+        // True only when a saved department (not the empty "new" row) is selected
+        private bool HasSavedGroupSelected()
+        {
+            return dgvGroups.SelectedRows.Count > 0
+                && !dgvGroups.SelectedRows[0].IsNewRow
+                && dgvGroups.SelectedRows[0].Cells["GroupID"].Value is not (null or DBNull);
+        }
+
         private void btnEditGroup_Click(object sender, EventArgs e)
         {
-            if (dgvGroups.SelectedRows.Count == 0)
+            if (!HasSavedGroupSelected())
             {
                 MessageBox.Show("Please select a group to edit.", "Edit Group", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -1056,7 +841,7 @@ namespace EmployeeTrainingTracker
 
         private void btnDeleteGroup_Click(object sender, EventArgs e)
         {
-            if (dgvGroups.SelectedRows.Count == 0)
+            if (!HasSavedGroupSelected())
             {
                 MessageBox.Show("Please select a group to delete.", "Delete Group", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -1082,7 +867,7 @@ namespace EmployeeTrainingTracker
         private void btnAddMemberDirect_Click(object sender, EventArgs e)
         {
             // 1. Validation: Is a group selected?
-            if (dgvGroups.SelectedRows.Count == 0)
+            if (!HasSavedGroupSelected())
             {
                 MessageBox.Show("Please select a group first.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -1118,7 +903,7 @@ namespace EmployeeTrainingTracker
 
         private void btnRemoveMember_Click(object sender, EventArgs e)
         {
-            if (dgvGroups.SelectedRows.Count == 0 || dgvGroupMembers.SelectedRows.Count == 0)
+            if (!HasSavedGroupSelected() || dgvGroupMembers.SelectedRows.Count == 0)
             {
                 MessageBox.Show("Please select a group and a member to remove.", "Remove Member", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -1204,50 +989,7 @@ namespace EmployeeTrainingTracker
 
         private void btnExportCsv_Click(object sender, EventArgs e)
         {
-            if (dgvReportResults.Rows.Count == 0)
-            {
-                MessageBox.Show("No data to export.");
-                return;
-            }
-
-            using (SaveFileDialog sfd = new SaveFileDialog())
-            {
-                sfd.Filter = "CSV files (*.csv)|*.csv";
-                sfd.FileName = $"Report_{DateTime.Now:yyyyMMdd}.csv";
-
-                if (sfd.ShowDialog() != DialogResult.OK) return;
-
-                try
-                {
-                    StringBuilder sb = new StringBuilder();
-
-                    // Header row
-                    var columnNames = dgvReportResults.Columns
-                                       .Cast<DataGridViewColumn>()
-                                       .Where(c => c.Visible)
-                                       .Select(c => c.HeaderText);
-                    sb.AppendLine(string.Join(",", columnNames));
-
-                    // Data rows
-                    foreach (DataGridViewRow row in dgvReportResults.Rows)
-                    {
-                        if (!row.IsNewRow)
-                        {
-                            var cells = row.Cells.Cast<DataGridViewCell>()
-                                           .Where(c => c.OwningColumn.Visible)
-                                           .Select(c => EscapeCsvValue(c.Value?.ToString() ?? ""));
-                            sb.AppendLine(string.Join(",", cells));
-                        }
-                    }
-
-                    System.IO.File.WriteAllText(sfd.FileName, sb.ToString());
-                    MessageBox.Show("CSV exported successfully!");
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Error exporting CSV: {ex.Message}");
-                }
-            }
+            DashboardHelper.ExportDataGridViewToCsv(dgvReportResults, "Report");
         }
 
         private void cmbReportType_SelectedIndexChanged(object sender, EventArgs e)
@@ -1592,7 +1334,7 @@ namespace EmployeeTrainingTracker
         private void cbManager_SelectedIndexChanged(object? sender, EventArgs e)
         {
             if (_loadingManagerCombo) return; // skip if combo is still loading
-            if (dgvGroups.SelectedRows.Count == 0) return;
+            if (!HasSavedGroupSelected()) return;
             if (cbManager.SelectedValue == null) return;
 
             int groupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
@@ -1640,81 +1382,10 @@ namespace EmployeeTrainingTracker
         }
 
         private void dgvCertificates_CellContentClick(object sender, DataGridViewCellEventArgs e)
-        {
-            // Ignore header clicks or invalid clicks
-            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
-
-            // Only handle clicks on the FileLink column
-            if (dgvCertificates.Columns[e.ColumnIndex].Name != "FileLink")
-                return;
-
-            if (dgvCertificates.Rows[e.RowIndex].DataBoundItem is not DataRowView rowView)
-                return;
-
-            // Grab the S3Key instead of the old FilePath
-            string? s3Key = rowView["S3Key"]?.ToString();
-
-            if (string.IsNullOrEmpty(s3Key))
-            {
-                MessageBox.Show("No cloud file linked for this certificate.", "File Not Found", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            try
-            {
-                // 1. Generate the secure Presigned URL from AWS
-                string secureUrl = S3Service.GetSecureViewUrl(s3Key);
-
-                // 2. Open the URL in the default web browser
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = secureUrl,
-                    UseShellExecute = true
-                });
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Could not open the file from the cloud:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
+            => DashboardHelper.FileLinkCellClick(sender, e);
 
         private void dgvCertificates_DataBindingComplete(object sender, DataGridViewBindingCompleteEventArgs e)
-        {
-            // 1. Call your centralized helper first (handles the red deletion rows)
-            UIHelpers.ApplyDeletionRowStyling((DataGridView)sender);
-
-            // 2. Add the yellow highlight for Pending items
-            foreach (DataGridViewRow row in dgvCertificates.Rows)
-            {
-                // Safety check to ensure it's a real data row
-                if (row.IsNewRow || row.DataBoundItem is not DataRowView rowView) continue;
-
-                // Check if flagged for deletion
-                bool isMarked = false;
-                if (rowView.Row.Table.Columns.Contains("ismarkedfordeletion"))
-                {
-                    isMarked = rowView["ismarkedfordeletion"] != DBNull.Value &&
-                               Convert.ToBoolean(rowView["ismarkedfordeletion"]);
-                }
-
-                // Only apply yellow if it's NOT marked for deletion
-                if (!isMarked && rowView.Row.Table.Columns.Contains("status"))
-                {
-                    string status = rowView["status"]?.ToString().Trim().ToLower() ?? "";
-
-                    if (status == "pending")
-                    {
-                        // Turn it yellow
-                        row.DefaultCellStyle.BackColor = Color.LightYellow;
-                    }
-                    else
-                    {
-                        // Ensure completed ones are normal
-                        row.DefaultCellStyle.BackColor = Color.White;
-                    }
-                }
-            }
-        }
+            => DashboardHelper.ApplyStandardRowStyling((DataGridView)sender);
 
         private void UpdateCertificateButtons()
         {
@@ -1778,7 +1449,22 @@ namespace EmployeeTrainingTracker
             {
                 if (dgvGroups.SelectedRows.Count == 0) return;
 
-                int groupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
+                var selected = dgvGroups.SelectedRows[0];
+                if (selected.IsNewRow || selected.Cells["GroupID"].Value == null || selected.Cells["GroupID"].Value == DBNull.Value)
+                {
+                    // "New department" row: clear the form so a fresh department can be typed in
+                    _loadingManagerCombo = true;
+                    txtGroupName.Clear();
+                    txtDescription.Clear();
+                    dgvGroupMembers.DataSource = null;
+                    cbManager.DataSource = null;
+                    cmbPotentialMembers.DataSource = null;
+                    _loadingManagerCombo = false;
+                    txtGroupName.Focus();
+                    return;
+                }
+
+                int groupId = Convert.ToInt32(selected.Cells["GroupID"].Value);
 
                 LoadGroupMembers(groupId); // Your log message
 
@@ -1816,48 +1502,10 @@ namespace EmployeeTrainingTracker
         }
 
         private void dgvPendingAcks_CellContentClick(object sender, DataGridViewCellEventArgs e)
-        {
-            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
-
-            if (dgvPendingAcks.Columns[e.ColumnIndex].Name == "FileLink")
-            {
-                if (dgvPendingAcks.Rows[e.RowIndex].DataBoundItem is not DataRowView rowView) return;
-
-                string? s3Key = rowView["S3Key"]?.ToString();
-
-                if (string.IsNullOrEmpty(s3Key))
-                {
-                    MessageBox.Show("No cloud file linked for this certificate.", "File Not Found", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
-
-                try
-                {
-                    // Generate the secure URL and open it
-                    string secureUrl = S3Service.GetSecureViewUrl(s3Key);
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = secureUrl,
-                        UseShellExecute = true
-                    });
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Could not open the file from the cloud:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
-        }
+            => DashboardHelper.FileLinkCellClick(sender, e);
 
         private void dgvPendingAcks_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
-        {
-            // Make the link just show the file name, not the whole folder path
-            if (dgvPendingAcks.Columns[e.ColumnIndex].Name == "FileLink" && e.Value != null)
-            {
-                string fullS3Key = e.Value.ToString() ?? "";
-                e.Value = System.IO.Path.GetFileName(fullS3Key);
-                e.FormattingApplied = true;
-            }
-        }
+            => DashboardHelper.FileLinkCellFormatting(sender, e);
 
 
         // Helper Functions
@@ -1884,16 +1532,6 @@ namespace EmployeeTrainingTracker
                 //tab.BackColor = Color.Gray; // or Color.Gainsboro / Color.WhiteSmoke / LightGray
             }
 
-        }
-
-        private string EscapeCsvValue(string value)
-        {
-            if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
-            {
-                value = value.Replace("\"", "\"\"");
-                value = $"\"{value}\"";
-            }
-            return value;
         }
 
         private List<int> GetSelectedEmployees()
@@ -1924,59 +1562,13 @@ namespace EmployeeTrainingTracker
         }
 
         private void dgvTasks_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
-        {
-            // Clean up the S3 File Name exactly like the other grids
-            if (dgvTasks.Columns[e.ColumnIndex].Name == "FileLink" && e.Value != null)
-            {
-                string fullS3Key = e.Value.ToString() ?? "";
-                e.Value = System.IO.Path.GetFileName(fullS3Key);
-                e.FormattingApplied = true;
-            }
-        }
+            => DashboardHelper.FileLinkCellFormatting(sender, e);
 
         private void dgvTasks_CellContentClick(object sender, DataGridViewCellEventArgs e)
-        {
-            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
-
-            if (dgvTasks.Columns[e.ColumnIndex].Name == "FileLink")
-            {
-                if (dgvTasks.Rows[e.RowIndex].DataBoundItem is not DataRowView rowView) return;
-
-                string? s3Key = rowView["S3Key"]?.ToString();
-
-                if (string.IsNullOrEmpty(s3Key))
-                {
-                    MessageBox.Show("No cloud file linked for this certificate.", "File Not Found", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
-
-                try
-                {
-                    // Open the file securely
-                    string secureUrl = S3Service.GetSecureViewUrl(s3Key);
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = secureUrl,
-                        UseShellExecute = true
-                    });
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Could not open the file from the cloud:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
-        }
+            => DashboardHelper.FileLinkCellClick(sender, e);
 
         private void dgvCertificates_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
-        {
-            // Only handle the clean S3 File Names here!
-            if (dgvCertificates.Columns[e.ColumnIndex].Name == "FileLink" && e.Value != null)
-            {
-                string fullS3Key = e.Value.ToString() ?? "";
-                e.Value = System.IO.Path.GetFileName(fullS3Key);
-                e.FormattingApplied = true;
-            }
-        }
+            => DashboardHelper.FileLinkCellFormatting(sender, e);
 
         private void btnExportHTSF13_Click(object sender, EventArgs e)
         {
