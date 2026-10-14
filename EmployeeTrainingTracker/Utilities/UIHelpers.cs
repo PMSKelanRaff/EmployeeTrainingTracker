@@ -38,6 +38,37 @@ namespace EmployeeTrainingTracker.Utilities
             dgv.RowHeadersVisible = false;
 
             ApplyGridFonts(dgv, ResponsiveScaler.GetScale(dgv));
+
+            // Dates show as yyyy-MM-dd with no time, every time the grid is (re)bound
+            dgv.DataBindingComplete -= FormatDateColumns;
+            dgv.DataBindingComplete += FormatDateColumns;
+            FormatDateColumns(dgv, EventArgs.Empty);
+        }
+
+        // Gives every date/timestamp column a date-only format (keeps any format a grid already set)
+        private static void FormatDateColumns(object? sender, EventArgs e)
+        {
+            if (sender is not DataGridView dgv) return;
+
+            DataTable? table = dgv.DataSource switch
+            {
+                DataTable t => t,
+                DataView v => v.Table,
+                BindingSource { DataSource: DataTable bt } => bt,
+                _ => null
+            };
+
+            foreach (DataGridViewColumn col in dgv.Columns)
+            {
+                if (!string.IsNullOrEmpty(col.DefaultCellStyle.Format)) continue;
+
+                Type? type = col.ValueType;
+                if (table != null && !string.IsNullOrEmpty(col.DataPropertyName) && table.Columns.Contains(col.DataPropertyName))
+                    type = table.Columns[col.DataPropertyName]!.DataType;
+
+                if (type == typeof(DateTime) || type == typeof(DateOnly) || type == typeof(DateTimeOffset))
+                    col.DefaultCellStyle.Format = "yyyy-MM-dd";
+            }
         }
 
         // Grid fonts at the given window scale; only touches grids styled by StyleDataGridView
@@ -62,6 +93,7 @@ namespace EmployeeTrainingTracker.Utilities
             { "status", "Status" },
             { "notes", "Notes" },
             { "participants", "Participants" },
+            { "othergroupparticipants", "Other Groups" },
             { "department", "Department" },
             { "CertificateName", "Certificate Name" },
             { "certificateid", "Certificate ID" },

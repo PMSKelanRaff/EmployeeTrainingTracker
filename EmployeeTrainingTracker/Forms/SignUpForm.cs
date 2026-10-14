@@ -20,7 +20,6 @@ namespace EmployeeTrainingTracker
 
             this.txtFullName.Validating += new CancelEventHandler(this.txtFullName_Validating);
             this.txtUsername.Validating += new CancelEventHandler(this.txtUsername_Validating);
-            this.txtDepartment.Validating += new CancelEventHandler(this.txtRequired_Validating);
             this.txtJobTitle.Validating += new CancelEventHandler(this.txtRequired_Validating);
             this.txtPassword.Validating += new CancelEventHandler(this.txtPassword_Validating);
         }
@@ -80,7 +79,6 @@ namespace EmployeeTrainingTracker
             string username = txtUsername.Text.Trim();
             string password = txtPassword.Text.Trim();
             string fullName = txtFullName.Text.Trim();
-            string department = txtDepartment.Text.Trim();
             string jobTitle = txtJobTitle.Text.Trim();
 
             // Existing Windows User Logic...
@@ -118,13 +116,13 @@ namespace EmployeeTrainingTracker
                             {
                                 cmd.Connection = conn;
                                 cmd.Transaction = tran;
+                                // Department is assigned later by an Admin (Departments tab / group membership)
                                 cmd.CommandText = @"
                                     INSERT INTO Employees (FullName, Department, JobTitle)
-                                    VALUES ($1, $2, $3)
+                                    VALUES ($1, 'Unassigned', $2)
                                     RETURNING EmployeeID;";
 
                                 cmd.Parameters.AddWithValue(fullName);
-                                cmd.Parameters.AddWithValue(department);
                                 cmd.Parameters.AddWithValue(jobTitle);
                                 employeeId = Convert.ToInt32(cmd.ExecuteScalar());
                             }

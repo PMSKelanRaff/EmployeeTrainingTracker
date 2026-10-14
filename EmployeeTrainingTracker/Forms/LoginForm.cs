@@ -134,6 +134,14 @@ namespace EmployeeTrainingTracker
                 return;
             }
 
+            // Archived (departed) employees keep their records but can't log in until an Admin restores them
+            if (employeeId.HasValue && EmployeeAdminService.IsEmployeeArchived(employeeId.Value))
+            {
+                MessageBox.Show("This account has been archived. Please contact an Admin if you need access again.",
+                    "Account Archived", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
             if (role == "Admin" && employeeId.HasValue)
             {
                 // 1. Assign the form and pass the ID!

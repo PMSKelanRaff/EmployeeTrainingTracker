@@ -10,6 +10,70 @@ namespace EmployeeTrainingTracker.Utilities
 {
     public static class GroupService
     {
+        /// <summary>
+        /// SQL expression for an employee's real department(s), taken from their group
+        /// memberships rather than the old free-text Employees.Department column.
+        /// Requires the Employees table to be aliased as "e" in the outer query.
+        /// </summary>
+        public const string EmployeeDepartmentsSql = @"COALESCE((
+                SELECT STRING_AGG(dg.GroupName, ', ' ORDER BY dg.GroupName)
+                FROM GroupMembers dgm
+                INNER JOIN Groups dg ON dgm.GroupID = dg.GroupID
+                WHERE dgm.EmployeeID = e.EmployeeID), 'Unassigned')";
+
+        // Department names for drop-downs
+        public static List<string> GetDepartmentNames()
+        {
+            var names = new List<string>();
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+
+            using var cmd = new NpgsqlCommand("SELECT GroupName FROM Groups ORDER BY GroupName", conn);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                names.Add(reader.GetString(0));
+            return names;
+        }
+
+        // The departments (groups) a manager runs - GroupID, GroupName
+        public static DataTable GetGroupsByManager(int managerId)
+        {
+            var dt = new DataTable();
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+
+            using var cmd = new NpgsqlCommand(
+                "SELECT GroupID, GroupName FROM Groups WHERE ManagerID = $1 ORDER BY GroupName", conn);
+            cmd.Parameters.AddWithValue(managerId);
+            using var reader = cmd.ExecuteReader();
+            dt.Load(reader);
+            return dt;
+        }
+
+        // Comma-separated names of an employee's departments, or "Unassigned"
+        public static string GetEmployeeDepartmentNames(int employeeId)
+        {
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+
+            using var cmd = new NpgsqlCommand(
+                $"SELECT {EmployeeDepartmentsSql} FROM Employees e WHERE e.EmployeeID = $1", conn);
+            cmd.Parameters.AddWithValue(employeeId);
+            return cmd.ExecuteScalar()?.ToString() ?? "Unassigned";
+        }
+
+        // Comma-separated names of the departments (groups) a manager runs
+        public static string GetManagedDepartmentNames(int managerId)
+        {
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+
+            using var cmd = new NpgsqlCommand(
+                "SELECT STRING_AGG(GroupName, ', ' ORDER BY GroupName) FROM Groups WHERE ManagerID = $1", conn);
+            cmd.Parameters.AddWithValue(managerId);
+            var result = cmd.ExecuteScalar();
+            return result == null || result == DBNull.Value ? "" : result.ToString()!;
+        }
 
         // GROUP CRUD OPERATIONS
         public static DataTable GetAllGroups()
@@ -102,8 +166,8 @@ namespace EmployeeTrainingTracker.Utilities
             conn.Open();
 
 
-            string query = @"
-                SELECT e.EmployeeID, e.FullName, e.Department, e.JobTitle
+            string query = $@"
+                SELECT e.EmployeeID, e.FullName, {EmployeeDepartmentsSql} AS Department, e.JobTitle
                 FROM GroupMembers gm
                 JOIN Employees e ON gm.EmployeeID = e.EmployeeID
                 WHERE gm.GroupID = $1
@@ -157,13 +221,14 @@ namespace EmployeeTrainingTracker.Utilities
             conn.Open();
 
 
-            string sql = @"
-                SELECT EmployeeID, FullName, Department, JobTitle
-                FROM Employees
-                WHERE EmployeeID NOT IN (
+            string sql = $@"
+                SELECT e.EmployeeID, e.FullName, {EmployeeDepartmentsSql} AS Department, e.JobTitle
+                FROM Employees e
+                WHERE NOT e.IsArchived
+                  AND e.EmployeeID NOT IN (
                     SELECT EmployeeID FROM GroupMembers WHERE GroupID = $1
                 )
-                ORDER BY FullName;";
+                ORDER BY e.FullName;";
 
             using var cmd = new NpgsqlCommand(sql, conn);
 

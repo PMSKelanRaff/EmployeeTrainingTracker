@@ -16,11 +16,15 @@ public static class ReportService
             tc.ExpiryDate, 
             u.Email AS EmployeeEmail,
             e.FullName,
-            m.Email AS ManagerEmail
+            -- Manager(s) of the department(s) the employee belongs to (Groups.ManagerID)
+            (SELECT STRING_AGG(DISTINCT mu.Email, ', ')
+             FROM GroupMembers rgm
+             INNER JOIN Groups rg ON rgm.GroupID = rg.GroupID
+             INNER JOIN Users mu ON mu.EmployeeID = rg.ManagerID
+             WHERE rgm.EmployeeID = e.EmployeeID) AS ManagerEmail
         FROM TrainingCertificates tc
         JOIN Users u ON tc.EmployeeID = u.EmployeeID
         LEFT JOIN Employees e ON u.EmployeeID = e.EmployeeID
-        LEFT JOIN Managers m ON e.Department = m.Department
         WHERE 1=1";
 
         var parameters = new List<NpgsqlParameter>();
@@ -70,8 +74,8 @@ public static class ReportService
             tc.IssueDate, 
             tc.ExpiryDate, 
             u.Email,
-            e.FullName,
-            m.Email";
+            e.EmployeeID,
+            e.FullName";
 
         using var conn = DatabaseHelper.GetConnection();
         conn.Open();

@@ -26,6 +26,9 @@ namespace EmployeeTrainingTracker
                 dataGridView1.DataBindingComplete += DataGridView1_DataBindingComplete;
                 dataGridView1.CellFormatting += dataGridView1_CellFormatting;
 
+                // Show the employee's real department(s), same source as the Admin/Manager grids
+                this.Text = $"Employee Dashboard - {GroupService.GetEmployeeDepartmentNames(employeeId)}";
+
                 LoadCertificates(employeeId);
                 LoadPlannedTraining(employeeId);
 
@@ -181,8 +184,8 @@ namespace EmployeeTrainingTracker
                 return;
             }
 
-            string issueDate = dtpIssueDate.Value.ToString("yyyy-MM-dd");
-            string? expiryDate = dtpExpiryDate.Checked ? dtpExpiryDate.Value.ToString("yyyy-MM-dd") : null;
+            DateTime issueDate = dtpIssueDate.Value.Date;
+            DateTime? expiryDate = dtpExpiryDate.Checked ? dtpExpiryDate.Value.Date : null;
 
             // UPDATE THIS LINE to just pass null at the end instead of filePath:
             CertificateService.UpdateCertificate(certId, certName, key, hrs, provider, issueDate, expiryDate, null);

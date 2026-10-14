@@ -61,7 +61,7 @@ using var package = new ExcelPackage();
 // Sheet 1: Employees (same columns/order as the Admin dashboard's grid)
 // ---------------------------------------------------------------------
 var wsEmp = package.Workbook.Worksheets.Add("Employees");
-string[] empHeaders = { "Full Name", "Email", "Role", "Department", "Job Title" };
+string[] empHeaders = { "Full Name", "Email", "Role", "Department", "Job Title", "Status" };
 for (int i = 0; i < empHeaders.Length; i++)
     wsEmp.Cells[1, i + 1].Value = empHeaders[i];
 
@@ -71,11 +71,20 @@ using (var cmd = new NpgsqlCommand(@"
         COALESCE(e.FullName, u.Email) AS FullName,
         u.Email AS Email,
         u.Role,
-        COALESCE(e.Department, 'Unknown') AS Department,
-        COALESCE(e.JobTitle, 'Unknown') AS JobTitle
+        -- Real departments come from group membership; archived employees keep the
+        -- department(s) saved when they were archived
+        CASE WHEN COALESCE(e.IsArchived, FALSE) THEN COALESCE(e.Department, 'Unassigned')
+             ELSE COALESCE((
+                SELECT STRING_AGG(dg.GroupName, ', ' ORDER BY dg.GroupName)
+                FROM GroupMembers dgm
+                INNER JOIN Groups dg ON dgm.GroupID = dg.GroupID
+                WHERE dgm.EmployeeID = e.EmployeeID), 'Unassigned') END AS Department,
+        COALESCE(e.JobTitle, 'Unknown') AS JobTitle,
+        CASE WHEN COALESCE(e.IsArchived, FALSE)
+             THEN 'Archived ' || TO_CHAR(e.ArchivedAt, 'YYYY-MM-DD') ELSE 'Active' END AS Status
     FROM Users u
     LEFT JOIN Employees e ON u.EmployeeID = e.EmployeeID
-    ORDER BY FullName ASC", conn))
+    ORDER BY COALESCE(e.IsArchived, FALSE), FullName ASC", conn))
 using (var reader = cmd.ExecuteReader())
 {
     int row = 2;

@@ -101,7 +101,7 @@ namespace EmployeeTrainingTracker.Utilities
             cmd.Parameters.AddWithValue(key ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue(hrs ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue(provider ?? (object)DBNull.Value);
-            cmd.Parameters.AddWithValue(plannedDate.Date); // Pass as DateTime
+            cmd.Parameters.Add(DatabaseHelper.DateParam(plannedDate)); // date only
             cmd.Parameters.AddWithValue(notes ?? (object)DBNull.Value);
 
             long sessionId = (long)cmd.ExecuteScalar();
@@ -134,7 +134,7 @@ namespace EmployeeTrainingTracker.Utilities
             cmd.Parameters.AddWithValue(key ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue(hrs ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue(provider ?? (object)DBNull.Value);
-            cmd.Parameters.AddWithValue(plannedDate.Date); // Pass as DateTime
+            cmd.Parameters.Add(DatabaseHelper.DateParam(plannedDate)); // date only
             cmd.Parameters.AddWithValue(notes ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue(sessionId);
 
@@ -183,16 +183,26 @@ namespace EmployeeTrainingTracker.Utilities
             using var tx = conn.BeginTransaction();
 
             // --- 1️⃣ Get session info ---
+            // FOR UPDATE locks the row so two clicks / two users can't both complete it at once
             var sessionCmd = new NpgsqlCommand(@"
-                SELECT CertificateName, Key, HRS, Provider, FilePath, IssueDate, ExpiryDate
+                SELECT CertificateName, Key, HRS, Provider, FilePath, IssueDate, ExpiryDate, Status
                 FROM TrainingSessions
-                WHERE SessionID = $1", conn, tx);
+                WHERE SessionID = $1
+                FOR UPDATE", conn, tx);
             sessionCmd.Parameters.AddWithValue(sessionId);
 
             using var sessionReader = sessionCmd.ExecuteReader();
             if (!sessionReader.Read())
             {
                 MessageBox.Show("Training session not found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            // Already completed - certificates were created the first time, so don't create duplicates
+            if (string.Equals(sessionReader["Status"]?.ToString()?.Trim(), "Completed", StringComparison.OrdinalIgnoreCase))
+            {
+                MessageBox.Show("This training session has already been completed. Certificates were created at that time.",
+                    "Already Completed", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -203,11 +213,11 @@ namespace EmployeeTrainingTracker.Utilities
             string filePath = sessionReader["FilePath"]?.ToString();
 
             DateTime issueDate = sessionReader["IssueDate"] != DBNull.Value
-                ? DateTime.Parse(sessionReader["IssueDate"].ToString())
+                ? Convert.ToDateTime(sessionReader["IssueDate"])
                 : DateTime.Today;
 
             DateTime expiryDate = sessionReader["ExpiryDate"] != DBNull.Value
-                ? DateTime.Parse(sessionReader["ExpiryDate"].ToString())
+                ? Convert.ToDateTime(sessionReader["ExpiryDate"])
                 : issueDate.AddYears(1); // fallback to 1 year if missing
 
             sessionReader.Close();
@@ -243,8 +253,8 @@ namespace EmployeeTrainingTracker.Utilities
                 insertCmd.Parameters.AddWithValue(string.IsNullOrEmpty(key) ? DBNull.Value : key);
                 insertCmd.Parameters.AddWithValue(hrs ?? (object)DBNull.Value);
                 insertCmd.Parameters.AddWithValue(string.IsNullOrEmpty(provider) ? DBNull.Value : provider);
-                insertCmd.Parameters.AddWithValue(issueDate.Date); // Pass as DateTime
-                insertCmd.Parameters.AddWithValue(expiryDate.Date); // Pass as DateTime
+                insertCmd.Parameters.Add(DatabaseHelper.DateParam(issueDate)); // date only
+                insertCmd.Parameters.Add(DatabaseHelper.DateParam(expiryDate)); // date only
                 insertCmd.Parameters.AddWithValue(string.IsNullOrEmpty(filePath) ? DBNull.Value : filePath);
 
                 insertCmd.ExecuteNonQuery();
@@ -266,7 +276,7 @@ namespace EmployeeTrainingTracker.Utilities
         {
             var employees = new List<EmployeeItem>();
 
-            string query = "SELECT EmployeeID, FullName FROM Employees ORDER BY FullName";
+            string query = "SELECT EmployeeID, FullName FROM Employees WHERE NOT IsArchived ORDER BY FullName";
 
 
             using var conn = DatabaseHelper.GetConnection();
@@ -329,7 +339,7 @@ namespace EmployeeTrainingTracker.Utilities
         public static List<EmployeeItem> GetEmployeesByDepartment(string department)
         {
             var employees = new List<EmployeeItem>();
-            string query = "SELECT EmployeeID, FullName FROM Employees WHERE Department = $1 ORDER BY FullName";
+            string query = "SELECT EmployeeID, FullName FROM Employees WHERE Department = $1 AND NOT IsArchived ORDER BY FullName";
 
             using var conn = DatabaseHelper.GetConnection();
             conn.Open();
@@ -397,7 +407,14 @@ namespace EmployeeTrainingTracker.Utilities
                     ts.FilePath,
                     ts.Status,
                     ts.Notes,
-                    STRING_AGG(DISTINCT e.FullName, ', ') AS Participants
+                    STRING_AGG(DISTINCT e.FullName, ', ') AS Participants,
+                    -- Shared sessions: how many participants belong to other managers' groups (names stay hidden)
+                    (SELECT COUNT(*) FROM TrainingParticipants tpo
+                     WHERE tpo.SessionID = ts.SessionID
+                       AND tpo.EmployeeID NOT IN (
+                           SELECT gmo.EmployeeID FROM GroupMembers gmo
+                           INNER JOIN Groups gro ON gmo.GroupID = gro.GroupID
+                           WHERE gro.ManagerID = $1)) AS OtherGroupParticipants
                 FROM TrainingSessions ts
                 INNER JOIN TrainingParticipants tp ON ts.SessionID = tp.SessionID
                 INNER JOIN Employees e ON tp.EmployeeID = e.EmployeeID
@@ -418,6 +435,188 @@ namespace EmployeeTrainingTracker.Utilities
             table.Load(reader);
 
             return table;
+        }
+
+        // ---------------------------------------------------------------------------------
+        // Shared sessions (Manager dashboard)
+        // A session can contain employees from several managers' groups. These methods only
+        // ever add, remove or move the calling manager's own participants - everyone else in
+        // the session is left exactly as it was.
+        // ---------------------------------------------------------------------------------
+
+        private const string ManagedEmployeesSql = @"
+            SELECT gm.EmployeeID FROM GroupMembers gm
+            INNER JOIN Groups g ON gm.GroupID = g.GroupID
+            WHERE g.ManagerID = @managerId";
+
+        // Number of participants in the session who are NOT in this manager's groups
+        public static int GetOtherParticipantCount(int managerId, int sessionId)
+        {
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+            return CountOtherParticipants(conn, null, managerId, sessionId);
+        }
+
+        /// <summary>
+        /// Edits a session from the Manager dashboard. The manager's own participants are
+        /// replaced with employeeIds; other managers' participants are always kept.
+        /// When splitFromShared is true, the manager's employees are moved into a new copy of
+        /// the session and the new details apply only to that copy - the original session is
+        /// left untouched for everyone else. Returns the SessionID that was updated.
+        /// </summary>
+        public static int UpdatePlannedSessionForManager(int managerId, int sessionId, string certificateName, string key, double? hrs, string provider, DateTime plannedDate, string notes, List<int> employeeIds, bool splitFromShared)
+        {
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+            using var tx = conn.BeginTransaction();
+
+            int targetId = sessionId;
+            if (splitFromShared)
+            {
+                targetId = CloneSession(conn, tx, sessionId);
+                MoveManagerParticipants(conn, tx, managerId, sessionId, targetId);
+            }
+
+            var cmd = new NpgsqlCommand(@"
+            UPDATE TrainingSessions
+            SET CertificateName=$1, Key=$2, HRS=$3, Provider=$4, PlannedDate=$5, Notes=$6
+            WHERE SessionID=$7", conn, tx);
+
+            cmd.Parameters.AddWithValue(certificateName);
+            cmd.Parameters.AddWithValue(key ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue(hrs ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue(provider ?? (object)DBNull.Value);
+            cmd.Parameters.Add(DatabaseHelper.DateParam(plannedDate)); // date only
+            cmd.Parameters.AddWithValue(notes ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue(targetId);
+            cmd.ExecuteNonQuery();
+
+            // Swap out only this manager's participants
+            RemoveManagerParticipants(conn, tx, managerId, targetId);
+            foreach (int empId in employeeIds.Distinct())
+            {
+                var partCmd = new NpgsqlCommand("INSERT INTO TrainingParticipants (SessionID, EmployeeID) VALUES ($1, $2)", conn, tx);
+                partCmd.Parameters.AddWithValue(targetId);
+                partCmd.Parameters.AddWithValue(empId);
+                partCmd.ExecuteNonQuery();
+            }
+
+            tx.Commit();
+            return targetId;
+        }
+
+        /// <summary>
+        /// Removes the manager's employees from the session. The session itself is only deleted
+        /// when nobody else is left in it. Returns true if the whole session was deleted.
+        /// </summary>
+        public static bool DeletePlannedSessionForManager(int managerId, int sessionId)
+        {
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+            using var tx = conn.BeginTransaction();
+
+            RemoveManagerParticipants(conn, tx, managerId, sessionId);
+
+            var countCmd = new NpgsqlCommand("SELECT COUNT(*) FROM TrainingParticipants WHERE SessionID = $1", conn, tx);
+            countCmd.Parameters.AddWithValue(sessionId);
+            bool sessionEmpty = Convert.ToInt64(countCmd.ExecuteScalar()) == 0;
+
+            if (sessionEmpty)
+            {
+                var delSession = new NpgsqlCommand("DELETE FROM TrainingSessions WHERE SessionID=$1", conn, tx);
+                delSession.Parameters.AddWithValue(sessionId);
+                delSession.ExecuteNonQuery();
+            }
+
+            tx.Commit();
+            return sessionEmpty;
+        }
+
+        /// <summary>
+        /// Completes the session for the manager's employees only. If other managers' employees
+        /// are also in the session, the manager's employees are first moved into their own copy,
+        /// which is then completed - the original stays Planned for everyone else.
+        /// </summary>
+        public static void CompleteTrainingSessionForManager(int managerId, int sessionId)
+        {
+            int targetId = sessionId;
+
+            using (var conn = DatabaseHelper.GetConnection())
+            {
+                conn.Open();
+                using var tx = conn.BeginTransaction();
+
+                // Check before splitting, otherwise a copy of an already-completed session would be left behind
+                if (IsSessionCompleted(conn, tx, sessionId))
+                {
+                    MessageBox.Show("This training session has already been completed. Certificates were created at that time.",
+                        "Already Completed", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                if (CountOtherParticipants(conn, tx, managerId, sessionId) > 0)
+                {
+                    targetId = CloneSession(conn, tx, sessionId);
+                    MoveManagerParticipants(conn, tx, managerId, sessionId, targetId);
+                }
+
+                tx.Commit();
+            }
+
+            CompleteTrainingSession(targetId);
+        }
+
+        private static bool IsSessionCompleted(NpgsqlConnection conn, NpgsqlTransaction tx, int sessionId)
+        {
+            using var cmd = new NpgsqlCommand("SELECT Status FROM TrainingSessions WHERE SessionID = @sessionId FOR UPDATE", conn, tx);
+            cmd.Parameters.AddWithValue("sessionId", sessionId);
+            return string.Equals(cmd.ExecuteScalar()?.ToString()?.Trim(), "Completed", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static int CountOtherParticipants(NpgsqlConnection conn, NpgsqlTransaction? tx, int managerId, int sessionId)
+        {
+            using var cmd = new NpgsqlCommand($@"
+                SELECT COUNT(*) FROM TrainingParticipants
+                WHERE SessionID = @sessionId
+                  AND EmployeeID NOT IN ({ManagedEmployeesSql})", conn, tx);
+            cmd.Parameters.AddWithValue("sessionId", sessionId);
+            cmd.Parameters.AddWithValue("managerId", managerId);
+            return Convert.ToInt32(cmd.ExecuteScalar());
+        }
+
+        // Copies a session's details (no participants) and returns the new SessionID
+        private static int CloneSession(NpgsqlConnection conn, NpgsqlTransaction tx, int sessionId)
+        {
+            using var cmd = new NpgsqlCommand(@"
+                INSERT INTO TrainingSessions (CertificateName, Key, HRS, Provider, PlannedDate, Notes, IssueDate, ExpiryDate, FilePath, Status)
+                SELECT CertificateName, Key, HRS, Provider, PlannedDate, Notes, IssueDate, ExpiryDate, FilePath, Status
+                FROM TrainingSessions WHERE SessionID = @sessionId
+                RETURNING SessionID", conn, tx);
+            cmd.Parameters.AddWithValue("sessionId", sessionId);
+            return Convert.ToInt32(cmd.ExecuteScalar());
+        }
+
+        private static void MoveManagerParticipants(NpgsqlConnection conn, NpgsqlTransaction tx, int managerId, int fromSessionId, int toSessionId)
+        {
+            using var cmd = new NpgsqlCommand($@"
+                UPDATE TrainingParticipants SET SessionID = @toId
+                WHERE SessionID = @fromId
+                  AND EmployeeID IN ({ManagedEmployeesSql})", conn, tx);
+            cmd.Parameters.AddWithValue("toId", toSessionId);
+            cmd.Parameters.AddWithValue("fromId", fromSessionId);
+            cmd.Parameters.AddWithValue("managerId", managerId);
+            cmd.ExecuteNonQuery();
+        }
+
+        private static void RemoveManagerParticipants(NpgsqlConnection conn, NpgsqlTransaction tx, int managerId, int sessionId)
+        {
+            using var cmd = new NpgsqlCommand($@"
+                DELETE FROM TrainingParticipants
+                WHERE SessionID = @sessionId
+                  AND EmployeeID IN ({ManagedEmployeesSql})", conn, tx);
+            cmd.Parameters.AddWithValue("sessionId", sessionId);
+            cmd.Parameters.AddWithValue("managerId", managerId);
+            cmd.ExecuteNonQuery();
         }
     }
 }

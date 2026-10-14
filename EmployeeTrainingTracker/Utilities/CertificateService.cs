@@ -36,8 +36,9 @@ namespace EmployeeTrainingTracker.Utilities
                 tc.ismarkedfordeletion, 
                 tc.status, 
                 COALESCE(e.FullName, 'Unknown') AS EmployeeName    
-            FROM TrainingCertificates tc    
-            LEFT JOIN Employees e ON tc.EmployeeID = e.EmployeeID    
+            FROM TrainingCertificates tc
+            LEFT JOIN Employees e ON tc.EmployeeID = e.EmployeeID
+            WHERE NOT COALESCE(e.IsArchived, FALSE)    -- archived employees' certificates are kept but not listed here
             ORDER BY e.FullName ASC, tc.IssueDate DESC", conn);
             }
             else
@@ -72,6 +73,48 @@ namespace EmployeeTrainingTracker.Utilities
             return table;
         }
 
+        // Manager view - only certificates for employees in groups they manage.
+        // employeeId = 0 means "All Employees"; otherwise that employee must also be one of the manager's.
+        public static DataTable GetCertificatesForManager(int managerId, int employeeId = 0)
+        {
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+
+            using var cmd = new NpgsqlCommand(@"
+            SELECT
+                tc.CertificateID,
+                tc.CertificateName,
+                tc.Key,
+                tc.HRS,
+                tc.Provider,
+                tc.IssueDate,
+                tc.ExpiryDate,
+                tc.FilePath,
+                tc.S3Key,
+                tc.LastNotifiedDate,
+                tc.ismarkedfordeletion,
+                tc.status,
+                COALESCE(e.FullName, 'Unknown') AS EmployeeName
+            FROM TrainingCertificates tc
+            INNER JOIN Employees e ON tc.EmployeeID = e.EmployeeID
+            WHERE (tc.EmployeeID = @managerId    -- the manager's own certificates
+                   OR tc.EmployeeID IN (
+                       SELECT gm.EmployeeID
+                       FROM GroupMembers gm
+                       INNER JOIN Groups g ON gm.GroupID = g.GroupID
+                       WHERE g.ManagerID = @managerId))
+              AND (@employeeId = 0 OR tc.EmployeeID = @employeeId)
+            ORDER BY e.FullName ASC, tc.IssueDate DESC", conn);
+
+            cmd.Parameters.AddWithValue("managerId", managerId);
+            cmd.Parameters.AddWithValue("employeeId", employeeId);
+
+            using var reader = cmd.ExecuteReader();
+            DataTable table = new DataTable();
+            table.Load(reader);
+            return table;
+        }
+
         public static async Task<bool> SaveCertificateAsync(
         int employeeId, string employeeName, string certName, string localFilePath,
         DateTime issueDate, DateTime expiryDate, string key, double? cpdHrs, string provider)
@@ -99,8 +142,8 @@ namespace EmployeeTrainingTracker.Utilities
                         cmd.Parameters.AddWithValue("empId", employeeId);
                         cmd.Parameters.AddWithValue("name", certName);
                         cmd.Parameters.AddWithValue("keyPath", s3Key);
-                        cmd.Parameters.AddWithValue("issue", issueDate);
-                        cmd.Parameters.AddWithValue("expiry", expiryDate);
+                        cmd.Parameters.Add(DatabaseHelper.DateParam(issueDate, "issue"));
+                        cmd.Parameters.Add(DatabaseHelper.DateParam(expiryDate, "expiry"));
                         cmd.Parameters.AddWithValue("key", key ?? (object)DBNull.Value);
                         cmd.Parameters.AddWithValue("hrs", cpdHrs ?? (object)DBNull.Value);
                         cmd.Parameters.AddWithValue("provider", provider ?? (object)DBNull.Value);
@@ -117,7 +160,7 @@ namespace EmployeeTrainingTracker.Utilities
             }
         }
 
-        public static void AddCertificate(int employeeId, string certName, string key, double cpdHrs, string provider, string issueDate, string? expiryDate, string? filePath = null)
+        public static void AddCertificate(int employeeId, string certName, string key, double cpdHrs, string provider, DateTime issueDate, DateTime? expiryDate, string? filePath = null)
         {
             using var conn = DatabaseHelper.GetConnection();
             conn.Open();
@@ -132,22 +175,14 @@ namespace EmployeeTrainingTracker.Utilities
             cmd.Parameters.AddWithValue(string.IsNullOrEmpty(key) ? DBNull.Value : key);
             cmd.Parameters.AddWithValue(cpdHrs);
             cmd.Parameters.AddWithValue(string.IsNullOrEmpty(provider) ? DBNull.Value : provider);
-            cmd.Parameters.AddWithValue(issueDate);
-            if (!string.IsNullOrEmpty(expiryDate))
-            {
-                // It is already a string, so just pass it.
-                cmd.Parameters.AddWithValue(expiryDate);
-            }
-            else
-            {
-                cmd.Parameters.AddWithValue(DBNull.Value);
-            }
+            cmd.Parameters.Add(DatabaseHelper.DateParam(issueDate));
+            cmd.Parameters.Add(DatabaseHelper.DateParam(expiryDate));
 
             cmd.Parameters.AddWithValue(string.IsNullOrEmpty(filePath) ? DBNull.Value : filePath);
             cmd.ExecuteNonQuery();
         }
 
-        public static void UpdateCertificate(int certId, string name, string key, double hrs, string provider, string issueDate, string? expiryDate, string? filePath)
+        public static void UpdateCertificate(int certId, string name, string key, double hrs, string provider, DateTime issueDate, DateTime? expiryDate, string? filePath)
         {
             using var conn = DatabaseHelper.GetConnection();
             conn.Open();
@@ -167,13 +202,8 @@ namespace EmployeeTrainingTracker.Utilities
             cmd.Parameters.AddWithValue(string.IsNullOrEmpty(key) ? DBNull.Value : key);
             cmd.Parameters.AddWithValue(hrs);
             cmd.Parameters.AddWithValue(string.IsNullOrEmpty(provider) ? DBNull.Value : provider);
-            cmd.Parameters.AddWithValue(issueDate);
-
-            // Check for null string
-            if (!string.IsNullOrEmpty(expiryDate))
-                cmd.Parameters.AddWithValue(expiryDate);
-            else
-                cmd.Parameters.AddWithValue(DBNull.Value);
+            cmd.Parameters.Add(DatabaseHelper.DateParam(issueDate));
+            cmd.Parameters.Add(DatabaseHelper.DateParam(expiryDate)); // null = no expiry
 
             cmd.Parameters.AddWithValue(string.IsNullOrEmpty(filePath) ? DBNull.Value : filePath);
 
@@ -232,7 +262,7 @@ namespace EmployeeTrainingTracker.Utilities
             tc.LastNotifiedDate
         FROM TrainingCertificates tc
         JOIN Employees e ON tc.EmployeeID = e.EmployeeID
-        WHERE tc.ismarkedfordeletion = TRUE
+        WHERE tc.ismarkedfordeletion = TRUE AND NOT e.IsArchived
         ORDER BY tc.IssueDate DESC";
 
             using var cmd = new NpgsqlCommand(sql, conn);

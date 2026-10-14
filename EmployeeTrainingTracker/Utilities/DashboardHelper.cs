@@ -322,6 +322,28 @@ namespace EmployeeTrainingTracker.Utilities
         }
 
         /// <summary>
+        /// Makes the row for the given EmployeeID the current row of an employees grid
+        /// (which fires SelectionChanged, so the dashboard loads that employee everywhere).
+        /// Does nothing if the employee isn't in the grid.
+        /// </summary>
+        public static void SelectEmployeeRow(DataGridView dgvEmployees, int employeeId)
+        {
+            if (employeeId <= 0) return;
+
+            foreach (DataGridViewRow row in dgvEmployees.Rows)
+            {
+                var value = row.Cells["EmployeeID"].Value;
+                if (value != null && value != DBNull.Value && Convert.ToInt32(value) == employeeId)
+                {
+                    var firstVisible = row.Cells.Cast<DataGridViewCell>().FirstOrDefault(c => c.Visible);
+                    if (firstVisible != null) dgvEmployees.CurrentCell = firstVisible;
+                    row.Selected = true;
+                    return;
+                }
+            }
+        }
+
+        /// <summary>
         /// Clears the "add/edit employee" input controls shared by Admin and Manager dashboards.
         /// </summary>
         public static void ClearEmployeeInputs(TextBox txtUsername, TextBox txtPassword, ComboBox cmbRole, ComboBox cmbDept, TextBox txtJobTitle)
@@ -371,7 +393,8 @@ namespace EmployeeTrainingTracker.Utilities
 
                     var cells = row.Cells.Cast<DataGridViewCell>()
                         .Where(c => c.OwningColumn.Visible)
-                        .Select(c => EscapeCsvValue(c.Value?.ToString() ?? ""));
+                        // FormattedValue = what the grid shows (e.g. dates as yyyy-MM-dd, no time)
+                        .Select(c => EscapeCsvValue(c.FormattedValue?.ToString() ?? ""));
                     sb.AppendLine(string.Join(",", cells));
                 }
 

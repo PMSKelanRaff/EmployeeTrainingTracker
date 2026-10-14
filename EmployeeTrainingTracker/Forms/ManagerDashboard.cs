@@ -24,14 +24,82 @@ namespace EmployeeTrainingTracker
             _managerId = managerId;
         }
 
-        // Add this helper method right below the constructor
-        private string GetManagerDepartment(int empId)
+        // Shows the standard message and returns false when the manager doesn't own the record
+        private bool EnsureAccess(bool allowed)
         {
-            using var conn = DatabaseHelper.GetConnection();
-            conn.Open();
-            using var cmd = new NpgsqlCommand("SELECT Department FROM Employees WHERE EmployeeID = $1", conn);
-            cmd.Parameters.AddWithValue(empId);
-            return cmd.ExecuteScalar()?.ToString();
+            if (!allowed)
+            {
+                MessageBox.Show("You can only manage records for employees in your own groups.", "Access Denied", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            return allowed;
+        }
+
+        // A session with no participants from the manager's groups would vanish from their grid
+        private bool EnsureParticipantsSelected(List<int> employeeIds)
+        {
+            if (employeeIds.Count == 0)
+            {
+                MessageBox.Show("Please select at least one employee from your groups.", "No Participants", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+            return true;
+        }
+
+        // Selects an employee in the Employees grid, which also loads them on the Certificates tab
+        private void SelectEmployeeRow(int employeeId)
+            => DashboardHelper.SelectEmployeeRow(dgvEmployees, employeeId);
+
+        // Department drop-down shows the real departments this manager runs (read-only for managers)
+        private void LoadDepartmentOptions()
+        {
+            string current = cmbDept.Text;
+            cmbDept.Items.Clear();
+            foreach (DataRow row in GroupService.GetGroupsByManager(_managerId).Rows)
+                cmbDept.Items.Add(row["GroupName"].ToString()!);
+            cmbDept.Text = current;
+        }
+
+        // Reports tab "Groups" list - only the departments this manager runs
+        private void LoadGroupsForReports()
+        {
+            clbGroups.Items.Clear();
+            foreach (DataRow row in GroupService.GetGroupsByManager(_managerId).Rows)
+            {
+                clbGroups.Items.Add(new EmployeeItem
+                {
+                    Id = Convert.ToInt32(row["GroupID"]),
+                    Name = $"{row["GroupName"]} (Group)",
+                    IsGroup = true
+                });
+            }
+        }
+
+        // Re-reads department membership when switching tabs, since an Admin may have changed it
+        private void tabControl_SelectedIndexChanged_Refresh(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (tabControl.SelectedTab == tabEmployees)
+                {
+                    int? selectedEmpId = GetSelectedEmployeeId();
+                    LoadDepartmentOptions();
+                    LoadEmployees();
+                    if (selectedEmpId.HasValue) SelectEmployeeRow(selectedEmpId.Value);
+                }
+                else if (tabControl.SelectedTab == Reports)
+                {
+                    LoadEmployeeList();
+                    LoadGroupsForReports();
+                }
+                else if (tabControl.SelectedTab == Planning)
+                {
+                    LoadPlannedTraining();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error refreshing data: {ex.Message}", "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void SetCurrentEmployeeName(string employeeName)
@@ -45,13 +113,13 @@ namespace EmployeeTrainingTracker
         {
             try
             {
-                // 1. Authenticate Department
-                _managerDepartment = GetManagerDepartment(_managerId);
+                // 1. Authenticate Department - the department(s) this manager runs, from Groups
+                _managerDepartment = GroupService.GetManagedDepartmentNames(_managerId);
                 this.Text = $"Manager Dashboard - {_managerDepartment}";
 
-                if (string.IsNullOrEmpty(_managerDepartment) || _managerDepartment == "Unknown")
+                if (string.IsNullOrEmpty(_managerDepartment))
                 {
-                    MessageBox.Show("Your account is not assigned to a valid department.", "Access Denied");
+                    MessageBox.Show("Your account is not assigned to manage any department.", "Access Denied");
                     this.Close();
                     return;
                 }
@@ -61,8 +129,10 @@ namespace EmployeeTrainingTracker
                 cmbDept.Enabled = false;
 
                 // 3. Load Restricted Data
+                LoadDepartmentOptions();
                 LoadEmployees(); // Now uses the restricted version below
                 LoadEmployeeList();
+                LoadGroupsForReports();
                 LoadPlannedTraining();
 
                 LoadDeletionTasks();
@@ -77,6 +147,12 @@ namespace EmployeeTrainingTracker
                 tabCertificates.Enabled = false;
                 LoadReportSettings();
                 StyleAllDGVs();
+
+                // Select the manager themselves once the grid is on screen (the grid picks row 0 when first shown)
+                this.Shown += (s, args) => SelectEmployeeRow(_managerId);
+
+                // Pick up department changes an Admin makes while this dashboard is open
+                tabControl.SelectedIndexChanged += tabControl_SelectedIndexChanged_Refresh;
 
                 // Disable Admin-only tabs if they carried over
                 // tabControl.TabPages.Remove(tabGroups); // Uncomment if you want to completely hide the Groups tab
@@ -93,21 +169,24 @@ namespace EmployeeTrainingTracker
             using var conn = DatabaseHelper.GetConnection();
             conn.Open();
 
-            // NEW SQL: Filters by the Group hierarchy instead of a text-based Department match
-            string query = @"
-        SELECT DISTINCT
+            // Employees in the groups this manager runs, plus the manager themselves.
+            // Department comes from group membership, not the old free-text column.
+            string query = $@"
+        SELECT
             u.UserID,
             COALESCE(e.FullName, u.Email) AS FullName,
             u.Email AS Email,
             u.Role,
             e.EmployeeID,
-            COALESCE(e.Department, 'Unknown') AS Department,
+            {GroupService.EmployeeDepartmentsSql} AS Department,
             COALESCE(e.JobTitle, 'Unknown') AS JobTitle
         FROM Users u
         INNER JOIN Employees e ON u.EmployeeID = e.EmployeeID
-        INNER JOIN GroupMembers gm ON e.EmployeeID = gm.EmployeeID
-        INNER JOIN Groups g ON gm.GroupID = g.GroupID
-        WHERE g.ManagerID = $1
+        WHERE e.EmployeeID = $1
+           OR e.EmployeeID IN (
+               SELECT gm.EmployeeID FROM GroupMembers gm
+               INNER JOIN Groups g ON gm.GroupID = g.GroupID
+               WHERE g.ManagerID = $1)
         ORDER BY FullName ASC";
 
             using var cmd = new NpgsqlCommand(query, conn);
@@ -138,7 +217,8 @@ namespace EmployeeTrainingTracker
 
         private void LoadCertificates(int employeeId)
         {
-            DataTable table = CertificateService.GetCertificates(employeeId);
+            // Always scoped to this manager's groups, whether "All Employees" (0) or a single employee
+            DataTable table = CertificateService.GetCertificatesForManager(_managerId, employeeId);
             DashboardHelper.BindCertificates(dgvCertificates, table);
 
             // update buttons correctly
@@ -251,9 +331,11 @@ namespace EmployeeTrainingTracker
                 return;
             }
 
-            string issue = dtpIssueDate.Value.ToString("yyyy-MM-dd");
-            string? expiry = dtpExpiryDate.Checked ? dtpExpiryDate.Value.ToString("yyyy-MM-dd") : null;
+            DateTime issue = dtpIssueDate.Value.Date;
+            DateTime? expiry = dtpExpiryDate.Checked ? dtpExpiryDate.Value.Date : null;
             double.TryParse(hrsText, out double cpdHrs);
+
+            if (!EnsureAccess(ManagerAccessService.CanManageCertificate(_managerId, certId))) return;
 
             CertificateService.UpdateCertificate(certId, name, key, cpdHrs, provider, issue, expiry, null);
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
@@ -276,6 +358,8 @@ namespace EmployeeTrainingTracker
             int certId = Convert.ToInt32(dgvCertificates.CurrentRow.Cells["CertificateID"].Value);
             string certName = dgvCertificates.CurrentRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
             string? s3Key = dgvCertificates.CurrentRow.Cells["FileLink"].Value?.ToString();
+
+            if (!EnsureAccess(ManagerAccessService.CanManageCertificate(_managerId, certId))) return;
 
             var confirm = MessageBox.Show($"Are you sure you want to permanently delete the certificate '{certName}'?", "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (confirm == DialogResult.No) return;
@@ -317,6 +401,8 @@ namespace EmployeeTrainingTracker
                 MessageBox.Show("Please select an employee first before uploading a certificate.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
+
+            if (!EnsureAccess(ManagerAccessService.CanManageEmployee(_managerId, currentEmployeeId.Value))) return;
 
             using (OpenFileDialog ofd = new OpenFileDialog())
             {
@@ -394,14 +480,37 @@ namespace EmployeeTrainingTracker
                 return;
             }
 
+            // 3. Find the Manager's GroupID - new employees are auto-assigned to it
+            int? managerGroupId = EmployeeAdminService.GetManagerGroupId(_managerId);
+
+            // Returning employee: restore their archived record into this manager's department
+            int? archivedId = EmployeeAdminService.FindArchivedEmployeeByEmail(email);
+            if (archivedId.HasValue && managerGroupId.HasValue)
+            {
+                var restore = MessageBox.Show(
+                    $"{email} belongs to an archived employee.\n\nRestore their previous record (including certificates and training history) into your department?",
+                    "Returning Employee", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (restore == DialogResult.Yes)
+                {
+                    EmployeeAdminService.RestoreEmployee(archivedId.Value, managerGroupId.Value);
+                    LoadEmployees();
+                    LoadEmployeeList();
+                    ClearEmployeeInputs();
+                    SelectEmployeeRow(archivedId.Value);
+                    MessageBox.Show($"{fullName} has been restored and added to your department.", "Employee Restored", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    MessageBox.Show("That email is still in use by the archived record, so a new account can't be created with it.", "Email In Use");
+                }
+                return;
+            }
+
             if (string.IsNullOrEmpty(password))
             {
                 MessageBox.Show("A password is required for new users.");
                 return;
             }
-
-            // 3. Find the Manager's GroupID - new employees are auto-assigned to it
-            int? managerGroupId = EmployeeAdminService.GetManagerGroupId(_managerId);
 
             if (!managerGroupId.HasValue)
             {
@@ -448,17 +557,22 @@ namespace EmployeeTrainingTracker
                 ? (int?)null
                 : Convert.ToInt32(empIdObj);
 
+            // Both the user account and the employee record being updated must be the manager's
+            bool allowed = ManagerAccessService.CanManageUser(_managerId, userId)
+                && (!employeeId.HasValue || ManagerAccessService.CanManageEmployee(_managerId, employeeId.Value));
+            if (!EnsureAccess(allowed)) return;
+
             // 2. Gather Input Data
             string fullName = txtFullName.Text.Trim();
             string email = txtUsername.Text.Trim(); // Assuming this is the email/username field
             string role = cmbRole.SelectedItem?.ToString() ?? "Employee";
-            string department = string.IsNullOrEmpty(cmbDept.Text.Trim()) ? "Unknown" : cmbDept.Text.Trim();
             string jobTitle = string.IsNullOrEmpty(txtJobTitle.Text.Trim()) ? "Unknown" : txtJobTitle.Text.Trim();
 
             // Get Password Input
             string newPassword = txtPassword.Text.Trim();
 
-            EmployeeAdminService.UpdateEmployee(userId, employeeId, fullName, email, role, department, jobTitle, newPassword);
+            // Department is group membership (managed by Admin), so leave it unchanged here
+            EmployeeAdminService.UpdateEmployee(userId, employeeId, fullName, email, role, null, jobTitle, newPassword);
 
             // 6. Refresh UI
             MessageBox.Show("Employee updated successfully.");
@@ -477,7 +591,19 @@ namespace EmployeeTrainingTracker
                 return;
             }
 
-            var confirm = MessageBox.Show("Delete this employee and all their certificates?", "Confirm", MessageBoxButtons.YesNo);
+            if (empId.Value == _managerId)
+            {
+                MessageBox.Show("You can't delete your own account. Please ask an Admin.", "Not Allowed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (!EnsureAccess(ManagerAccessService.CanManageEmployee(_managerId, empId.Value))) return;
+
+            var confirm = MessageBox.Show(
+                "Delete this employee?\n\n" +
+                "They will be archived: removed from all active lists and unable to log in, but their record and " +
+                "certificates are kept. If they return, add them again with the same email to restore their history.",
+                "Confirm", MessageBoxButtons.YesNo);
             if (confirm == DialogResult.No) return;
 
             EmployeeAdminService.DeleteEmployee(empId.Value);
@@ -504,6 +630,8 @@ namespace EmployeeTrainingTracker
         private void btnAddSession_Click(object sender, EventArgs e)
         {
             var selectedEmployeeIds = GetSelectedEmployees(); // List<int> from CheckedListBox
+            if (!EnsureParticipantsSelected(selectedEmployeeIds)) return;
+
             PlannedTrainingService.AddPlannedSession(
                 txtCertificateNamePlan.Text,
                 txtKeyPlan.Text,
@@ -524,18 +652,74 @@ namespace EmployeeTrainingTracker
             int sessionId = Convert.ToInt32(dgvPlannedTraining.CurrentRow.Cells["SessionID"].Value);
             var selectedEmployeeIds = GetSelectedEmployees();
 
-            PlannedTrainingService.UpdatePlannedSession(
+            if (!EnsureAccess(ManagerAccessService.CanManageSession(_managerId, sessionId))) return;
+            if (!EnsureParticipantsSelected(selectedEmployeeIds)) return;
+
+            double? hrs = double.TryParse(txtHrsPlan.Text, out double parsedHrs) ? parsedHrs : (double?)null;
+
+            // Shared session + changed details: let the manager choose who the change applies to.
+            // Participant-only changes never need asking - other groups' staff are always kept.
+            bool splitFromShared = false;
+            int otherCount = PlannedTrainingService.GetOtherParticipantCount(_managerId, sessionId);
+            if (otherCount > 0 && SessionDetailsChanged(hrs))
+            {
+                var choice = MessageBox.Show(
+                    $"This session is shared with {otherCount} employee(s) from other groups.\n\n" +
+                    "Yes - apply the new details to the whole session (everyone attending).\n" +
+                    "No - move only your employees into their own session with the new details; the original stays as it is for the other groups.\n" +
+                    "Cancel - make no changes.",
+                    "Shared Session", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+
+                if (choice == DialogResult.Cancel) return;
+                splitFromShared = choice == DialogResult.No;
+            }
+
+            int updatedId = PlannedTrainingService.UpdatePlannedSessionForManager(
+                _managerId,
                 sessionId,
                 txtCertificateNamePlan.Text,
                 txtKeyPlan.Text,
-                double.TryParse(txtHrsPlan.Text, out double hrs) ? hrs : (double?)null,
+                hrs,
                 txtProviderPlan.Text,
                 dtpPlannedDate.Value,
                 textNotesPlan.Text,
-                selectedEmployeeIds
+                selectedEmployeeIds,
+                splitFromShared
             );
 
             LoadPlannedTraining();
+            SelectPlannedSession(updatedId);
+        }
+
+        // Compares the edit boxes with the selected session row
+        private bool SessionDetailsChanged(double? hrs)
+        {
+            if (dgvPlannedTraining.CurrentRow?.DataBoundItem is not DataRowView row) return true;
+
+            static string Norm(object? value) => value == null || value == DBNull.Value ? "" : value.ToString()!.Trim();
+
+            double? rowHrs = double.TryParse(Norm(row["HRS"]), out double h) ? h : (double?)null;
+            DateTime? rowDate = DateTime.TryParse(Norm(row["PlannedDate"]), out DateTime d) ? d.Date : (DateTime?)null;
+
+            return Norm(row["CertificateName"]) != txtCertificateNamePlan.Text.Trim()
+                || Norm(row["Key"]) != txtKeyPlan.Text.Trim()
+                || Norm(row["Provider"]) != txtProviderPlan.Text.Trim()
+                || Norm(row["Notes"]) != textNotesPlan.Text.Trim()
+                || rowHrs != hrs
+                || rowDate != dtpPlannedDate.Value.Date;
+        }
+
+        private void SelectPlannedSession(int sessionId)
+        {
+            foreach (DataGridViewRow row in dgvPlannedTraining.Rows)
+            {
+                if (row.Cells["SessionID"].Value != null && Convert.ToInt32(row.Cells["SessionID"].Value) == sessionId)
+                {
+                    var firstVisible = row.Cells.Cast<DataGridViewCell>().FirstOrDefault(c => c.Visible);
+                    if (firstVisible != null) dgvPlannedTraining.CurrentCell = firstVisible;
+                    break;
+                }
+            }
         }
 
         private void btnDeleteSession_Click(object sender, EventArgs e)
@@ -544,10 +728,22 @@ namespace EmployeeTrainingTracker
 
             int sessionId = Convert.ToInt32(dgvPlannedTraining.CurrentRow.Cells["SessionID"].Value);
 
-            var confirm = MessageBox.Show("Are you sure you want to delete this session?", "Confirm", MessageBoxButtons.YesNo);
+            if (!EnsureAccess(ManagerAccessService.CanManageSession(_managerId, sessionId))) return;
+
+            int otherCount = PlannedTrainingService.GetOtherParticipantCount(_managerId, sessionId);
+            string prompt = otherCount > 0
+                ? $"This session is shared with {otherCount} employee(s) from other groups.\n\n" +
+                  "Your employees will be removed from it, but the session will stay in place for the other groups. Continue?"
+                : "Are you sure you want to delete this session?";
+
+            var confirm = MessageBox.Show(prompt, "Confirm", MessageBoxButtons.YesNo);
             if (confirm == DialogResult.No) return;
 
-            PlannedTrainingService.DeletePlannedSession(sessionId);
+            bool deleted = PlannedTrainingService.DeletePlannedSessionForManager(_managerId, sessionId);
+            if (!deleted)
+            {
+                MessageBox.Show("Your employees have been removed from the shared session.", "Session Updated", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
             LoadPlannedTraining();
         }
 
@@ -556,7 +752,20 @@ namespace EmployeeTrainingTracker
             if (dgvPlannedTraining.CurrentRow != null)
             {
                 int sessionId = Convert.ToInt32(dgvPlannedTraining.CurrentRow.Cells["SessionID"].Value);
-                PlannedTrainingService.CompleteTrainingSession(sessionId);
+                if (!EnsureAccess(ManagerAccessService.CanManageSession(_managerId, sessionId))) return;
+
+                int otherCount = PlannedTrainingService.GetOtherParticipantCount(_managerId, sessionId);
+                if (otherCount > 0)
+                {
+                    var confirm = MessageBox.Show(
+                        $"This session is shared with {otherCount} employee(s) from other groups.\n\n" +
+                        "It will be marked complete (and certificates created) for your employees only. " +
+                        "The other groups' employees stay in the planned session. Continue?",
+                        "Shared Session", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    if (confirm == DialogResult.No) return;
+                }
+
+                PlannedTrainingService.CompleteTrainingSessionForManager(_managerId, sessionId);
                 LoadPlannedTraining(); // refresh grid
             }
         }
@@ -601,6 +810,14 @@ namespace EmployeeTrainingTracker
                     .Cast<EmployeeItem>()
                     .Select(x => x.Id)
                     .ToList();
+            }
+
+            // Drop anyone outside the manager's groups (e.g. members pulled in via a group lookup)
+            selectedEmployees = ManagerAccessService.FilterManagedEmployees(_managerId, selectedEmployees);
+            if (selectedEmployees.Count == 0)
+            {
+                MessageBox.Show("No employees from your groups were selected.", "Report", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
             }
 
             try
@@ -652,6 +869,8 @@ namespace EmployeeTrainingTracker
             // FIXED: Using "FileLink" instead of "S3Key" to avoid the crash
             string s3Key = dgvTasks.CurrentRow.Cells["FileLink"].Value?.ToString();
 
+            if (!EnsureAccess(ManagerAccessService.CanManageCertificate(_managerId, certId))) return;
+
             var confirm = MessageBox.Show($"Permanently delete '{certName}'?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (confirm == DialogResult.No) return;
 
@@ -679,6 +898,8 @@ namespace EmployeeTrainingTracker
 
             int certId = Convert.ToInt32(dgvTasks.CurrentRow.Cells["CertificateID"].Value);
             string certName = dgvTasks.CurrentRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
+
+            if (!EnsureAccess(ManagerAccessService.CanManageCertificate(_managerId, certId))) return;
 
             var confirm = MessageBox.Show($"Reject deletion request for '{certName}'? It will be restored to the employee's dashboard.", "Confirm Reject", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
             if (confirm == DialogResult.No) return;
@@ -711,6 +932,8 @@ namespace EmployeeTrainingTracker
 
             // Grab the typed-in Trainer Name (if any)
             string trainerName = selectedRow.Cells["trainername"].Value?.ToString() ?? "";
+
+            if (!EnsureAccess(ManagerAccessService.CanManageCertificate(_managerId, ackId))) return;
 
             var confirm = MessageBox.Show(
                 "Are you sure you want to approve this training record? This will digitally sign it as Completed.",
@@ -750,6 +973,8 @@ namespace EmployeeTrainingTracker
             int certId = Convert.ToInt32(selectedRow.Cells["CertificateID"].Value);
             string topic = selectedRow.Cells["trainingtopic"].Value?.ToString() ?? "Unknown";
             string? s3Key = selectedRow.Cells["FileLink"].Value?.ToString();
+
+            if (!EnsureAccess(ManagerAccessService.CanManageCertificate(_managerId, certId))) return;
 
             var confirm = MessageBox.Show(
                 $"Are you sure you want to REJECT and DELETE the pending certificate for '{topic}'?",
@@ -1036,7 +1261,8 @@ namespace EmployeeTrainingTracker
                 }
             }
 
-            return selectedIds.Distinct().ToList(); // remove duplicates in case multiple groups overlap
+            // Remove duplicates and anyone outside the manager's groups
+            return ManagerAccessService.FilterManagedEmployees(_managerId, selectedIds);
         }
 
         private void dgvCertificates_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
@@ -1104,6 +1330,8 @@ namespace EmployeeTrainingTracker
                 {
                     try
                     {
+                        if (!EnsureAccess(ManagerAccessService.CanManageEmployee(_managerId, currentEmployeeId.Value))) return;
+
                         // Generate!
                         LegacyExcelService.GenerateHTSF13(currentEmployeeId.Value, currentEmployeeName, templatePath, sfd.FileName);
 
@@ -1136,7 +1364,7 @@ namespace EmployeeTrainingTracker
 
             using (FolderBrowserDialog fbd = new FolderBrowserDialog())
             {
-                fbd.Description = "Select a folder to save ALL company HTSF13 Records";
+                fbd.Description = "Select a folder to save HTSF13 Records for all employees in your groups";
 
                 if (fbd.ShowDialog() == DialogResult.OK)
                 {
@@ -1144,7 +1372,7 @@ namespace EmployeeTrainingTracker
 
                     try
                     {
-                        // ADMIN SETTINGS: Set to true so it grabs the entire company!
+                        // Manager export - only employees in groups this manager runs
                         bool isAdmin = false;
                         int managerEmployeeId = _managerId;
 
@@ -1152,7 +1380,7 @@ namespace EmployeeTrainingTracker
 
                         if (employeesToExport.Rows.Count == 0)
                         {
-                            MessageBox.Show("No employees found in the database.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            MessageBox.Show("No employees found in your groups.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
                             return;
                         }
 

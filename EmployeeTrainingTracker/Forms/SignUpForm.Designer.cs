@@ -36,15 +36,13 @@
             txtPassword = new TextBox();
             Lbl_FullName = new Label();
             Lbl_JobTitle = new Label();
-            Lbl_Department = new Label();
-            txtDepartment = new TextBox();
             txtFullName = new TextBox();
             txtJobTitle = new TextBox();
             SuspendLayout();
             // 
             // btnCreate
             // 
-            btnCreate.Location = new Point(154, 271);
+            btnCreate.Location = new Point(154, 228);
             btnCreate.Name = "btnCreate";
             btnCreate.Size = new Size(102, 23);
             btnCreate.TabIndex = 7;
@@ -106,28 +104,12 @@
             // Lbl_JobTitle
             // 
             Lbl_JobTitle.AutoSize = true;
-            Lbl_JobTitle.Location = new Point(9, 230);
+            Lbl_JobTitle.Location = new Point(9, 187);
             Lbl_JobTitle.Name = "Lbl_JobTitle";
             Lbl_JobTitle.Size = new Size(57, 15);
             Lbl_JobTitle.TabIndex = 8;
             Lbl_JobTitle.Text = "Job Title :";
-            // 
-            // Lbl_Department
-            // 
-            Lbl_Department.AutoSize = true;
-            Lbl_Department.Location = new Point(9, 187);
-            Lbl_Department.Name = "Lbl_Department";
-            Lbl_Department.Size = new Size(76, 15);
-            Lbl_Department.TabIndex = 9;
-            Lbl_Department.Text = "Department :";
-            // 
-            // txtDepartment
-            // 
-            txtDepartment.Location = new Point(84, 184);
-            txtDepartment.Name = "txtDepartment";
-            txtDepartment.Size = new Size(131, 23);
-            txtDepartment.TabIndex = 4;
-            // 
+            //
             // txtFullName
             // 
             txtFullName.Location = new Point(84, 140);
@@ -137,20 +119,18 @@
             // 
             // txtJobTitle
             // 
-            txtJobTitle.Location = new Point(84, 227);
+            txtJobTitle.Location = new Point(84, 184);
             txtJobTitle.Name = "txtJobTitle";
             txtJobTitle.Size = new Size(131, 23);
-            txtJobTitle.TabIndex = 5;
+            txtJobTitle.TabIndex = 4;
             // 
             // SignUpForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(268, 306);
+            ClientSize = new Size(268, 263);
             Controls.Add(txtJobTitle);
             Controls.Add(txtFullName);
-            Controls.Add(txtDepartment);
-            Controls.Add(Lbl_Department);
             Controls.Add(Lbl_JobTitle);
             Controls.Add(Lbl_FullName);
             Controls.Add(txtPassword);
@@ -175,8 +155,6 @@
         private TextBox txtPassword;
         private Label Lbl_FullName;
         private Label Lbl_JobTitle;
-        private Label Lbl_Department;
-        private TextBox txtDepartment;
         private TextBox txtFullName;
         private TextBox txtJobTitle;
     }

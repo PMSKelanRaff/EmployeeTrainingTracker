@@ -102,7 +102,7 @@ namespace EmployeeTrainingTracker
             if (isAdmin)
             {
                 // Admins just grab absolutely everyone in the company
-                sql = "SELECT employeeid, fullname FROM employees ORDER BY fullname ASC";
+                sql = "SELECT employeeid, fullname FROM employees WHERE NOT isarchived ORDER BY fullname ASC";
             }
             else
             {

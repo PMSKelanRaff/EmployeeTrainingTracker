@@ -66,8 +66,13 @@ namespace EmployeeTrainingTracker
                 LoadManagers();
                 LoadGroups();
 
+                LoadDepartmentOptions();
+
                 cbManager.SelectedIndexChanged += cbManager_SelectedIndexChanged;
                 tabControl.SelectedIndexChanged += tabControl_SelectedIndexChanged_Refresh;
+
+                // Select the logged-in user once the grid is on screen (the grid picks row 0 when first shown)
+                this.Shown += (s, args) => SelectEmployeeRow(loggedInUserId);
                 dgvGroups.DataBindingComplete += dgvGroupGrids_DataBindingComplete;
                 dgvGroupMembers.DataBindingComplete += dgvGroupGrids_DataBindingComplete;
 
@@ -95,22 +100,27 @@ namespace EmployeeTrainingTracker
             {
                 conn.Open();
 
-                // CHANGED: 
-                // 1. Swapped positions of 'Email' and 'FullName' in the SELECT list
-                // 2. Added 'ORDER BY FullName ASC' at the end
+                // Active employees by default; "Show archived employees" switches to the archive.
+                // Archived employees show the department(s) they were in when archived.
                 using (var cmd = new NpgsqlCommand(@"
-            SELECT 
+            SELECT
                 u.UserID,
                 COALESCE(e.FullName, u.Email) AS FullName,
                 u.Email AS Email,
                 u.Role,
                 e.EmployeeID,
-                COALESCE(e.Department, 'Unknown') AS Department,
-                COALESCE(e.JobTitle, 'Unknown') AS JobTitle
+                CASE WHEN e.EmployeeID IS NULL THEN 'Unassigned'
+                     WHEN e.IsArchived THEN COALESCE(e.Department, 'Unassigned')
+                     ELSE " + GroupService.EmployeeDepartmentsSql + @" END AS Department,
+                COALESCE(e.JobTitle, 'Unknown') AS JobTitle,
+                e.ArchivedAt
             FROM Users u
             LEFT JOIN Employees e ON u.EmployeeID = e.EmployeeID
+            WHERE COALESCE(e.IsArchived, FALSE) = @archived
             ORDER BY FullName ASC", conn))
                 {
+                    cmd.Parameters.AddWithValue("archived", chkShowArchived.Checked);
+
                     using (var reader = cmd.ExecuteReader())
                     {
                         DataTable table = new DataTable();
@@ -125,6 +135,12 @@ namespace EmployeeTrainingTracker
 
                         if (dgvEmployees.Columns.Contains("EmployeeID"))
                             dgvEmployees.Columns["EmployeeID"].Visible = false;
+
+                        if (dgvEmployees.Columns.Contains("ArchivedAt"))
+                        {
+                            dgvEmployees.Columns["ArchivedAt"].Visible = chkShowArchived.Checked;
+                            dgvEmployees.Columns["ArchivedAt"].HeaderText = "Archived On";
+                        }
 
                         // ---------------------------------------------------------
                         // NEW: Populate ComboBox independently with an "All" option
@@ -166,7 +182,7 @@ namespace EmployeeTrainingTracker
             using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
-                var cmd = new NpgsqlCommand("SELECT EmployeeID, FullName FROM Employees ORDER BY FullName", conn);
+                var cmd = new NpgsqlCommand("SELECT EmployeeID, FullName FROM Employees WHERE NOT IsArchived ORDER BY FullName", conn);
                 using (var reader = cmd.ExecuteReader())
                 {
                     while (reader.Read())
@@ -273,6 +289,7 @@ namespace EmployeeTrainingTracker
 
             LoadEmployeeList();
             LoadGroupsForReports();
+            LoadDepartmentOptions();
         }
 
         private void tabControl_SelectedIndexChanged_Refresh(object? sender, EventArgs e)
@@ -280,7 +297,33 @@ namespace EmployeeTrainingTracker
             // Departments tab: always show fresh data when the user switches to it
             if (tabControl.SelectedTab == Groups)
                 RefreshEmployeeDependentTabs();
+
+            // Employees tab: department memberships may have changed on the Departments tab
+            if (tabControl.SelectedTab == tabEmployees)
+            {
+                int? selectedEmpId = GetSelectedEmployeeId();
+                LoadDepartmentOptions();
+                LoadEmployees();
+                if (selectedEmpId.HasValue) SelectEmployeeRow(selectedEmpId.Value);
+            }
         }
+
+        // Department drop-down on the Employees tab lists the real departments (Groups)
+        private void LoadDepartmentOptions()
+        {
+            string current = cmbDept.Text;
+            cmbDept.Items.Clear();
+            foreach (string name in GroupService.GetDepartmentNames())
+                cmbDept.Items.Add(name);
+            cmbDept.Text = current;
+        }
+
+        private bool IsRealDepartment(string department)
+            => cmbDept.Items.Cast<object>().Any(i => string.Equals(i.ToString(), department, StringComparison.OrdinalIgnoreCase));
+
+        // Selects an employee in the Employees grid, which also loads them on the Certificates tab
+        private void SelectEmployeeRow(int employeeId)
+            => DashboardHelper.SelectEmployeeRow(dgvEmployees, employeeId);
 
         private void LoadManagers()
         {
@@ -288,8 +331,9 @@ namespace EmployeeTrainingTracker
             conn.Open();
 
             string query = @"
-            SELECT EmployeeID, FullName 
+            SELECT EmployeeID, FullName
             FROM Employees
+            WHERE NOT IsArchived
             ORDER BY FullName;";
 
             using var cmd = new NpgsqlCommand(query, conn);
@@ -476,8 +520,8 @@ namespace EmployeeTrainingTracker
                 return;
             }
 
-            string issue = dtpIssueDate.Value.ToString("yyyy-MM-dd");
-            string? expiry = dtpExpiryDate.Checked ? dtpExpiryDate.Value.ToString("yyyy-MM-dd") : null;
+            DateTime issue = dtpIssueDate.Value.Date;
+            DateTime? expiry = dtpExpiryDate.Checked ? dtpExpiryDate.Value.Date : null;
             double.TryParse(hrsText, out double cpdHrs);
 
             CertificateService.UpdateCertificate(certId, name, key, cpdHrs, provider, issue, expiry, null);
@@ -619,14 +663,30 @@ namespace EmployeeTrainingTracker
                 return;
             }
 
+            // Returning employee: offer to restore their archived record (keeps their history)
+            int? archivedId = EmployeeAdminService.FindArchivedEmployeeByEmail(email);
+            if (archivedId.HasValue)
+            {
+                var restore = MessageBox.Show(
+                    $"{email} belongs to an archived employee.\n\nRestore their previous record, including their certificates and training history?",
+                    "Returning Employee", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (restore == DialogResult.Yes)
+                    RestoreAndShow(archivedId.Value, fullName);
+                else
+                    MessageBox.Show("That email is still in use by the archived record, so a new account can't be created with it.", "Email In Use");
+                return;
+            }
+
             if (string.IsNullOrEmpty(password))
             {
                 MessageBox.Show("A password is required for new users.");
                 return;
             }
 
-            // 3. Create the employee + linked user account
-            EmployeeAdminService.AddEmployee(fullName, email, role, department, jobTitle, password);
+            // 3. Create the employee + linked user account, placed in the chosen department (group)
+            int newEmployeeId = EmployeeAdminService.AddEmployee(fullName, email, role, department, jobTitle, password);
+            if (IsRealDepartment(department))
+                EmployeeAdminService.SetEmployeeDepartment(newEmployeeId, department);
 
             // 6. Refresh UI
             LoadEmployees();
@@ -675,10 +735,19 @@ namespace EmployeeTrainingTracker
             // Get Password Input
             string newPassword = txtPassword.Text.Trim();
 
-            EmployeeAdminService.UpdateEmployee(userId, employeeId, fullName, email, role, department, jobTitle, newPassword);
+            // Departments are group memberships - only a real department name is applied
+            bool realDepartment = IsRealDepartment(department);
+            EmployeeAdminService.UpdateEmployee(userId, employeeId, fullName, email, role, realDepartment ? department : null, jobTitle, newPassword);
+
+            string departmentNote = "";
+            if (realDepartment && employeeId.HasValue
+                && EmployeeAdminService.SetEmployeeDepartment(employeeId.Value, department) == EmployeeAdminService.DepartmentChangeResult.MultipleDepartments)
+            {
+                departmentNote = "\n\nThis employee belongs to more than one department, so their departments were not changed. Use the Departments tab to manage them.";
+            }
 
             // 6. Refresh UI
-            MessageBox.Show("Employee updated successfully.");
+            MessageBox.Show("Employee updated successfully." + departmentNote);
             LoadEmployees();
             RefreshEmployeeDependentTabs();
 
@@ -695,7 +764,17 @@ namespace EmployeeTrainingTracker
                 return;
             }
 
-            var confirm = MessageBox.Show("Delete this employee and all their certificates?", "Confirm", MessageBoxButtons.YesNo);
+            if (empId.Value == loggedInUserId)
+            {
+                MessageBox.Show("You can't delete your own account while logged in.", "Not Allowed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var confirm = MessageBox.Show(
+                "Delete this employee?\n\n" +
+                "They will be archived: removed from all active lists and unable to log in, but their record and " +
+                "certificates are kept. You can restore them from 'Show archived employees' if they return.",
+                "Confirm", MessageBoxButtons.YesNo);
             if (confirm == DialogResult.No) return;
 
             EmployeeAdminService.DeleteEmployee(empId.Value);
@@ -704,6 +783,51 @@ namespace EmployeeTrainingTracker
             RefreshEmployeeDependentTabs();
             dgvCertificates.DataSource = null;
             tabCertificates.Enabled = false;
+        }
+
+        private void btnRestoreEmployee_Click(object? sender, EventArgs e)
+        {
+            int? empId = GetSelectedEmployeeId();
+            if (empId == null)
+            {
+                MessageBox.Show("Please select an archived employee to restore.");
+                return;
+            }
+
+            string name = dgvEmployees.CurrentRow?.Cells["FullName"].Value?.ToString() ?? "this employee";
+            var confirm = MessageBox.Show($"Restore {name}? They will be able to log in again.", "Restore Employee", MessageBoxButtons.YesNo);
+            if (confirm == DialogResult.No) return;
+
+            RestoreAndShow(empId.Value, name);
+        }
+
+        // Restores an archived employee, switches back to the active list and selects them
+        private void RestoreAndShow(int employeeId, string name)
+        {
+            var rejoined = EmployeeAdminService.RestoreEmployee(employeeId);
+
+            chkShowArchived.Checked = false; // reloads the active list
+            RefreshEmployeeDependentTabs();
+            SelectEmployeeRow(employeeId);
+
+            string departments = rejoined.Count > 0
+                ? $"They have been put back into: {string.Join(", ", rejoined)}."
+                : "Their previous department no longer exists, so they are Unassigned - pick a department and click Edit.";
+            MessageBox.Show($"{name} has been restored.\n\n{departments}", "Employee Restored", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void chkShowArchived_CheckedChanged(object? sender, EventArgs e)
+        {
+            bool archiveView = chkShowArchived.Checked;
+
+            // The archive is read-only apart from Restore
+            btnRestoreEmployee.Visible = archiveView;
+            btnDeleteEmployee.Enabled = !archiveView;
+            btnEditEmployee.Enabled = !archiveView;
+            btnAddEmployee.Enabled = !archiveView;
+
+            ClearEmployeeInputs();
+            LoadEmployees();
         }
 
         private void ClearEmployeeInputs()

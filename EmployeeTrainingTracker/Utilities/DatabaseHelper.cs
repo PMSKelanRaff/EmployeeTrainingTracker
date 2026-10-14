@@ -34,6 +34,18 @@ namespace EmployeeTrainingTracker
             return new NpgsqlConnection(_connectionString);
         }
 
+        /// <summary>
+        /// A date-only parameter (no time part) for DATE columns such as IssueDate/ExpiryDate.
+        /// Pass a name for @named parameters, or leave it null for positional ($1) ones.
+        /// </summary>
+        public static NpgsqlParameter DateParam(DateTime? value, string? name = null)
+        {
+            var p = new NpgsqlParameter { NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Date };
+            if (name != null) p.ParameterName = name;
+            p.Value = value.HasValue ? DateOnly.FromDateTime(value.Value) : DBNull.Value;
+            return p;
+        }
+
         // 3.  A test method to see if it works
         public static bool TestConnection()
         {

@@ -41,6 +41,8 @@ namespace EmployeeTrainingTracker
             cmbDept = new ComboBox();
             lbl_Department = new Label();
             btnDeleteEmployee = new Button();
+            btnRestoreEmployee = new Button();
+            chkShowArchived = new CheckBox();
             btnEditEmployee = new Button();
             btnAddEmployee = new Button();
             lbl_Type = new Label();
@@ -200,6 +202,8 @@ namespace EmployeeTrainingTracker
             tabEmployees.Controls.Add(cmbDept);
             tabEmployees.Controls.Add(lbl_Department);
             tabEmployees.Controls.Add(btnDeleteEmployee);
+            tabEmployees.Controls.Add(btnRestoreEmployee);
+            tabEmployees.Controls.Add(chkShowArchived);
             tabEmployees.Controls.Add(btnEditEmployee);
             tabEmployees.Controls.Add(btnAddEmployee);
             tabEmployees.Controls.Add(lbl_Type);
@@ -282,7 +286,31 @@ namespace EmployeeTrainingTracker
             btnDeleteEmployee.Text = "Delete";
             btnDeleteEmployee.UseVisualStyleBackColor = true;
             btnDeleteEmployee.Click += btnDeleteEmployee_Click;
-            // 
+            //
+            // btnRestoreEmployee
+            //
+            btnRestoreEmployee.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            btnRestoreEmployee.Location = new Point(643, 422);
+            btnRestoreEmployee.Name = "btnRestoreEmployee";
+            btnRestoreEmployee.Size = new Size(75, 23);
+            btnRestoreEmployee.TabIndex = 25;
+            btnRestoreEmployee.Text = "Restore";
+            btnRestoreEmployee.UseVisualStyleBackColor = true;
+            btnRestoreEmployee.Visible = false;
+            btnRestoreEmployee.Click += btnRestoreEmployee_Click;
+            //
+            // chkShowArchived
+            //
+            chkShowArchived.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            chkShowArchived.AutoSize = true;
+            chkShowArchived.Location = new Point(6, 425);
+            chkShowArchived.Name = "chkShowArchived";
+            chkShowArchived.Size = new Size(160, 19);
+            chkShowArchived.TabIndex = 26;
+            chkShowArchived.Text = "Show archived employees";
+            chkShowArchived.UseVisualStyleBackColor = true;
+            chkShowArchived.CheckedChanged += chkShowArchived_CheckedChanged;
+            //
             // btnEditEmployee
             // 
             btnEditEmployee.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
@@ -1330,6 +1358,8 @@ namespace EmployeeTrainingTracker
         private Label lbl_Password;
         private Label lbl_Type;
         private Button btnDeleteEmployee;
+        private Button btnRestoreEmployee;
+        private CheckBox chkShowArchived;
         private Button btnEditEmployee;
         private Button btnAddEmployee;
         private DateTimePicker dtpExpiryDate;

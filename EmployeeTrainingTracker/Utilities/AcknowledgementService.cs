@@ -95,6 +95,7 @@ namespace EmployeeTrainingTracker
         FROM trainingacknowledgements
         JOIN employees ON trainingacknowledgements.employeeid = employees.employeeid
         WHERE trainingacknowledgements.managerid = @manId AND trainingacknowledgements.status = 'Pending'
+          AND NOT employees.isarchived
         ORDER BY trainingacknowledgements.createdat ASC";
 
             using var cmd = new NpgsqlCommand(sql, conn);
