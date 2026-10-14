@@ -3,8 +3,9 @@
 -- '2025-03-11 00:00:00'. This converts them to the DATE type, which holds a date only.
 -- Existing values are converted in place - nothing is lost.
 --
--- LastNotifiedDate is deliberately left as text: nothing in the app writes it, so something
--- outside the app (e.g. a reminder job) probably does, and changing its type could break that.
+-- LastNotifiedDate is converted separately by 003_last_notified_date.sql (it is written by
+-- TrainingTrackerCertificateNotifier). Run this only once the updated notifier is in place -
+-- the old notifier reads these columns as text and would fail.
 --
 -- Run each statement one at a time in DBeaver (Ctrl+Enter on each), in order.
 -- Safe to run more than once.
