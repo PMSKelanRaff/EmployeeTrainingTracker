@@ -17,6 +17,8 @@ namespace EmployeeTrainingTracker
         private bool _loadingManagerCombo = false;
         private bool _isSyncingSelection = false;
         private int loggedInUserId;
+        private TabPage? tabSkillsMatrix;
+        private SkillsMatrixView? skillsMatrixView;
 
 
         private void SetCurrentEmployeeName(string employeeName)
@@ -67,6 +69,22 @@ namespace EmployeeTrainingTracker
                 LoadGroups();
 
                 LoadDepartmentOptions();
+
+                // Skills Matrix (read-only, Admin only): separate tab, loads the first time it is opened.
+                // Isolated so a problem here can never stop the rest of the dashboard loading.
+                try
+                {
+                    skillsMatrixView = new SkillsMatrixView(loggedInUserId) { Dock = DockStyle.Fill };
+                    tabSkillsMatrix = new TabPage("Skills Matrix") { Name = "tabSkillsMatrix" };
+                    tabSkillsMatrix.Controls.Add(skillsMatrixView);
+                    tabControl.TabPages.Add(tabSkillsMatrix);
+                }
+                catch (Exception ex)
+                {
+                    skillsMatrixView = null;
+                    tabSkillsMatrix = null;
+                    System.Diagnostics.Debug.WriteLine($"Skills Matrix tab not added: {ex}");
+                }
 
                 cbManager.SelectedIndexChanged += cbManager_SelectedIndexChanged;
                 tabControl.SelectedIndexChanged += tabControl_SelectedIndexChanged_Refresh;
@@ -294,6 +312,9 @@ namespace EmployeeTrainingTracker
 
         private void tabControl_SelectedIndexChanged_Refresh(object? sender, EventArgs e)
         {
+            if (tabSkillsMatrix != null && tabControl.SelectedTab == tabSkillsMatrix)
+                skillsMatrixView?.EnsureLoaded();
+
             // Departments tab: always show fresh data when the user switches to it
             if (tabControl.SelectedTab == Groups)
                 RefreshEmployeeDependentTabs();
