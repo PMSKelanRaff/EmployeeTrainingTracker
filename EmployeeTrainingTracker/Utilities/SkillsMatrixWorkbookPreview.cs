@@ -48,7 +48,47 @@ namespace EmployeeTrainingTracker.Utilities
             string? InabHeaderRef,
             IReadOnlyList<LegendCell> Legend);
 
-        public sealed record PreviewArea(SkillAreaInfo Area, SkillMatrixData Data, IReadOnlyList<string> Warnings, PreviewColours Colours);
+        /// <summary>
+        /// Something on a sheet that needs human review. Kind is one of the ReviewKind constants; Cell is the
+        /// full reference ("Sheet!A1") or null when the item concerns the whole sheet.
+        /// </summary>
+        public sealed record ReviewItem(string Kind, string? Cell, string Message);
+
+        public static class ReviewKind
+        {
+            public const string Formula = "Formula";
+            public const string UnexpectedValue = "UnexpectedValue";
+            public const string OutOfRange = "OutOfRangeValue";
+            public const string HiddenRow = "HiddenRow";
+            public const string DuplicateSkill = "DuplicateSkillName";
+            public const string AmbiguousLegend = "AmbiguousLevelDefinition";
+            public const string UnnamedColumn = "UnnamedColumn";
+            public const string MissingSkillName = "MissingSkillName";
+            public const string NoCategoryHeading = "NoCategoryHeading";
+            public const string UnexpectedInab = "UnexpectedInabValue";
+            public const string CategoryRowValue = "ValueInCategoryRow";
+            public const string ColourInconsistency = "ColourInconsistency";
+            public const string NoValidationRange = "NoValidationRange";
+            public const string LevelNotInKey = "LevelNotInKey";
+        }
+
+        /// <summary>What was read on a sheet, and what was left out (with reasons).</summary>
+        public sealed record SheetScope(
+            string LegendRange,
+            IReadOnlyList<string> HeaderRows,          // e.g. "row 3, columns C:K"
+            IReadOnlyList<string> ValidationRanges,    // the sheet's data-validation ranges = the in-range cells
+            int LastRow,
+            IReadOnlyList<string> SkippedColumns,      // "Laboratory!J3 - no name in the header row and no values"
+            int BlankRowsSkipped,
+            int CategoryRows,
+            int OutOfRangeBlankCells);                 // blank cells outside the validation range (no record)
+
+        public sealed record PreviewArea(SkillAreaInfo Area, SkillMatrixData Data, IReadOnlyList<ReviewItem> ReviewItems,
+                                         PreviewColours Colours, SheetScope Scope)
+        {
+            /// <summary>The review items as plain text (the preview's "Review notes").</summary>
+            public IReadOnlyList<string> Warnings => ReviewItems.Select(i => i.Message).ToList();
+        }
 
         public sealed record PreviewResult(
             string FilePath,
@@ -162,7 +202,11 @@ namespace EmployeeTrainingTracker.Utilities
 
         private static PreviewArea ReadSheet(ExcelWorksheet ws, SheetLayout layout, SkillsMatrixWorkbookColours colours, ref long nextId)
         {
-            var warnings = new List<string>();
+            var warnings = new List<ReviewItem>();
+            void Flag(string kind, string? cell, string message) => warnings.Add(new ReviewItem(kind, cell, message));
+            var headerRows = new List<string>();
+            var skippedColumns = new List<string>();
+            int blankRows = 0, categoryRows = 0, outOfRangeBlank = 0;
 
             // Displayed colours of every cell the preview shows (the workbook's own colour standard)
             var display = new Dictionary<string, SkillsMatrixWorkbookColours.CellDisplay>();
@@ -183,9 +227,11 @@ namespace EmployeeTrainingTracker.Utilities
             var ranges = ReadValidationRanges(ws);
             bool hasValidation = ranges.Count > 0;
             if (!hasValidation)
-                warnings.Add("This sheet has no data-validation range, so every person/skill cell is treated as part of the matrix.");
+                Flag(ReviewKind.NoValidationRange, null, "This sheet has no data-validation range, so every person/skill cell is treated as part of the matrix.");
 
             var legend = ReadLegend(ws, layout.LegendRange);
+            if (legend.NeedsConfirmation)
+                Flag(ReviewKind.AmbiguousLegend, legend.SourceRef, $"Level definitions need confirmation: {legend.LegendNote}");
 
             var categories = new List<SkillCategoryInfo>();
             var skills = new List<SkillRowInfo>();
@@ -196,16 +242,25 @@ namespace EmployeeTrainingTracker.Utilities
             {
                 // Person columns: named header cells; unnamed columns only if they hold values
                 var blockMembers = new List<(SkillMemberInfo Member, int Col)>();
+                headerRows.Add($"row {block.HeaderRow}, people in columns {Col(block.FirstPersonCol)}:{Col(block.LastPersonCol)}, " +
+                               $"skills in column {Col(block.SkillCol)}" +
+                               (block.InabCol.HasValue ? $", INAB in column {Col(block.InabCol.Value)}" : ", no INAB column") +
+                               $", data from row {block.FirstDataRow}");
                 for (int c = block.FirstPersonCol; c <= block.LastPersonCol; c++)
                 {
                     string header = Text(ws.Cells[block.HeaderRow, c]);
                     bool hasValues = Enumerable.Range(block.FirstDataRow, Math.Max(0, lastRow - block.FirstDataRow + 1))
                                                .Any(r => ws.Cells[r, c].Value != null || !string.IsNullOrEmpty(ws.Cells[r, c].Formula));
-                    if (header.Length == 0 && !hasValues) continue;
+                    if (header.Length == 0 && !hasValues)
+                    {
+                        skippedColumns.Add($"{ws.Name}!{Col(c)}{block.HeaderRow} - no name in the header row and no values");
+                        continue;
+                    }
                     if (header.Length == 0)
                     {
                         header = $"(unnamed column {Col(c)})";
-                        warnings.Add($"Column {Col(c)} has values but no name in the header row ({ws.Name}!{Col(c)}{block.HeaderRow}).");
+                        Flag(ReviewKind.UnnamedColumn, $"{ws.Name}!{Col(c)}{block.HeaderRow}",
+                             $"Column {Col(c)} has values but no name in the header row ({ws.Name}!{Col(c)}{block.HeaderRow}).");
                     }
                     var member = new SkillMemberInfo(nextId++, 0, "", false, header, Subgroup(ws, block.SubgroupRows, c), Col(c));
                     blockMembers.Add((member, c));
@@ -241,18 +296,21 @@ namespace EmployeeTrainingTracker.Utilities
                         // Category header row: shaded label with no INAB value and no numeric levels
                         var cat = new SkillCategoryInfo(nextId++, skillName, Remember(r, block.SkillCol));
                         categories.Add(cat);
+                        categoryRows++;
                         currentCategory = cat.CategoryId;
                         foreach (var bm in blockMembers.Where(x => ws.Cells[r, x.Col].Value != null))
-                            warnings.Add($"Value '{Text(ws.Cells[r, bm.Col])}' in category header row ({ws.Name}!{Col(bm.Col)}{r}) - not shown.");
+                            Flag(ReviewKind.CategoryRowValue, $"{ws.Name}!{Col(bm.Col)}{r}",
+                                 $"Value '{Text(ws.Cells[r, bm.Col])}' in category header row ({ws.Name}!{Col(bm.Col)}{r}) - not shown.");
                         continue;
                     }
 
-                    if (skillName.Length == 0 && inabRaw.Length == 0 && !anyValue) continue; // blank row
+                    if (skillName.Length == 0 && inabRaw.Length == 0 && !anyValue) { blankRows++; continue; } // blank row
 
                     if (skillName.Length == 0)
                     {
                         skillName = "(no skill name in source)";
-                        warnings.Add($"Row {r} has an INAB value and/or level cells but no skill name ({ws.Name}!{Col(block.SkillCol)}{r}) - shown as '(no skill name in source)'.");
+                        Flag(ReviewKind.MissingSkillName, $"{ws.Name}!{Col(block.SkillCol)}{r}",
+                             $"Row {r} has an INAB value and/or level cells but no skill name ({ws.Name}!{Col(block.SkillCol)}{r}) - shown as '(no skill name in source)'.");
                     }
 
                     if (currentCategory == null)
@@ -260,13 +318,16 @@ namespace EmployeeTrainingTracker.Utilities
                         var cat = new SkillCategoryInfo(nextId++, "(no category heading)", $"{ws.Name}!{Col(block.SkillCol)}{r}");
                         categories.Add(cat);
                         currentCategory = cat.CategoryId;
+                        Flag(ReviewKind.NoCategoryHeading, cat.SourceRef,
+                             $"Skill rows start at {cat.SourceRef} before any category heading - grouped under '(no category heading)'.");
                     }
 
                     bool? inab = inabRaw.Equals("Yes", StringComparison.OrdinalIgnoreCase) ? true
                                : inabRaw.Equals("No", StringComparison.OrdinalIgnoreCase) ? false
                                : null;
                     if (inab == null && inabRaw.Length > 0)
-                        warnings.Add($"Unexpected INAB value '{inabRaw}' ({ws.Name}!{Col(block.InabCol!.Value)}{r}) - shown as written.");
+                        Flag(ReviewKind.UnexpectedInab, $"{ws.Name}!{Col(block.InabCol!.Value)}{r}",
+                             $"Unexpected INAB value '{inabRaw}' ({ws.Name}!{Col(block.InabCol!.Value)}{r}) - shown as written.");
 
                     bool hidden = ws.Row(r).Hidden;
                     var skill = new SkillRowInfo(nextId++, currentCategory.Value, skillName, inab,
@@ -275,23 +336,24 @@ namespace EmployeeTrainingTracker.Utilities
                     if (block.InabCol.HasValue)
                         inabRefs[skill.SkillId] = Remember(r, block.InabCol.Value);
                     if (hidden)
-                        warnings.Add($"Row {r} '{skillName}' is hidden in the workbook.");
+                        Flag(ReviewKind.HiddenRow, skill.SourceRef, $"Row {r} '{skillName}' is hidden in the workbook.");
 
                     foreach (var (member, c) in blockMembers)
                     {
                         var info = ClassifyCell(ws, r, c, !hasValidation || InRange(ranges, r, c));
-                        if (info == null) continue; // outside the source range
+                        if (info == null) { outOfRangeBlank++; continue; } // blank and outside the source range: no record
                         cells[(skill.SkillId, member.MemberId)] = info;
                         Remember(r, c);
                         if (info.Status == "Flagged")
-                            warnings.Add($"{info.SourceCell}: {info.FlagReason} (value: {info.RawValue}).");
+                            Flag(FlagKind(info), info.SourceCell, $"{info.SourceCell}: {info.FlagReason} (value: {info.RawValue}).");
                     }
                 }
             }
 
             foreach (var dup in skills.Where(s => s.Name != "(no skill name in source)")
                                       .GroupBy(s => s.Name.Trim(), StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
-                warnings.Add($"Skill name '{dup.Key}' appears {dup.Count()} times on this sheet (kept separately: {string.Join(", ", dup.Select(d => d.SourceRef))}).");
+                Flag(ReviewKind.DuplicateSkill, dup.First().SourceRef,
+                     $"Skill name '{dup.Key}' appears {dup.Count()} times on this sheet (kept separately: {string.Join(", ", dup.Select(d => d.SourceRef))}).");
 
             // Key cells (with their displayed colours) and the column-heading cells
             var legendCells = new List<LegendCell>();
@@ -317,11 +379,19 @@ namespace EmployeeTrainingTracker.Utilities
 
             var data = new SkillMatrixData(area, legend, categories, skills, members, cells, Array.Empty<SkillExcludedColumn>());
             var preview = new PreviewColours(display, inabRefs, headerRefs, groupRefs, skillHeaderRef, inabHeaderRef, legendCells);
-            return new PreviewArea(area, data, warnings, preview);
+            var scope = new SheetScope($"{ws.Name}!{layout.LegendRange}", headerRows,
+                ranges.Select(x => $"{ws.Name}!{Col(x.C1)}{x.R1}:{Col(x.C2)}{x.R2}").ToList(),
+                lastRow, skippedColumns, blankRows, categoryRows, outOfRangeBlank);
+            return new PreviewArea(area, data, warnings, preview, scope);
         }
 
+        private static string FlagKind(SkillCellInfo info) =>
+            info.RawValue?.StartsWith("=") == true ? ReviewKind.Formula
+            : info.FlagReason?.StartsWith("Value outside") == true ? ReviewKind.OutOfRange
+            : ReviewKind.UnexpectedValue;
+
         // Lists cells whose displayed fill differs from the most common fill used for the same value on the sheet
-        private static void AddColourNotes(List<string> warnings, IEnumerable<(string Key, string Ref)> items,
+        private static void AddColourNotes(List<ReviewItem> warnings, IEnumerable<(string Key, string Ref)> items,
                                            Dictionary<string, SkillsMatrixWorkbookColours.CellDisplay> display)
         {
             static string F(System.Drawing.Color? c) => c.HasValue ? $"#{c.Value.R:X2}{c.Value.G:X2}{c.Value.B:X2}" : "no fill";
@@ -330,7 +400,8 @@ namespace EmployeeTrainingTracker.Utilities
                 var fills = group.Select(i => (i.Ref, Fill: F(display[i.Ref].Fill))).ToList();
                 string usual = fills.GroupBy(f => f.Fill).OrderByDescending(g => g.Count()).First().Key;
                 foreach (var odd in fills.Where(f => f.Fill != usual))
-                    warnings.Add($"{odd.Ref}: {group.Key} is coloured {odd.Fill} in the workbook (most {group.Key} cells on this sheet are {usual}) - shown as in the workbook.");
+                    warnings.Add(new ReviewItem(ReviewKind.ColourInconsistency, odd.Ref,
+                        $"{odd.Ref}: {group.Key} is coloured {odd.Fill} in the workbook (most {group.Key} cells on this sheet are {usual}) - shown as in the workbook."));
             }
         }
 
@@ -354,15 +425,15 @@ namespace EmployeeTrainingTracker.Utilities
                 if (d == Math.Floor(d) && d >= 1 && d <= 5)
                     return inRange
                         ? new SkillCellInfo("Level", (int)d, null, null, src)
-                        : new SkillCellInfo("Flagged", null, Convert.ToString(v), "Value outside the sheet's data-validation range", src);
-                return new SkillCellInfo("Flagged", null, Convert.ToString(v), "Number that is not a whole level 1-5", src);
+                        : new SkillCellInfo("Flagged", null, Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture), "Value outside the sheet's data-validation range", src);
+                return new SkillCellInfo("Flagged", null, Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture), "Number that is not a whole level 1-5", src);
             }
 
             if (v is string s)
                 return new SkillCellInfo("Flagged", null, s,
                     s.Trim().Length == 0 ? "Whitespace-only cell" : "Text value, not a level", src);
 
-            return new SkillCellInfo("Flagged", null, Convert.ToString(v), $"Unexpected value type ({v.GetType().Name})", src);
+            return new SkillCellInfo("Flagged", null, Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture), $"Unexpected value type ({v.GetType().Name})", src);
         }
 
         private static SkillLegend ReadLegend(ExcelWorksheet ws, string range)

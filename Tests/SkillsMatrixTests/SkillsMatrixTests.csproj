@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Isolated tests for the Skills Matrix workbook reader, dry run and reconciliation.
+       Dependency-free console runner (no test framework packages): dotnet run -project Tests/SkillsMatrixTests
+       Uses only dummy workbooks and dummy employee lists generated in a temporary folder.
+       No database: nothing here references Npgsql or the application's connection settings. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\EmployeeTrainingTracker\EmployeeTrainingTracker.csproj" />
+  </ItemGroup>
+
+</Project>

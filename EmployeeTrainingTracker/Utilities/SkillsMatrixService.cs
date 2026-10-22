@@ -29,9 +29,10 @@ namespace EmployeeTrainingTracker.Utilities
         public sealed record SkillMatrixImportInfo(long ImportId, string SourceFileName, string SourceSha256,
             string? SourceVersion, string ApprovedBy, DateTime ImportedAt, string? Notes);
 
-        public sealed record SkillAreaInfo(long AreaId, string Name, string SourceSheet);
+        public sealed record SkillAreaInfo(long AreaId, string Name, string SourceSheet,
+            string? SkillHeaderRef = null, string? InabHeaderRef = null);
 
-        public sealed record SkillLegendEntry(int KeyNumber, int Level, string Label, string? Description);
+        public sealed record SkillLegendEntry(int KeyNumber, int Level, string Label, string? Description, string? SourceRef = null);
 
         public sealed record SkillLegend(string ScaleName, bool NeedsConfirmation, string? LegendNote,
             string SourceRef, IReadOnlyList<SkillLegendEntry> Entries);
@@ -39,10 +40,11 @@ namespace EmployeeTrainingTracker.Utilities
         public sealed record SkillCategoryInfo(long CategoryId, string Name, string SourceRef);
 
         public sealed record SkillRowInfo(long SkillId, long CategoryId, string Name, bool? InabAccredited,
-            string? InabRaw, bool HiddenInSource, string SourceRef);
+            string? InabRaw, bool HiddenInSource, string SourceRef, string? InabSourceRef = null);
 
         public sealed record SkillMemberInfo(long MemberId, long EmployeeId, string EmployeeName, bool EmployeeArchived,
-            string SourceHeaderText, string? SubGroupLabel, string SourceColumn);
+            string SourceHeaderText, string? SubGroupLabel, string SourceColumn,
+            string? HeaderSourceRef = null, string? SubGroupSourceRef = null);
 
         /// <summary>Status is 'Level', 'Unassessed' (blank in source) or 'Flagged'. A missing cell = outside the source range.</summary>
         public sealed record SkillCellInfo(string Status, int? Level, string? RawValue, string? FlagReason, string SourceCell);
@@ -56,7 +58,9 @@ namespace EmployeeTrainingTracker.Utilities
             IReadOnlyList<SkillRowInfo> Skills,
             IReadOnlyList<SkillMemberInfo> Members,
             IReadOnlyDictionary<(long SkillId, long MemberId), SkillCellInfo> Cells,
-            IReadOnlyList<SkillExcludedColumn> ExcludedColumns);
+            IReadOnlyList<SkillExcludedColumn> ExcludedColumns,
+            // The workbook's displayed formatting of the imported cells (SkillMatrixCellFormats), keyed by "Sheet!A1"
+            IReadOnlyDictionary<string, SkillsMatrixWorkbookColours.CellDisplay>? Formats = null);
 
         // ------------------------------------------------------------------------------------------
 
@@ -131,7 +135,7 @@ namespace EmployeeTrainingTracker.Utilities
             conn.Open();
 
             using var cmd = new NpgsqlCommand(@"
-                SELECT AreaID, Name, SourceSheet
+                SELECT AreaID, Name, SourceSheet, SkillHeaderRef, InabHeaderRef
                 FROM SkillMatrixAreas
                 WHERE ImportID = @importId
                 ORDER BY DisplayOrder, AreaID", conn);
@@ -140,7 +144,8 @@ namespace EmployeeTrainingTracker.Utilities
             var areas = new List<SkillAreaInfo>();
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
-                areas.Add(new SkillAreaInfo(reader.GetInt64(0), reader.GetString(1), reader.GetString(2)));
+                areas.Add(new SkillAreaInfo(reader.GetInt64(0), reader.GetString(1), reader.GetString(2),
+                    reader.IsDBNull(3) ? null : reader.GetString(3), reader.IsDBNull(4) ? null : reader.GetString(4)));
             return areas;
         }
 
@@ -162,7 +167,8 @@ namespace EmployeeTrainingTracker.Utilities
             bool needsConfirmation;
             string? legendNote;
             using (var cmd = new NpgsqlCommand(@"
-                SELECT a.AreaID, a.Name, a.SourceSheet, s.ScaleID, s.Name, s.LegendStatus, s.LegendNote, s.SourceRef
+                SELECT a.AreaID, a.Name, a.SourceSheet, s.ScaleID, s.Name, s.LegendStatus, s.LegendNote, s.SourceRef,
+                       a.SkillHeaderRef, a.InabHeaderRef
                 FROM SkillMatrixAreas a
                 INNER JOIN SkillMatrixScales s ON s.ScaleID = a.ScaleID AND s.ImportID = a.ImportID
                 WHERE a.AreaID = @areaId AND a.ImportID = @importId", conn))
@@ -173,7 +179,8 @@ namespace EmployeeTrainingTracker.Utilities
                 if (!reader.Read())
                     throw new InvalidOperationException("That sheet is not part of the current Skills Matrix import.");
 
-                area = new SkillAreaInfo(reader.GetInt64(0), reader.GetString(1), reader.GetString(2));
+                area = new SkillAreaInfo(reader.GetInt64(0), reader.GetString(1), reader.GetString(2),
+                    reader.IsDBNull(8) ? null : reader.GetString(8), reader.IsDBNull(9) ? null : reader.GetString(9));
                 scaleId = reader.GetInt64(3);
                 scaleName = reader.GetString(4);
                 needsConfirmation = reader.GetString(5) == "NeedsConfirmation";
@@ -183,7 +190,7 @@ namespace EmployeeTrainingTracker.Utilities
 
             var entries = new List<SkillLegendEntry>();
             using (var cmd = new NpgsqlCommand(@"
-                SELECT KeyNumber, Level, Label, Description
+                SELECT KeyNumber, Level, Label, Description, SourceRef
                 FROM SkillMatrixScaleLevels
                 WHERE ScaleID = @scaleId
                 ORDER BY KeyNumber, Level", conn))
@@ -192,7 +199,7 @@ namespace EmployeeTrainingTracker.Utilities
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read())
                     entries.Add(new SkillLegendEntry(reader.GetInt16(0), reader.GetInt16(1), reader.GetString(2),
-                        reader.IsDBNull(3) ? null : reader.GetString(3)));
+                        reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetString(4)));
             }
 
             var categories = new List<SkillCategoryInfo>();
@@ -210,7 +217,7 @@ namespace EmployeeTrainingTracker.Utilities
 
             var skills = new List<SkillRowInfo>();
             using (var cmd = new NpgsqlCommand(@"
-                SELECT SkillID, CategoryID, Name, InabAccredited, InabRaw, HiddenInSource, SourceRef
+                SELECT SkillID, CategoryID, Name, InabAccredited, InabRaw, HiddenInSource, SourceRef, InabSourceRef
                 FROM SkillMatrixSkills
                 WHERE AreaID = @areaId
                 ORDER BY DisplayOrder, SourceRow", conn))
@@ -221,13 +228,15 @@ namespace EmployeeTrainingTracker.Utilities
                     skills.Add(new SkillRowInfo(reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2),
                         reader.IsDBNull(3) ? null : reader.GetBoolean(3),
                         reader.IsDBNull(4) ? null : reader.GetString(4),
-                        reader.GetBoolean(5), reader.GetString(6)));
+                        reader.GetBoolean(5), reader.GetString(6),
+                        reader.IsDBNull(7) ? null : reader.GetString(7)));
             }
 
             var members = new List<SkillMemberInfo>();
             using (var cmd = new NpgsqlCommand(@"
                 SELECT c.ColumnID, c.EmployeeID, COALESCE(e.FullName, '(employee record not found)'),
-                       COALESCE(e.IsArchived, FALSE), c.SourceHeaderText, c.SubGroupLabel, c.SourceColumn
+                       COALESCE(e.IsArchived, FALSE), c.SourceHeaderText, c.SubGroupLabel, c.SourceColumn,
+                       c.HeaderSourceRef, c.SubGroupSourceRef
                 FROM SkillMatrixColumns c
                 LEFT JOIN Employees e ON e.EmployeeID = c.EmployeeID
                 WHERE c.AreaID = @areaId AND c.Disposition = 'Member'
@@ -238,7 +247,8 @@ namespace EmployeeTrainingTracker.Utilities
                 while (reader.Read())
                     members.Add(new SkillMemberInfo(reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2),
                         reader.GetBoolean(3), reader.GetString(4),
-                        reader.IsDBNull(5) ? null : reader.GetString(5), reader.GetString(6)));
+                        reader.IsDBNull(5) ? null : reader.GetString(5), reader.GetString(6),
+                        reader.GetString(7), reader.IsDBNull(8) ? null : reader.GetString(8)));
             }
 
             var cells = new Dictionary<(long, long), SkillCellInfo>();
@@ -271,8 +281,32 @@ namespace EmployeeTrainingTracker.Utilities
                     excluded.Add(new SkillExcludedColumn(reader.GetString(0), reader.GetString(1), reader.GetString(2)));
             }
 
+            // The workbook's displayed formatting, as captured at import time
+            var formats = new Dictionary<string, SkillsMatrixWorkbookColours.CellDisplay>(StringComparer.Ordinal);
+            using (var cmd = new NpgsqlCommand(@"
+                SELECT SourceRef, FillSource, FillRgb, Pattern, PatternColorRgb, PatternBackRgb,
+                       ConditionalRule, FontSource, FontRgb, FontRule, Bold
+                FROM SkillMatrixCellFormats
+                WHERE AreaID = @areaId", conn))
+            {
+                cmd.Parameters.AddWithValue("areaId", areaId);
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    string? S(int i) => reader.IsDBNull(i) ? null : reader.GetString(i);
+                    formats[reader.GetString(0)] = new SkillsMatrixWorkbookColours.CellDisplay(
+                        FromHex(S(2)), FromHex(S(8)) ?? System.Drawing.Color.Black, reader.GetBoolean(10),
+                        S(3), FromHex(S(4)), FromHex(S(5)), reader.GetString(1), S(6), reader.GetString(7), S(9));
+                }
+            }
+
             var legend = new SkillLegend(scaleName, needsConfirmation, legendNote, scaleSourceRef, entries);
-            return new SkillMatrixData(area, legend, categories, skills, members, cells, excluded);
+            return new SkillMatrixData(area, legend, categories, skills, members, cells, excluded, formats);
         }
+
+        private static System.Drawing.Color? FromHex(string? rgb) =>
+            rgb is { Length: 6 }
+                ? System.Drawing.Color.FromArgb(Convert.ToInt32(rgb[0..2], 16), Convert.ToInt32(rgb[2..4], 16), Convert.ToInt32(rgb[4..6], 16))
+                : null;
     }
 }

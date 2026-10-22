@@ -8,8 +8,8 @@ A **read-only** representation, inside the Training Tracker, of approved data fr
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Schema (migration 004), read-only service, Admin "Skills Matrix" tab, this document | Built; **migration not yet run** |
-| 2a | Import tool dry run + employee reconciliation report (writes nothing to the database) | Not started (separate approval) |
-| 2b | Approved load of confirmed data from a verified workbook copy | Not started (separate approval) |
+| 2a | Import tool dry run + employee reconciliation report (writes nothing to the database) | Built (see "Dry run" below); not yet run against real employee records |
+| 2b | Approved load of confirmed data from a verified workbook copy | Prepared: decisions, import plan, checks and writer built; **the import step is switched off** (see "Preparing the import") |
 | Out of scope | Editing, sync back to Excel, Employee/Manager views, training-evidence links, department mapping, security/permission/authentication/deployment changes | Future decisions |
 
 Until an approved import exists the tab shows an explicit empty state.
@@ -113,7 +113,7 @@ for level 4), so **no colour meaning is used**.
   ("Griptester").
 - Repeated skill names within or across sheets (e.g. FAP, ITS, MIST appear under both Laboratory
   Tests and Laboratory Checks; Liquid Limit under EN and BS; ArcGIS Pro on GIS and Data Analysis).
-  Kept as separate skills per sheet/source row.
+  Kept as separate skills per sheet/source cell.
 - Data Collection "External" section (LUGS, Chemical Awareness Training, Digital Tacho, Eco
   Driving) has no values and overlaps H&S Environmental.
 - Template formula rule (excluded sheet): "capable" counts **exactly level 4** (`COUNTIF(...,4)`),
@@ -160,6 +160,7 @@ SkillMatrixImports          one immutable snapshot per approved import; LoadStat
   SkillMatrixAreas          one per imported sheet (its scale must be from the same import)
     SkillMatrixCategories   category header rows
       SkillMatrixSkills     skill rows; INAB Yes/No/not specified; HiddenInSource; source row/ref
+                            (unique by source cell: Innovation has two side-by-side tables sharing rows)
     SkillMatrixColumns      every person column: Member (confirmed EmployeeID) | Excluded (reason)
     SkillMatrixCells        Level (1-5) | Unassessed (blank in source) | Flagged (raw value + reason);
                             no row = outside the sheet's source range
@@ -338,6 +339,109 @@ a database backup/snapshot; `public.Employees(EmployeeID)` exists with a primary
 constraint; no `skillmatrix*` objects already exist; the role running the migration is the role the
 application connects as (the migration adds no grants); a decision on the hard-delete consequence
 above.
+
+## Dry run and employee reconciliation (Phase 2a)
+
+**Where:** Admin tab -> "Open workbook copy (preview)…" -> **"Dry run report…"**. The button exists only in
+preview mode and works on the copy already read into memory. Its only outputs are an on-screen window and,
+if the user chooses, new report files. There is no import, confirm or database action anywhere in it.
+
+**No database:** `SkillsMatrixDryRun`, `SkillsMatrixReconciliation`, the preview reader and the dry-run
+window make no database connection (checked by the tests). The Admin check happens once, when the preview
+is opened (unchanged).
+
+**Employee records:** reconciliation uses only an employee list file chosen by the user: a local CSV with
+`EmployeeID`, `FullName` and optionally `IsArchived`. The file is opened read-only and its SHA-256 goes in the
+report. With no list, every name is reported unmatched (or student). Real reconciliation needs the
+current employee records in such a file. Producing it from the live database is a separate decision,
+not part of this phase.
+
+**Rules** (all rows start `UNCONFIRMED`; nothing is ever accepted automatically):
+
+| Status | When |
+|---|---|
+| Exact candidate | identical text, or identical after normalising case, punctuation (incl. apostrophes), spacing and accents |
+| Suggested match - requires confirmation | close spelling (1 character; 2 for names of 10+ letters), one name containing the other, or several equally good records (then none is proposed) |
+| Unmatched | nothing close; an empty header. Same surname with a different first name is listed as *not proposed* |
+| Student / non-employee | the header text contains the word "student"; no match is proposed, similar records are only mentioned |
+| Archived employee | the best candidate's record is archived |
+
+Every row keeps the original text, all its header-cell references, the match type, a confidence level
+(High / Medium / Low / None), a reason, and empty `ConfirmedEmployeeID` / `ReviewerNotes` columns for
+the reviewer. When first names differ, the reason warns that it may be a different person.
+
+**Files** (new files only, never overwriting; names start `SkillsMatrix_DRYRUN_<timestamp>`): `_Report.txt`
+(the summary), `_Reconciliation.csv`, `_ReviewItems.csv` (every flagged cell or row, with its reference and
+kind) and `_Formatting.csv` (each shown cell's displayed formatting in the `SkillMatrixCellFormats`
+shape). CSV values starting with `= + - @` get a leading `'` so spreadsheet programs show them as text.
+The files contain employee names.
+
+**Tests:** `Tests/SkillsMatrixTests` is a dependency-free console runner, kept outside the solution so
+the application build is unchanged. Run it with `dotnet run --project Tests/SkillsMatrixTests`. It
+generates a dummy workbook and dummy employee lists in a temp folder; `--sample <folder>` writes the
+dummy dry-run files for review. Result (2026-10-22): **131/131 passed**. Against the local verified
+working copy (read-only, no employee list), the dry run gives the level counts verified earlier
+(Laboratory 221, Data Collection 151, Data Analysis 277, GIS 16, Software 42, QMS 15, Innovation 12,
+H&S 229, Admin 14), the 2 formula cells, 64 distinct names, and 3,174 formatting rows. All 3,174 meet
+migration 004's formatting rules. The copy's SHA-256 was unchanged.
+
+## Preparing the import (Phase 3)
+
+**Workflow** (Admin tab, all steps read-only until the last, which is switched off):
+1. **Open workbook copy (preview)…** - read into memory, SHA-256 checked before and after.
+2. **Dry run report…** - "Decisions needed" tab lists, most urgent first, every name, ambiguous key or
+   level, formula / flagged cell and other check; **Save dry-run report files…** writes the report and CSVs.
+3. In the saved reconciliation CSV, the reviewer sets `HumanConfirmation` to `CONFIRMED` (with
+   `ConfirmedEmployeeID`) or `EXCLUDED` (reason in `ReviewerNotes`) for **every** name, and saves it as
+   "CSV UTF-8". Nothing is confirmed by the application.
+4. **Prepare import…** - choose the employee list used for the review, then the reviewed CSV, and enter
+   *Approved by*. The window shows exactly what would be written (per table and sheet, every member and
+   excluded column), the blocking errors, and the acknowledgements to tick. **Save plan summary…** writes it
+   to a new file. The **Import** button is disabled: `SkillsMatrixImportForm.ImportExecutionEnabled = false`.
+
+**Blocking errors** (nothing can be imported while any remain): a name still UNCONFIRMED (or any value other
+than CONFIRMED / EXCLUDED); a confirmed ID that is not a whole number or not in the employee list; an
+exclusion without a reason, or with an ID; a decisions file whose names or cell references do not match the
+workbook (another workbook, an edited file, or a CSV saved without UTF-8); duplicate rows; a workbook that
+changed while being read; no employee list; no *Approved by*; any breach of migration 004's rules (checked
+in the application before anything could be written).
+
+**Acknowledgements** (each must be ticked by a person): a file that is not the verified copy; each key that
+needs confirmation (imported as written, `NeedsConfirmation`); each sheet's flagged cells (imported as
+`Flagged` with their original value, never as levels); levels a sheet's key does not define; each archived
+or "student" name confirmed as an employee; the same employee in two columns of one sheet. The current
+workbook has no levels outside its keys; H&S Environmental and Admin need key acknowledgements, Admin its
+two formula cells.
+
+**What an import writes:** one transaction - the import row (with approver, importer, notes recording the
+decisions file and employee list with their SHA-256, colour method and verification), then scales, key
+entries, areas, categories, skills, every person column (`Member` with the confirmed employee, or
+`Excluded` with the reviewer's reason), cells for `Member` columns only, and the displayed formatting of
+the stored cells. It is then marked Complete and made current; earlier snapshots are kept unchanged. Any
+error (e.g. an employee ID the database does not have - the Employees foreign key) leaves nothing.
+Nothing in existing tables is written. Departments are not mapped (no decision has been made).
+
+**Reading an import:** the Admin tab's normal (non-preview) view now also reads `SkillMatrixCellFormats`,
+so an imported snapshot shows the workbook's colours as the preview does.
+
+**Writer** (`SkillsMatrixImportWriter`): the only Skills Matrix code that writes. It uses the connection it is
+given, refuses a plan that is not ready, missing acknowledgements, or a typed confirmation other than
+`IMPORT <first 8 characters of the file's SHA-256>`, and sets `search_path` / `lock_timeout` like the
+migration. Before the first real import, the remaining steps are listed in "Remaining before the first import".
+
+**Tests (2026-10-22):** isolated suite **170/170** (adds decisions, plan, schema-rule, refusal and
+switch-off tests); writer on a disposable local PostgreSQL with migration 004 and dummy data **20/20**
+(first import, a rejected import leaving nothing, a replacement import keeping the first snapshot, stored
+states, reasons, formatting and the service's formatting query).
+
+### Remaining before the first import (each needs a separate decision / approval)
+1. **Current employee records** for the reconciliation: an employee-list CSV produced from the live
+   `Employees` table (a read-only export) - not done; the app never reads it for this.
+2. **Review**: every name CONFIRMED / EXCLUDED in the reconciliation CSV; the H&S and Admin keys and the
+   two Admin formula cells acknowledged (or the workbook corrected and re-run).
+3. **Migration 004 on production** (prerequisite checks and backup listed above).
+4. **Enabling the import step** for the approved run (`ImportExecutionEnabled`), and access for the new
+   tables if the application does not connect as their owner.
 
 ## Access control and its limitations
 

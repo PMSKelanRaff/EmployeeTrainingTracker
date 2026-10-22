@@ -61,7 +61,7 @@
 --       SkillMatrixScaleLevels    legend entries (KeyNumber allows two keys on one sheet)
 --     SkillMatrixAreas          one per imported (visible) sheet
 --       SkillMatrixCategories     category header rows
---         SkillMatrixSkills              skill rows (kept per sheet; duplicates kept, unique by source row)
+--         SkillMatrixSkills              skill rows (kept per sheet; duplicates kept, unique by source cell)
 --       SkillMatrixColumns    every person column of the sheet: 'Member' (confirmed employee match)
 --                           or 'Excluded' (unconfirmed / student / archived / unmatched, with reason)
 --       SkillMatrixCells    one row per in-range cell of a Member column:
@@ -188,7 +188,9 @@ CREATE TABLE public.SkillMatrixCategories (
 
 
 -- 6. Skill rows ------------------------------------------------------------------------------------
---    Kept separate per sheet. Duplicate names are kept (unique by source row, not by name).
+--    Kept separate per sheet. Duplicate names are kept (unique by source cell, not by name). Unique by the
+--    skill's own cell rather than its row, because a sheet can hold side-by-side tables (Innovation: skills
+--    in columns A and G share rows, e.g. Innovation!A5 and Innovation!G5).
 CREATE TABLE public.SkillMatrixSkills (
     SkillID         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     AreaID          BIGINT  NOT NULL,
@@ -201,7 +203,7 @@ CREATE TABLE public.SkillMatrixSkills (
     DisplayOrder    INT     NOT NULL,
     SourceRow       INT     NOT NULL CHECK (SourceRow >= 1),
     SourceRef       TEXT    NOT NULL,                   -- e.g. 'Laboratory!A5'
-    UNIQUE (AreaID, SourceRow),
+    UNIQUE (AreaID, SourceRef),
     UNIQUE (SkillID, AreaID),                           -- target of SkillMatrixCells' composite FK
     CHECK (InabAccredited IS NULL OR InabRaw IS NOT NULL),
     CHECK (InabRaw IS NULL OR InabSourceRef IS NOT NULL),

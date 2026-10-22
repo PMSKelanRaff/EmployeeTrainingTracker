@@ -25,14 +25,24 @@ namespace EmployeeTrainingTracker.Utilities
     {
         /// <summary>
         /// Fill = the colour to paint (for patterned fills, the visual blend of pattern colour over background);
-        /// Pattern = the Excel pattern name ("solid", "mediumGray", ... or null for none);
+        /// Pattern = the OOXML pattern name ("solid", "mediumGray", ... or null for none);
         /// PatternColor / PatternBack = the pattern's foreground and background as stored in the workbook.
+        /// Provenance (matches SkillMatrixCellFormats): FillSource = "None" | "CellStyle" | "ConditionalFormat",
+        /// ConditionalRule = the rule that set the fill; FontSource = "CellStyle" | "ConditionalFormat",
+        /// FontRule = the rule that set the font colour.
         /// </summary>
         public sealed record CellDisplay(Color? Fill, Color Font, bool Bold, string? Pattern = null,
-                                         Color? PatternColor = null, Color? PatternBack = null);
+                                         Color? PatternColor = null, Color? PatternBack = null,
+                                         string FillSource = "None", string? ConditionalRule = null,
+                                         string FontSource = "CellStyle", string? FontRule = null);
 
         private sealed record Rule(int Priority, List<(int R1, int C1, int R2, int C2)> Ranges, string Type,
-                                   string? Text, Color? DxfFill, Color? DxfFont, List<(string Type, double? Val, Color Color)>? Scale);
+                                   string? Text, Color? DxfFill, Color? DxfFont, List<(string Type, double? Val, Color Color)>? Scale,
+                                   string Sqref)
+        {
+            /// <summary>The rule as written, e.g. 'priority 3: containsText "4" on E5:E18'.</summary>
+            public string Describe() => $"priority {Priority}: {Type}{(Text != null ? $" \"{Text}\"" : "")} on {Sqref}";
+        }
 
         private readonly ExcelWorksheet _ws;
         private readonly Color[] _theme;
@@ -103,35 +113,37 @@ namespace EmployeeTrainingTracker.Utilities
             bool bold = cell.Style.Font.Bold;
 
             Color? fill = null;
-            bool fontSetByRule = false;
+            Rule? fillRule = null, fontRule = null;
             foreach (var rule in _rules.Where(x => x.Ranges.Any(g => r >= g.R1 && r <= g.R2 && c >= g.C1 && c <= g.C2)))
             {
                 if (rule.Type == "containsText")
                 {
                     if (rule.Text == null || !ContainsText(cell, rule.Text)) continue;
-                    if (!fontSetByRule && rule.DxfFont.HasValue) { font = rule.DxfFont.Value; fontSetByRule = true; }
-                    if (fill == null && rule.DxfFill.HasValue) fill = rule.DxfFill;
+                    if (fontRule == null && rule.DxfFont.HasValue) { font = rule.DxfFont.Value; fontRule = rule; }
+                    if (fill == null && rule.DxfFill.HasValue) { fill = rule.DxfFill; fillRule = rule; }
                 }
                 else if (rule.Type == "colorScale" && rule.Scale != null)
                 {
-                    if (fill == null && NumericValue(cell) is double v)
-                        fill = ScaleColor(rule, v);
+                    if (fill == null && NumericValue(cell) is double v) { fill = ScaleColor(rule, v); fillRule = rule; }
                 }
-                if (fill != null && fontSetByRule) break; // each property comes from the highest-priority rule that sets it
+                if (fill != null && fontRule != null) break; // each property comes from the highest-priority rule that sets it
             }
+            string fontSource = fontRule != null ? "ConditionalFormat" : "CellStyle";
+            string? fontRuleText = fontRule?.Describe();
 
             if (fill != null)
-                return new CellDisplay(fill, font, bold, "solid", fill, null);
+                return new CellDisplay(fill, font, bold, "solid", fill, null,
+                                       "ConditionalFormat", fillRule!.Describe(), fontSource, fontRuleText);
 
             // Fixed fill. Solid = its colour. Patterned (e.g. the 50% grey dots on category rows) = the
             // visual blend of the pattern colour over its background, since a grid cell can't draw the dots.
             var pattern = cell.Style.Fill.PatternType;
             if (pattern == ExcelFillStyle.None)
-                return new CellDisplay(null, font, bold);
+                return new CellDisplay(null, font, bold, FontSource: fontSource, FontRule: fontRuleText);
 
             Color fore = ResolveColor(cell.Style.Fill.BackgroundColor) ?? Color.Black;   // EPPlus: pattern colour (fgColor)
             if (pattern == ExcelFillStyle.Solid)
-                return new CellDisplay(fore, font, bold, "solid", fore, null);
+                return new CellDisplay(fore, font, bold, "solid", fore, null, "CellStyle", null, fontSource, fontRuleText);
 
             // EPPlus: background (bgColor). 'Automatic' (indexed 64) means the window background, i.e. white.
             var bgColor = cell.Style.Fill.PatternColor;
@@ -148,7 +160,14 @@ namespace EmployeeTrainingTracker.Utilities
                 _ => 0.50,
             };
             var blend = Color.FromArgb(Lerp(back.R, fore.R, coverage), Lerp(back.G, fore.G, coverage), Lerp(back.B, fore.B, coverage));
-            return new CellDisplay(blend, font, bold, pattern.ToString(), fore, back);
+            return new CellDisplay(blend, font, bold, OoxmlPatternName(pattern), fore, back, "CellStyle", null, fontSource, fontRuleText);
+        }
+
+        // EPPlus enum name -> the OOXML patternType name used in the workbook ('MediumGray' -> 'mediumGray')
+        private static string OoxmlPatternName(ExcelFillStyle pattern)
+        {
+            string name = pattern.ToString();
+            return char.ToLowerInvariant(name[0]) + name[1..];
         }
 
         // ---------------------------------------------------------------------------------------------
@@ -235,7 +254,7 @@ namespace EmployeeTrainingTracker.Utilities
                 using var zip = new ZipArchive(new MemoryStream(workbookBytes, writable: false), ZipArchiveMode.Read);
                 var entry = zip.GetEntry("xl/theme/theme1.xml");
                 if (entry == null) return result;
-                var doc = new XmlDocument();
+                var doc = new XmlDocument { XmlResolver = null };
                 using (var s = entry.Open()) doc.Load(s);
                 var ns = new XmlNamespaceManager(doc.NameTable);
                 ns.AddNamespace("a", "http://schemas.openxmlformats.org/drawingml/2006/main");
@@ -280,7 +299,8 @@ namespace EmployeeTrainingTracker.Utilities
             ns.AddNamespace("m", MainNs);
             foreach (XmlElement cf in sheet.SelectNodes("//m:conditionalFormatting", ns)!)
             {
-                var ranges = cf.GetAttribute("sqref").Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(ParseRange).ToList();
+                string sqref = cf.GetAttribute("sqref");
+                var ranges = sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(ParseRange).ToList();
                 foreach (XmlElement rule in cf.SelectNodes("m:cfRule", ns)!)
                 {
                     int priority = int.TryParse(rule.GetAttribute("priority"), out var p) ? p : int.MaxValue;
@@ -302,7 +322,7 @@ namespace EmployeeTrainingTracker.Utilities
                     }
 
                     string? text = rule.HasAttribute("text") ? rule.GetAttribute("text") : null;
-                    rules.Add(new Rule(priority, ranges, type, text, dxfFill, dxfFont, scale));
+                    rules.Add(new Rule(priority, ranges, type, text, dxfFill, dxfFont, scale, sqref));
                 }
             }
             return rules.OrderBy(r => r.Priority).ToList();

@@ -37,10 +37,13 @@ namespace EmployeeTrainingTracker
         // PREVIEW ONLY: data read in memory from a local workbook copy (never from or to the database)
         private SkillsMatrixWorkbookPreview.PreviewResult? _preview;
         private SkillsMatrixWorkbookPreview.PreviewArea? _previewArea;
+        // Workbook colours for the sheet shown: from the preview, or from an imported snapshot's SkillMatrixCellFormats
+        private SkillsMatrixWorkbookPreview.PreviewColours? _colours;
 
         private readonly Button btnPreview = new() { Text = "Open workbook copy (preview)…", AutoSize = true, Dock = DockStyle.Left };
         private readonly Label lblPreviewInfo = SingleLine(SystemColors.GrayText,
-            "  Preview reads a local COPY of the workbook into memory only - nothing is saved, and nothing is read from or written to the database.");
+            "  Steps:  1. Open a workbook COPY (read into memory only)   2. Dry run report - save the files   " +
+            "3. Record CONFIRMED / EXCLUDED for every name in the reconciliation CSV   4. Prepare import - checks everything; writes nothing.");
         private readonly Label lblPreviewBanner = SingleLine(SystemColors.InfoText,
             "PREVIEW  ·  read-only workbook copy  ·  NOT an approved database import  ·  names as written, NOT matched to employees  ·  nothing is saved");
 
@@ -51,6 +54,10 @@ namespace EmployeeTrainingTracker
         private readonly CheckBox chkColour = new() { Text = "Workbook colours", AutoSize = true, Checked = true, Anchor = AnchorStyles.Left, Margin = new Padding(6, 3, 3, 3), Visible = false };
         private readonly FlowLayoutPanel legendChips = new() { AutoSize = true, WrapContents = false, Margin = new Padding(3, 2, 6, 0), Anchor = AnchorStyles.Left, Visible = false };
         private readonly Button btnNotes = new() { Text = "Review notes", AutoSize = true, Anchor = AnchorStyles.Left, Visible = false };
+        // DRY RUN (preview only): reports what an import would contain; never imports or touches the database
+        private readonly Button btnDryRun = new() { Text = "Dry run report…", AutoSize = true, Anchor = AnchorStyles.Left, Visible = false };
+        // PREPARE IMPORT (preview only): builds and checks an import plan from reviewed decisions; writes nothing
+        private readonly Button btnPrepare = new() { Text = "Prepare import…", AutoSize = true, Anchor = AnchorStyles.Left, Visible = false };
         private readonly Button btnRefresh = new() { Text = "Refresh", AutoSize = true, Anchor = AnchorStyles.Left };
         private readonly Label lblSource = SingleLine(SystemColors.GrayText, "");
         private readonly Label lblLegend = SingleLine(SystemColors.ControlText, "");
@@ -74,16 +81,18 @@ namespace EmployeeTrainingTracker
             lblPreviewBanner.Font = new Font(lblPreviewBanner.Font, FontStyle.Bold);
 
             // --- Matrix layout: header | legend | legend warning | grid | footer ---------------------
-            var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 7, RowCount = 1, Margin = new Padding(0) };
-            for (int i = 0; i < 6; i++) header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 9, RowCount = 1, Margin = new Padding(0) };
+            for (int i = 0; i < 8; i++) header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             header.Controls.Add(new Label { Text = "Sheet:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
             header.Controls.Add(cmbArea, 1, 0);
             header.Controls.Add(chkShowHidden, 2, 0);
             header.Controls.Add(chkColour, 3, 0);
             header.Controls.Add(btnNotes, 4, 0);
-            header.Controls.Add(btnRefresh, 5, 0);
-            header.Controls.Add(lblSource, 6, 0);
+            header.Controls.Add(btnDryRun, 5, 0);
+            header.Controls.Add(btnPrepare, 6, 0);
+            header.Controls.Add(btnRefresh, 7, 0);
+            header.Controls.Add(lblSource, 8, 0);
 
             // Legend row: the sheet's key cells as coloured chips (workbook colours) + the key wording / notes
             var legendRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(0) };
@@ -129,6 +138,12 @@ namespace EmployeeTrainingTracker
             btnRefresh.Click += (_, _) => { ExitPreview(); _loaded = false; EnsureLoaded(); };
             btnPreview.Click += (_, _) => OpenPreview();
             btnNotes.Click += (_, _) => ShowNotes();
+            btnDryRun.Click += (_, _) => RunDryRun();
+            btnPrepare.Click += (_, _) => PrepareImport();
+            toolTip.SetToolTip(btnPrepare, "Build and check an import plan from the reviewed reconciliation CSV: shows exactly what would be written, " +
+                                           "blocking errors and the acknowledgements needed. Nothing is written.");
+            toolTip.SetToolTip(btnDryRun, "DRY RUN: report what an import of this workbook copy would contain, with an employee " +
+                                          "reconciliation for review. Nothing is imported and the database is not used.");
             toolTip.SetToolTip(lblPreviewInfo, lblPreviewInfo.Text.Trim());
 
             ShowEmpty("Open this tab to load the Skills Matrix.");
@@ -302,6 +317,8 @@ namespace EmployeeTrainingTracker
                                           $"Verified copy (2026-10-21): {SkillsMatrixWorkbookPreview.VerifiedCopySha256}");
             btnRefresh.Text = "Close preview";
             chkColour.Visible = true;   // workbook colours are available for a workbook preview
+            btnDryRun.Visible = true;   // dry run works on this in-memory preview only
+            btnPrepare.Visible = true;
 
             ShowMatrixLayout();
             cmbArea.DisplayMember = nameof(SkillAreaInfo.Name);
@@ -312,11 +329,83 @@ namespace EmployeeTrainingTracker
         {
             _preview = null;
             _previewArea = null;
+            _colours = null;
             SetRowHeight(root, RootBannerRow, 0);
             btnNotes.Visible = false;
+            btnDryRun.Visible = false;
+            btnPrepare.Visible = false;
             btnRefresh.Text = "Refresh";
             chkColour.Visible = false;
             legendChips.Visible = false;
+        }
+
+        // ------------------------------------------------------------------------------------------
+        // DRY RUN: works only on the preview already read into memory (the Admin check was done when the
+        // preview was opened). No database connection, no import; the only output is the on-screen report
+        // and, if the user chooses, new report files.
+
+        private void RunDryRun()
+        {
+            if (_preview == null) return;
+
+            var choice = MessageBox.Show(
+                "Reconcile the workbook's names against an employee list?\n\n" +
+                "The dry run does not read employee records from the database. Choose a local CSV file with the columns " +
+                "EmployeeID, FullName and (optionally) IsArchived - for example a test list.\n\n" +
+                "Yes = choose a file    No = no list (every name is reported unmatched)    Cancel = stop",
+                "Skills Matrix dry run", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+            if (choice == DialogResult.Cancel) return;
+
+            SkillsMatrixReconciliation.EmployeeRoster? roster = null;
+            if (choice == DialogResult.Yes)
+            {
+                using var dialog = new OpenFileDialog
+                {
+                    Title = "Choose a local employee list (CSV) for the dry-run reconciliation",
+                    Filter = "CSV file (*.csv)|*.csv",
+                    CheckFileExists = true,
+                };
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                try
+                {
+                    roster = SkillsMatrixReconciliation.LoadRosterCsv(dialog.FileName);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Could not read the employee list:\n{ex.Message}", "Skills Matrix dry run", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+            }
+
+            var result = SkillsMatrixDryRun.Run(_preview, roster);
+            using var form = new SkillsMatrixDryRunForm(result);
+            form.ShowDialog(this);
+        }
+
+        // PREPARE IMPORT: a separate step from the dry run. Needs the employee list the decisions were made against;
+        // the plan window itself writes nothing (its Import step is switched off in this build).
+        private void PrepareImport()
+        {
+            if (_preview == null) return;
+            using var dialog = new OpenFileDialog
+            {
+                Title = "Prepare import - step 1 of 2: choose the employee list (CSV) used for the reviewed reconciliation",
+                Filter = "CSV file (*.csv)|*.csv",
+                CheckFileExists = true,
+            };
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+            SkillsMatrixReconciliation.EmployeeRoster roster;
+            try
+            {
+                roster = SkillsMatrixReconciliation.LoadRosterCsv(dialog.FileName);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not read the employee list:\n{ex.Message}", "Prepare import", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            using var form = new SkillsMatrixImportForm(SkillsMatrixDryRun.Run(_preview, roster), _adminEmployeeId);
+            form.ShowDialog(this);
         }
 
         private void ShowNotes()
@@ -362,6 +451,7 @@ namespace EmployeeTrainingTracker
                 if (cmbArea.SelectedItem is not SkillAreaInfo previewArea) return;
                 _previewArea = _preview.Areas.First(a => a.Area.AreaId == previewArea.AreaId);
                 _matrix = _previewArea.Data;
+                _colours = _previewArea.Colours;
                 RenderLegend(_matrix.Legend);
                 RenderMatrix();
                 return;
@@ -372,6 +462,8 @@ namespace EmployeeTrainingTracker
             try
             {
                 _matrix = SkillsMatrixService.GetMatrix(_adminEmployeeId, _import.ImportId, area.AreaId);
+                _colours = ImportedColours(_matrix);
+                chkColour.Visible = _colours != null;
                 RenderLegend(_matrix.Legend);
                 RenderMatrix();
             }
@@ -426,7 +518,7 @@ namespace EmployeeTrainingTracker
             // Workbook colours: show the sheet's key cells as chips, painted exactly as the workbook shows them
             legendChips.SuspendLayout();
             foreach (Control old in legendChips.Controls.Cast<Control>().ToList()) { legendChips.Controls.Remove(old); old.Dispose(); }
-            var keyCells = UseWorkbookColours ? _previewArea!.Colours.Legend : null;
+            var keyCells = UseWorkbookColours ? _colours!.Legend : null;
             if (keyCells is { Count: > 0 })
             {
                 foreach (var key in keyCells.GroupBy(k => (k.Level, k.Label)).Select(g => g.First()).OrderBy(k => k.Level))
@@ -460,11 +552,25 @@ namespace EmployeeTrainingTracker
 
         // ---- Workbook colours (preview) ------------------------------------------------------------
 
-        private bool UseWorkbookColours => _preview != null && _previewArea != null && chkColour.Checked;
+        private bool UseWorkbookColours => _colours != null && chkColour.Checked;
+
+        /// <summary>Workbook colours of an imported snapshot (from SkillMatrixCellFormats), or null if none were stored.</summary>
+        private static SkillsMatrixWorkbookPreview.PreviewColours? ImportedColours(SkillMatrixData m)
+        {
+            if (m.Formats is not { Count: > 0 } formats) return null;
+            return new SkillsMatrixWorkbookPreview.PreviewColours(
+                formats,
+                m.Skills.Where(s => s.InabSourceRef != null).ToDictionary(s => s.SkillId, s => s.InabSourceRef!),
+                m.Members.Where(x => x.HeaderSourceRef != null).ToDictionary(x => x.MemberId, x => x.HeaderSourceRef!),
+                m.Members.Where(x => x.SubGroupSourceRef != null).ToDictionary(x => x.MemberId, x => x.SubGroupSourceRef!),
+                m.Area.SkillHeaderRef, m.Area.InabHeaderRef,
+                m.Legend.Entries.Where(e => e.SourceRef != null)
+                    .Select(e => new SkillsMatrixWorkbookPreview.LegendCell(e.Level, e.Label, e.Description, e.SourceRef!)).ToList());
+        }
 
         /// <summary>The colours Excel displays for a workbook cell, when workbook colours are on.</summary>
         private SkillsMatrixWorkbookColours.CellDisplay? Look(string? sourceRef) =>
-            UseWorkbookColours && sourceRef != null && _previewArea!.Colours.Display.TryGetValue(sourceRef, out var d) ? d : null;
+            UseWorkbookColours && sourceRef != null && _colours!.Display.TryGetValue(sourceRef, out var d) ? d : null;
 
         private void PaintStyle(DataGridViewCellStyle style, SkillsMatrixWorkbookColours.CellDisplay? d)
         {
@@ -489,7 +595,7 @@ namespace EmployeeTrainingTracker
             if (_matrix == null) return;
             var m = _matrix;
             bool workbookColours = UseWorkbookColours;
-            var colours = workbookColours ? _previewArea!.Colours : null;
+            var colours = workbookColours ? _colours : null;
 
             grid.SuspendLayout();
             grid.Rows.Clear();
