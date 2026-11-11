@@ -91,6 +91,10 @@ namespace EmployeeTrainingTracker
 
         private readonly ComboBox cmbArea = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240, Anchor = AnchorStyles.Left };
         private readonly CheckBox chkShowHidden = new() { Text = "Show hidden rows", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(10, 3, 3, 3) };
+        // Live copy: people archived in the Employees tab are hidden unless this is ticked (then shown greyed, read-only)
+        private readonly CheckBox chkShowArchived = new() { Text = "Show archived people", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(6, 3, 3, 3), Visible = false };
+        // Refresh: the sheet to show again after reloading
+        private string? _restoreAreaName;
         // The workbook's own colour standard (preview): every cell is painted with the colours Excel displays
         // for it - level colours, INAB green/red, headings, key - as worked out by SkillsMatrixWorkbookColours.
         private readonly CheckBox chkColour = new() { Text = "Workbook colours", AutoSize = true, Checked = true, Anchor = AnchorStyles.Left, Margin = new Padding(6, 3, 3, 3), Visible = false };
@@ -135,7 +139,7 @@ namespace EmployeeTrainingTracker
             // --- Matrix layout: header | legend | legend warning | grid | footer ---------------------
             var headerControls = new Control[]
             {
-                new Label { Text = "Sheet:", AutoSize = true, Anchor = AnchorStyles.Left }, cmbArea, chkShowHidden, chkColour,
+                new Label { Text = "Sheet:", AutoSize = true, Anchor = AnchorStyles.Left }, cmbArea, chkShowHidden, chkShowArchived, chkColour,
                 btnNotes, btnDryRun, btnPrepare, chkEdit, btnSave, btnDiscard, lblPending, btnHistory, btnRefresh,
             };
             var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = headerControls.Length + 1, RowCount = 1, Margin = new Padding(0) };
@@ -191,11 +195,17 @@ namespace EmployeeTrainingTracker
             btnRefresh.Click += (_, _) =>
             {
                 if (!ConfirmLeaveEdits()) return;
+                bool wasPreview = _preview != null;
                 ExitPreview();
                 if (_importTools) { _matrix = null; ShowEmpty(ImportStartText); return; }   // "Close preview"
+                // Stay on the sheet being viewed (by name: sheet IDs change when the live copy is rebuilt)
+                _restoreAreaName = wasPreview ? null : (cmbArea.SelectedItem as SkillAreaInfo)?.Name;
                 _loaded = false;
                 EnsureLoaded();
             };
+            chkShowArchived.CheckedChanged += (_, _) => LoadSelectedArea(keepScroll: true);
+            toolTip.SetToolTip(chkShowArchived, "People archived in the Employees tab are hidden from the Skills Matrix; their levels are kept. " +
+                                                "Tick to show them (greyed, read-only).");
             btnPreview.Click += (_, _) => { if (ConfirmLeaveEdits()) OpenPreview(); };
 
             // Editing (live copy)
@@ -391,10 +401,7 @@ namespace EmployeeTrainingTracker
 
                 ShowMatrixLayout();
                 cmbArea.DisplayMember = nameof(SkillAreaInfo.Name);
-                _suppressAreaChange = true;
-                try { cmbArea.DataSource = areas; }
-                finally { _suppressAreaChange = false; }
-                OnAreaChanged();
+                BindAreas(areas);
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -405,6 +412,22 @@ namespace EmployeeTrainingTracker
                 _loaded = false; // allow Refresh to retry
                 ShowEmpty($"Could not load the Skills Matrix:\n{ex.Message}");
             }
+        }
+
+        /// <summary>Fills the sheet picker and shows a sheet: the one being viewed before a Refresh if it still exists, else the first.</summary>
+        private void BindAreas(List<SkillAreaInfo> areas)
+        {
+            chkShowArchived.Visible = _live;
+            int restore = _restoreAreaName == null ? -1 : areas.FindIndex(a => a.Name == _restoreAreaName);
+            _restoreAreaName = null;
+            _suppressAreaChange = true;
+            try
+            {
+                cmbArea.DataSource = areas;
+                if (restore >= 0) cmbArea.SelectedIndex = restore;
+            }
+            finally { _suppressAreaChange = false; }
+            OnAreaChanged();
         }
 
         /// <summary>Manager dashboard: the live copy, showing (and letting them edit) only the people they manage.</summary>
@@ -439,10 +462,7 @@ namespace EmployeeTrainingTracker
 
                 ShowMatrixLayout();
                 cmbArea.DisplayMember = nameof(SkillAreaInfo.Name);
-                _suppressAreaChange = true;
-                try { cmbArea.DataSource = areas; }
-                finally { _suppressAreaChange = false; }
-                OnAreaChanged();
+                BindAreas(areas);
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -715,7 +735,7 @@ namespace EmployeeTrainingTracker
 
             try
             {
-                _matrix = _live ? SkillsMatrixLiveService.GetMatrix(_adminEmployeeId, area.AreaId)
+                _matrix = _live ? SkillsMatrixLiveService.GetMatrix(_adminEmployeeId, area.AreaId, chkShowArchived.Checked)
                                 : SkillsMatrixService.GetMatrix(_adminEmployeeId, _import.ImportId, area.AreaId);
                 _colours = ImportedColours(_matrix);
                 chkColour.Visible = _colours != null;
@@ -882,7 +902,7 @@ namespace EmployeeTrainingTracker
                 var col = new DataGridViewTextBoxColumn
                 {
                     Name = $"M{member.MemberId}",
-                    HeaderText = member.SourceHeaderText,
+                    HeaderText = member.SourceHeaderText + (_live && member.EmployeeArchived ? " (archived)" : ""),
                     Width = S(MemberColMinWidth),
                     SortMode = DataGridViewColumnSortMode.NotSortable,
                     ToolTipText = (member.EmployeeId <= 0
@@ -1059,7 +1079,9 @@ namespace EmployeeTrainingTracker
 
             string changed = data.UpdatedAt is DateTime at ? $"\nChanged in the app by {data.UpdatedByName} on {at:yyyy-MM-dd HH:mm}" : "";
             string where = string.IsNullOrEmpty(data.SourceCell) ? "" : $"\n{data.SourceCell}";
-            if (EditActive && _access != null && !_access.CanEdit(member.EmployeeId))
+            if (member.EmployeeArchived && _live)
+                where += "\n(archived in the Employees tab - read-only)";
+            else if (EditActive && _access != null && !_access.CanEdit(member.EmployeeId))
                 where += member.EmployeeId == _access.EmployeeId ? "\n(your own level - read-only)" : "\n(read-only)";
             switch (data.Status)
             {
@@ -1085,6 +1107,8 @@ namespace EmployeeTrainingTracker
                                        (EditActive ? "\nType a level (1-5) or Delete to resolve it." : "");
                     break;
             }
+            if (member.EmployeeArchived && _live)
+                cell.Style.ForeColor = cell.Style.SelectionForeColor = SystemColors.GrayText;   // archived: shown only on request
         }
 
         private string LevelLabel(int level) =>
@@ -1130,6 +1154,7 @@ namespace EmployeeTrainingTracker
             int i = cell.ColumnIndex - 2;
             if (i >= _matrix.Members.Count) return false;
             if (_access != null && !_access.CanEdit(_matrix.Members[i].EmployeeId)) return false;   // e.g. a manager's own column
+            if (_matrix.Members[i].EmployeeArchived) return false;                                  // archived: read-only
             if (!_matrix.Cells.TryGetValue((s.SkillId, _matrix.Members[i].MemberId), out var d)) return false;
             skill = s; member = _matrix.Members[i]; data = d;
             return true;

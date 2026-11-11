@@ -141,6 +141,15 @@ internal static class ImportTests
     /// <summary>The dummy Innovation-layout plan (employees 1 'Alice Example', 2 'Bob O Test'), for the live-copy tests.</summary>
     internal static ImportPlan DummyInnovationPlan(string root) => InnovationPlan(root, out _);
 
+    /// <summary>A plan for any dummy workbook, with the dummy employee list and the given decisions (merge tests).</summary>
+    internal static ImportPlan PlanForWorkbook(string workbook, string root, Dictionary<string, (string Decision, string Id, string Notes)> decisions,
+                                               out DryRunResult dry)
+    {
+        dry = SkillsMatrixDryRun.Run(SkillsMatrixWorkbookPreview.Load(workbook), Fixture.Roster());
+        var path = WriteDecisions(dry, Path.Combine(root, $"d_{Guid.NewGuid():N}.csv"), decisions);
+        return Build(dry, LoadDecisionsCsv(path), Details());
+    }
+
     /// <summary>Plan for the dummy Innovation-layout workbook (Alice and Bob confirmed).</summary>
     private static ImportPlan InnovationPlan(string root, out PreviewResult preview)
     {

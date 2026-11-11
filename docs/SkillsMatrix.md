@@ -549,6 +549,50 @@ cells byte-for-byte unchanged (fingerprint), the change log untouched; snapshot 
   batch refused, group removal, manager undo, history filter, import rebuilding the live copy); database
   suites and scenarios unchanged (63/63, 21/21, 30/30); existing suite 176/176.
 
+### Archived people and Refresh (2026-11-11)
+
+- **Archived in the Employees tab = hidden on the Skills Matrix** (Admin and Manager views), read at display time,
+  so it is always in sync. Their levels are kept: unarchived, they reappear with their data. "Show archived
+  people" shows them greyed, marked "(archived)", read-only; `SaveCells` refuses archived people. A manager's
+  sheet list leaves out sheets where all their people are archived. On production this currently hides Liam
+  Melia (Data Collection), Oisin Porter (Data Analysis) and Peadar Jolliffe-Byrne (GIS, H&S Environmental), who
+  were imported deliberately although archived.
+- **Refresh stays on the sheet being viewed** (matched by sheet name).
+- C# live tests **63/63** (adds archived hidden / shown on request / save refused / manager sheet list / unarchived).
+
+### Re-import with merge (2026-11-11)
+
+For updating the matrix from a newer workbook without losing levels changed in the app (Skills Matrix Import
+tab -> Prepare import -> **Compare with live copy…**). `SkillsMatrixMerge.Compare` (read-only) compares three
+versions of every cell - the import the live copy was built from, the app's value now, the new workbook:
+
+| Situation | Result |
+|---|---|
+| changed only in the workbook | the workbook's value (automatic) |
+| changed only in the app | the app's value is kept (automatic) |
+| changed in both, to the same value | nothing to do |
+| changed in both, differently | **conflict**: the person importing chooses per cell ("Keep all app values" / "Take all workbook values"); the import cannot run until all are decided |
+| changed in the app, but the skill / person / cell is not in the new workbook | listed as "cannot be kept", with the reason |
+
+- Structure (sheets, categories, skills, people) follows the workbook; the comparison lists what is new or gone.
+- Matching: sheet by name; skill by (sheet, category, name, n-th occurrence of that name) - so a renamed skill
+  is "removed + added"; person by (sheet, employee, n-th column of that person - a person can be in both tables
+  of a side-by-side sheet).
+- The import (`SkillsMatrixImportWriter.Write(..., merge)`) rebuilds the live copy and puts the kept app values
+  back in the same transaction (shown as changed by their original author; one `SetCell` log entry each, "Kept the
+  app's value over the workbook ..."). It locks the live cells and is refused if anyone saved a change after the
+  comparison. If there are app changes and no comparison, Import asks: compare first / replace them / cancel.
+- The saved plan summary includes the comparison.
+- **New people right of a sheet's usual columns** are now read automatically (header cells with names, up to the
+  first empty header, never into the next table on the sheet), reported as `AddedPersonColumn` review items, and go
+  through the normal reconciliation. **New sheets** still need their layout added in code (they are listed as
+  "visible but not a recognised matrix sheet"). New rows need the sheet's data-validation range to cover them.
+- Tests: C# live tests **88/88** (adds 24 merge tests on a two-version dummy workbook: keep, conflict, same, lost,
+  workbook-only change, structure, undecided conflict refused, stale comparison refused, kept values in place and
+  logged, renamed row, new row / person, auto-detected column excluded). Real workbook copy: 115 people columns,
+  0 added automatically (unchanged). Read-only comparison of that copy with production's live copy: 0 differences
+  of any kind across 2,522 cells (both app edits had been set back to their imported values).
+
 ## Access control and its limitations
 
 - The tab exists only on the Admin dashboard, and `SkillsMatrixService` re-checks **on every call**

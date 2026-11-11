@@ -3,6 +3,10 @@
 // migration 005. Refuses any target other than localhost:54329/live with the sentinel table.
 using EmployeeTrainingTracker.Utilities;
 using Npgsql;
+using OfficeOpenXml;
+using OfficeOpenXml.Style;
+using System.Drawing;
+using static EmployeeTrainingTracker.Utilities.SkillsMatrixImportPlan;
 using static EmployeeTrainingTracker.Utilities.SkillsMatrixLiveService;
 
 internal static class LiveTests
@@ -20,6 +24,143 @@ internal static class LiveTests
         try { action(); Check(false, name, "no exception"); }
         catch (T ex) { Check(ex.Message.Contains(messagePart, StringComparison.OrdinalIgnoreCase), name, ex.Message); }
         catch (Exception ex) { Check(false, name, $"{ex.GetType().Name}: {ex.Message}"); }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Re-import with merge (SkillsMatrixMerge + SkillsMatrixImportWriter)
+
+    /// <summary>
+    /// A small 'Innovation' sheet. Version 1: Alice (C), Bob (D); skills one..four = 1, 2, 3, 4 for both.
+    /// Version 2 (the 'next' workbook): Alice skill two 2 -> 3; Alice skill three 3 -> 4; 'Skill four' renamed 'Skill 4';
+    /// Bob skill one 1 -> 5; new row 'Skill five'; new person Carol (E); a new person right of the usual columns (F).
+    /// </summary>
+    private static string MergeWorkbook(string path, int version)
+    {
+        ExcelPackage.License.SetNonCommercialOrganization("Student");
+        using var p = new ExcelPackage();
+        var ws = p.Workbook.Worksheets.Add("Innovation");
+        string[] key = { "1: To be Trained", "2: In Training", "3: Requires Supervision", "4: Skilled in Area", "5: Skilled to train others" };
+        for (int i = 0; i < key.Length; i++) ws.Cells[1, i + 1].Value = key[i];
+        ws.Cells["A4"].Value = "Skill"; ws.Cells["B4"].Value = "INAB accredited"; ws.Cells["C4"].Value = "Alice Example"; ws.Cells["D4"].Value = "Bob O'Test";
+        ws.Cells["G4"].Value = "Skill"; ws.Cells["H4"].Value = "INAB accredited"; ws.Cells["I4"].Value = "Bob O'Test";
+        foreach (var c in new[] { "A5", "G5" })
+        {
+            ws.Cells[c].Style.Fill.PatternType = ExcelFillStyle.Solid;
+            ws.Cells[c].Style.Fill.BackgroundColor.SetColor(Color.FromArgb(0xD9, 0xD9, 0xD9));
+        }
+        ws.Cells["A5"].Value = "Innovation table 1"; ws.Cells["G5"].Value = "Innovation table 2";
+        void Row(int r, string skill, string inab, int alice, int bob) { ws.Cells[r, 1].Value = skill; ws.Cells[r, 2].Value = inab; ws.Cells[r, 3].Value = alice; ws.Cells[r, 4].Value = bob; }
+        Row(6, "Skill one", "Yes", 1, version == 1 ? 1 : 5);
+        Row(7, "Skill two", "Yes", version == 1 ? 2 : 3, 2);
+        Row(8, "Skill three", "No", version == 1 ? 3 : 4, 3);
+        Row(9, version == 1 ? "Skill four" : "Skill 4", "No", 4, 4);
+        ws.Cells["G6"].Value = "Other skill"; ws.Cells["H6"].Value = "No"; ws.Cells["I6"].Value = 5;
+        int lastRow = 9;
+        if (version == 2)
+        {
+            Row(10, "Skill five", "Yes", 2, 3);
+            lastRow = 10;
+            ws.Cells["E4"].Value = "Carol Sample"; ws.Cells["E6"].Value = 2;
+            ws.Cells["F4"].Value = "Eve Closname";   // right of the usual columns (C:E): included automatically
+        }
+        foreach (var range in new[] { $"C6:F{lastRow}", "I6:L6" })
+        {
+            var dv = ws.DataValidations.AddListValidation(range);
+            foreach (var v in new[] { "1", "2", "3", "4", "5" }) dv.Formula.Values.Add(v);
+        }
+        p.SaveAs(new FileInfo(path));
+        return path;
+    }
+
+    private static void MergeTests(NpgsqlConnection conn)
+    {
+        long Scalar(string sql) => Convert.ToInt64(new NpgsqlCommand(sql, conn).ExecuteScalar());
+        const int Alice = 1;
+        // Dummy names as in the dummy employee list (disposable database)
+        new NpgsqlCommand("UPDATE public.Employees SET FullName = 'Alice Example' WHERE EmployeeID = 1; UPDATE public.Employees SET FullName = 'Bob O Test' WHERE EmployeeID = 2; " +
+                          "UPDATE public.Employees SET FullName = 'Carol Sample' WHERE EmployeeID = 3", conn).ExecuteNonQuery();
+        string root = Path.Combine(Path.GetTempPath(), "SkillsMatrixMergeTest", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var d1 = new Dictionary<string, (string, string, string)> { ["Alice Example"] = (Confirmed, "1", ""), ["Bob O'Test"] = (Confirmed, "2", "") };
+            var plan1 = ImportTests.PlanForWorkbook(MergeWorkbook(Path.Combine(root, "v1.xlsx"), 1), root, d1, out _);
+            Check(plan1.Errors.Count == 0, "merge: version 1 plan ready", string.Join(" | ", plan1.Errors));
+            SkillsMatrixImportWriter.Write(conn, plan1, plan1.Acknowledgements.Select(a => a.Key).ToHashSet(), SkillsMatrixImportWriter.ExpectedConfirmation(plan1), Alice);
+
+            var area = GetAreas(conn).Single(a => a.Name == "Innovation");
+            var m = GetMatrix(conn, area.AreaId);
+            long Sk(SkillsMatrixService.SkillMatrixData d, string n) => d.Skills.Single(s => s.Name == n).SkillId;
+            long Pe(SkillsMatrixService.SkillMatrixData d, string n) => d.Members.First(x => x.EmployeeName == n).MemberId;   // first column (table 1)
+            long ali = Pe(m, "Alice Example"), bob = Pe(m, "Bob O Test");
+            int V(string skill, long who) => m.Cells[(Sk(m, skill), who)].Version;
+            var r = SaveCells(conn, Alice, area.AreaId, new[] {
+                new CellChange(Sk(m, "Skill one"), ali, V("Skill one", ali), 5),      // only in the app        -> kept
+                new CellChange(Sk(m, "Skill two"), ali, V("Skill two", ali), 5),      // Excel 3 too            -> conflict
+                new CellChange(Sk(m, "Skill three"), ali, V("Skill three", ali), 4),  // Excel 4 too            -> same
+                new CellChange(Sk(m, "Skill four"), bob, V("Skill four", bob), 1),    // row renamed in Excel   -> lost
+            });
+            Check(r.Saved == 4, "merge: four changes made in the app");
+
+            var d2 = new Dictionary<string, (string, string, string)>(d1) { ["Carol Sample"] = (Confirmed, "3", ""), ["Eve Closname"] = (Excluded, "", "test: not imported") };
+            var plan2 = ImportTests.PlanForWorkbook(MergeWorkbook(Path.Combine(root, "v2.xlsx"), 2), root, d2, out var dry2);
+            Check(plan2.Errors.Count == 0, "merge: version 2 plan ready", string.Join(" | ", plan2.Errors));
+            Check(dry2.ReviewItems.Any(i => i.Kind == SkillsMatrixWorkbookPreview.ReviewKind.AddedColumn && i.Cell == "Innovation!F4")
+                  && plan2.Areas.Single().Columns.Any(c => c.SourceColumn == "F" && c.Disposition == "Excluded"),
+                  "new column right of the usual ones (F) is read, reported, and goes through reconciliation");
+
+            var rep = SkillsMatrixMerge.Compare(conn, plan2);
+            var edits = rep.Edits.ToDictionary(e => (e.Skill, e.EmployeeName));
+            Check(rep.KeptAutomatically == 1 && edits[("Skill one", "Alice Example")].Outcome == SkillsMatrixMerge.Outcome.KeepApp, "compare: changed only in the app -> kept");
+            var conflict = edits[("Skill two", "Alice Example")];
+            Check(rep.Conflicts.Count() == 1 && conflict.Outcome == SkillsMatrixMerge.Outcome.Conflict && conflict.BaseValue == "2" && conflict.AppValue == "5" && conflict.ExcelValue == "3",
+                  "compare: changed in both differently -> conflict with import / app / workbook values");
+            Check(rep.SameInBoth == 1, "compare: changed in both to the same value -> nothing to do");
+            Check(rep.Lost == 1 && edits[("Skill four", "Bob O Test")].LostReason!.Contains("skill"), "compare: app change on a row renamed in Excel -> cannot be kept, with the reason");
+            Check(rep.ExcelChangedCells == 1 && rep.ExcelChanges.Single().Contains("Skill one / Bob O Test: 1 -> 5"), "compare: changed only in the workbook -> taken", string.Join(" | ", rep.ExcelChanges));
+            Check(rep.Structure.Any(s => s.Contains("new skill 'Innovation table 1 / Skill five'")) && rep.Structure.Any(s => s.Contains("new skill 'Innovation table 1 / Skill 4'"))
+                  && rep.Structure.Any(s => s.Contains("no longer in the workbook 'Innovation table 1 / Skill four'")) && rep.Structure.Any(s => s.Contains("new person Carol Sample")),
+                  "compare: structure changes listed (new / removed rows, new person)", string.Join(" | ", rep.Structure));
+            Throws<InvalidOperationException>(() => SkillsMatrixMerge.Decide(rep, new bool?[] { null }), "an undecided conflict cannot be imported", "Decide every conflict");
+            Check(SkillsMatrixMerge.Decide(rep, new bool?[] { true }).Keep.Count == 2, "keeping the app's value in a conflict adds it to the kept values");
+
+            // Someone saves after the comparison -> the import is refused, nothing written
+            var takeExcel = SkillsMatrixMerge.Decide(rep, new bool?[] { false });
+            long importsBefore = Scalar("SELECT COUNT(*) FROM public.SkillMatrixImports");
+            r = SaveCells(conn, Alice, area.AreaId, new[] { new CellChange(Sk(m, "Skill three"), bob, V("Skill three", bob), 2) });
+            Throws<InvalidOperationException>(() => SkillsMatrixImportWriter.Write(conn, plan2, plan2.Acknowledgements.Select(a => a.Key).ToHashSet(),
+                                                  SkillsMatrixImportWriter.ExpectedConfirmation(plan2), Alice, takeExcel),
+                                              "import refused when the live copy changed after the comparison", "changed since the comparison");
+            Check(Scalar("SELECT COUNT(*) FROM public.SkillMatrixImports") == importsBefore, "... and nothing was written");
+
+            // Compare again (Bob's new change is app-only -> kept too), take Excel for the conflict, import
+            rep = SkillsMatrixMerge.Compare(conn, plan2);
+            var w = SkillsMatrixImportWriter.Write(conn, plan2, plan2.Acknowledgements.Select(a => a.Key).ToHashSet(),
+                                                   SkillsMatrixImportWriter.ExpectedConfirmation(plan2), Alice, SkillsMatrixMerge.Decide(rep, new bool?[] { false }));
+            Check(w.AppValuesKept == 2 && rep.KeptAutomatically == 2, "merge import: 2 app values kept", $"kept {w.AppValuesKept}");
+
+            area = GetAreas(conn).Single(a => a.Name == "Innovation");
+            m = GetMatrix(conn, area.AreaId);
+            ali = Pe(m, "Alice Example"); bob = Pe(m, "Bob O Test");
+            SkillsMatrixService.SkillCellInfo C(string skill, long who) => m.Cells[(Sk(m, skill), who)];
+            Check(C("Skill one", ali).Level == 5 && C("Skill one", ali).UpdatedByName == "Alice Example", "after: app-only change kept, still shown as changed by its author");
+            Check(C("Skill two", ali).Level == 3 && C("Skill two", ali).UpdatedAt == null, "after: conflict resolved to the workbook's value");
+            Check(C("Skill three", ali).Level == 4 && C("Skill three", bob).Level == 2, "after: same-in-both value, and the later app change, in place");
+            Check(C("Skill one", bob).Level == 5, "after: workbook-only change taken");
+            Check(C("Skill 4", bob).Level == 4 && m.Skills.All(s => s.Name != "Skill four"), "after: renamed row follows the workbook");
+            Check(m.Skills.Any(s => s.Name == "Skill five") && m.Members.Any(x => x.EmployeeName == "Carol Sample") && C("Skill one", Pe(m, "Carol Sample")).Level == 2,
+                  "after: new row and new person from the workbook");
+            Check(m.Members.All(x => x.SourceColumn != "F"), "after: the excluded new column is not on the sheet");
+            var notes = GetChanges(conn, area.AreaId).Where(c => c.Note != null && c.Note.StartsWith("Kept the app's value over the workbook")).ToList();
+            Check(notes.Count == 2 && notes.All(n => n.Action == "SetCell"), "after: each kept value logged");
+            Check(EditsSinceRebuild(conn) == 2, "after: the kept values count as changes since the rebuild (the next import compares them again)");
+            var again = SkillsMatrixMerge.Compare(conn, plan2);
+            Check(again.KeptAutomatically == 2 && !again.Conflicts.Any(), "after: comparing the same workbook again keeps them again, no conflicts");
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
     }
 
     public static int Run(string connectionString)
@@ -169,6 +310,24 @@ internal static class LiveTests
               "team row: a group the person manages themselves is not their manager");
         new NpgsqlCommand("UPDATE public.SkillMatrixLiveColumns SET SubGroupLabel = NULL WHERE EmployeeID = 3", conn).ExecuteNonQuery();
 
+        // --- Archived people (Employees tab) are hidden; shown read-only on request; their levels are kept ---
+        new NpgsqlCommand("UPDATE public.Employees SET IsArchived = TRUE WHERE EmployeeID = 2", conn).ExecuteNonQuery();
+        var hidden = GetMatrix(conn, lab.AreaId);
+        Check(hidden.Members.Count == 1 && hidden.Members[0].EmployeeName == "Alice Admin" && hidden.Cells.Keys.All(k => k.Item2 == alice),
+              "archived: Bob hidden from the sheet (column and cells)");
+        var withArchived = GetMatrix(conn, lab.AreaId, null, includeArchived: true);
+        var bobArchived = withArchived.Members.Single(x => x.EmployeeName == "Bob Tester");
+        Check(bobArchived.EmployeeArchived && withArchived.Cells.ContainsKey((abr, bob)), "archived: shown on request, marked archived, levels kept");
+        before = Scalar("SELECT COUNT(*) FROM public.SkillMatrixLiveChanges");
+        Throws<ArgumentException>(() => SaveCells(conn, Alice, lab.AreaId, new[] { new CellChange(abr, bob, withArchived.Cells[(abr, bob)].Version, 2) }),
+                                  "archived: saving their level is refused", "archived");
+        Check(Scalar("SELECT COUNT(*) FROM public.SkillMatrixLiveChanges") == before, "... nothing saved or logged");
+        Check(GetAreas(conn, GetAccess(conn, null, Carol)).Select(a => a.Name).SequenceEqual(new[] { "Admin" }),
+              "archived: a manager's sheet list leaves out sheets where her only people are archived");
+        new NpgsqlCommand("UPDATE public.Employees SET IsArchived = FALSE WHERE EmployeeID = 2", conn).ExecuteNonQuery();
+        Check(GetMatrix(conn, lab.AreaId).Members.Any(x => x.EmployeeName == "Bob Tester" && x.MemberId == bob),
+              "unarchived: Bob is back, same column and levels");
+
         // --- Managers (stand-in: Carol (3) manages group 'Lab' = Bob (2) and Carol) ---
         var carol = GetAccess(conn, null, Carol);
         Check(!carol.IsAdmin && carol.Managed.SetEquals(new long[] { 2, 3 }) && carol.CanEdit(2) && !carol.CanEdit(3) && !carol.CanSee(1),
@@ -231,6 +390,8 @@ internal static class LiveTests
         {
             try { Directory.Delete(root, recursive: true); } catch { }
         }
+
+        MergeTests(conn);
 
         Console.WriteLine();
         Console.WriteLine($"LIVE {_passed} passed, {_failed} failed");

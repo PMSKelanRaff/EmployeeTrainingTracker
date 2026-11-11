@@ -70,6 +70,8 @@ namespace EmployeeTrainingTracker.Utilities
             public const string ColourInconsistency = "ColourInconsistency";
             public const string NoValidationRange = "NoValidationRange";
             public const string LevelNotInKey = "LevelNotInKey";
+            /// <summary>A named person column right of the sheet's usual columns, included automatically (information).</summary>
+            public const string AddedColumn = "AddedPersonColumn";
         }
 
         /// <summary>What was read on a sheet, and what was left out (with reasons).</summary>
@@ -240,13 +242,29 @@ namespace EmployeeTrainingTracker.Utilities
 
             foreach (var block in layout.Blocks)
             {
+                // People added to the right of the sheet's usual columns: included while the header cells hold names,
+                // stopping at the first empty header, and never into the next table on the sheet (decision 2026-11-11).
+                int lastPersonCol = block.LastPersonCol;
+                int boundary = layout.Blocks
+                    .SelectMany(b => new int?[] { b.SkillCol, b.InabCol, b.CategoryCol, b.FirstPersonCol })
+                    .Where(c => c is int v && v > block.LastPersonCol).Select(c => c!.Value)
+                    .DefaultIfEmpty((ws.Dimension?.End.Column ?? block.LastPersonCol) + 1).Min();
+                while (lastPersonCol + 1 < boundary && Text(ws.Cells[block.HeaderRow, lastPersonCol + 1]).Length > 0)
+                {
+                    lastPersonCol++;
+                    Flag(ReviewKind.AddedColumn, $"{ws.Name}!{Col(lastPersonCol)}{block.HeaderRow}",
+                         $"Column {Col(lastPersonCol)} ('{Text(ws.Cells[block.HeaderRow, lastPersonCol])}') is right of this sheet's usual people " +
+                         $"columns ({Col(block.FirstPersonCol)}:{Col(block.LastPersonCol)}) and was included automatically.");
+                }
+
                 // Person columns: named header cells; unnamed columns only if they hold values
                 var blockMembers = new List<(SkillMemberInfo Member, int Col)>();
-                headerRows.Add($"row {block.HeaderRow}, people in columns {Col(block.FirstPersonCol)}:{Col(block.LastPersonCol)}, " +
-                               $"skills in column {Col(block.SkillCol)}" +
+                headerRows.Add($"row {block.HeaderRow}, people in columns {Col(block.FirstPersonCol)}:{Col(lastPersonCol)}" +
+                               (lastPersonCol > block.LastPersonCol ? $" ({Col(block.LastPersonCol + 1)}:{Col(lastPersonCol)} added automatically)" : "") +
+                               $", skills in column {Col(block.SkillCol)}" +
                                (block.InabCol.HasValue ? $", INAB in column {Col(block.InabCol.Value)}" : ", no INAB column") +
                                $", data from row {block.FirstDataRow}");
-                for (int c = block.FirstPersonCol; c <= block.LastPersonCol; c++)
+                for (int c = block.FirstPersonCol; c <= lastPersonCol; c++)
                 {
                     string header = Text(ws.Cells[block.HeaderRow, c]);
                     bool hasValues = Enumerable.Range(block.FirstDataRow, Math.Max(0, lastRow - block.FirstDataRow + 1))

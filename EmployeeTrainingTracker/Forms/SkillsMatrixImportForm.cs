@@ -43,6 +43,10 @@ namespace EmployeeTrainingTracker
         private readonly CheckedListBox clbAcks = new() { Dock = DockStyle.Fill, CheckOnClick = true, HorizontalScrollbar = true };
         private readonly Label lblStatus = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Font = new Font(SystemFonts.DefaultFont, FontStyle.Bold) };
         private readonly Button btnImport = new() { AutoSize = true };
+        // Re-import with merge: the comparison with the live copy and the decisions taken (reset when the plan changes)
+        private readonly Button btnCompare = new() { Text = "Compare with live copy…", AutoSize = true };
+        private SkillsMatrixMerge.Report? _mergeReport;
+        private SkillsMatrixMerge.MergePlan? _mergePlan;
 
         public SkillsMatrixImportForm(DryRunResult dry, int adminEmployeeId)
         {
@@ -103,17 +107,19 @@ namespace EmployeeTrainingTracker
             };
 
             // Buttons
-            var buttons = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 42, ColumnCount = 4, Padding = new Padding(6) };
+            var buttons = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 42, ColumnCount = 5, Padding = new Padding(6) };
             buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            for (int i = 0; i < 3; i++) buttons.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            for (int i = 0; i < 4; i++) buttons.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             var btnSave = new Button { Text = "Save plan summary…", AutoSize = true };
             var btnClose = new Button { Text = "Close", AutoSize = true, DialogResult = DialogResult.OK };
             btnSave.Click += (_, _) => SaveSummary();
             btnImport.Click += (_, _) => RunImport();
+            btnCompare.Click += (_, _) => CompareWithLive();
             buttons.Controls.Add(lblStatus, 0, 0);
             buttons.Controls.Add(btnSave, 1, 0);
-            buttons.Controls.Add(btnImport, 2, 0);
-            buttons.Controls.Add(btnClose, 3, 0);
+            buttons.Controls.Add(btnCompare, 2, 0);
+            buttons.Controls.Add(btnImport, 3, 0);
+            buttons.Controls.Add(btnClose, 4, 0);
 
             Controls.Add(split);
             Controls.Add(details);
@@ -152,6 +158,8 @@ namespace EmployeeTrainingTracker
         private void Rebuild()
         {
             _plan = Build(_dry, _decisions, new ImportDetails(txtApprovedBy.Text, ImportedBy, txtVersion.Text, txtNotes.Text));
+            _mergeReport = null;   // a new plan needs a new comparison
+            _mergePlan = null;
             var keys = _plan.Acknowledgements.Select(a => a.Key).ToHashSet();
             _acknowledged.RemoveWhere(k => !keys.Contains(k));   // keep ticks that still apply
 
@@ -171,9 +179,50 @@ namespace EmployeeTrainingTracker
             lblStatus.Text = ready
                 ? "READY - every decision is recorded and acknowledged."
                 : $"NOT READY - {_plan.Errors.Count} blocking error(s), {outstanding} acknowledgement(s) outstanding.";
+            if (ready && _mergePlan != null)
+                lblStatus.Text += $"   Merge decided: {_mergePlan.Keep.Count} app value(s) will be kept.";
             lblStatus.ForeColor = ready ? Color.DarkGreen : Color.DarkRed;
             btnImport.Text = ImportExecutionEnabled ? "Import…" : "Import (switched off in this build)";
             btnImport.Enabled = ImportExecutionEnabled && ready;
+            btnCompare.Enabled = ImportExecutionEnabled && ready;
+        }
+
+        /// <summary>Compares the plan with the live copy (read-only) and collects the merge decisions. Returns true when decided.</summary>
+        private bool CompareWithLive()
+        {
+            if (_plan == null || !_plan.IsReady(_acknowledged)) return false;
+            SkillsMatrixMerge.Report report;
+            try
+            {
+                SkillsMatrixService.EnsureImportUser(_adminEmployeeId);
+                using var conn = DatabaseHelper.GetConnection();
+                conn.Open();
+                var state = SkillsMatrixLiveService.GetState(conn);
+                if (!state.Installed || state.BasedOnImportId == null)
+                {
+                    MessageBox.Show(this, "There is no live copy yet: the import will build it. Nothing to compare.", "Compare with live copy",
+                                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return false;
+                }
+                Cursor = Cursors.WaitCursor;
+                report = SkillsMatrixMerge.Compare(conn, _plan);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Could not compare with the live copy:\n{ex.Message}", "Compare with live copy", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+            finally
+            {
+                Cursor = Cursors.Default;
+            }
+
+            using var form = new SkillsMatrixMergeForm(report);
+            if (form.ShowDialog(this) != DialogResult.OK || form.Result == null) return false;
+            _mergeReport = report;
+            _mergePlan = form.Result;
+            Render();
+            return true;
         }
 
         private void SaveSummary()
@@ -193,6 +242,12 @@ namespace EmployeeTrainingTracker
                 using var fs = new FileStream(dialog.FileName, FileMode.CreateNew, FileAccess.Write, FileShare.None);   // never overwrites
                 using var sw = new StreamWriter(fs, new UTF8Encoding(true));
                 sw.Write(RenderSummary(_plan, _acknowledged));
+                if (_mergeReport != null)
+                {
+                    sw.WriteLine();
+                    sw.Write(SkillsMatrixMerge.Render(_mergeReport));
+                    sw.WriteLine($"Decisions taken: {_mergePlan?.Keep.Count ?? 0} app value(s) to be kept.");
+                }
                 MessageBox.Show(this, "Saved (nothing was imported):\n" + dialog.FileName, "Prepare import", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (IOException ex) when (File.Exists(dialog.FileName))
@@ -234,9 +289,24 @@ namespace EmployeeTrainingTracker
                                 MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
+            // Changes made in the app since the live copy was built: offer the comparison (merge) first
+            if (edits > 0 && _mergePlan == null)
+            {
+                var choice = MessageBox.Show(this,
+                    $"{edits} change(s) have been made in the app since the live copy was built.\n\n" +
+                    "Yes = compare with the live copy first and keep the app's changes where you choose (recommended)\n" +
+                    "No = import and REPLACE them with the workbook's values (they stay listed in History)\n" +
+                    "Cancel = do nothing",
+                    "Skills Matrix import", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                if (choice == DialogResult.Cancel) return;
+                if (choice == DialogResult.Yes && !CompareWithLive()) return;
+            }
             string liveText = edits switch
             {
                 null => "",
+                _ when _mergePlan != null =>
+                    $"\n\nThe live copy (what the Skills Matrix tab shows and edits) is rebuilt from this import, then {_mergePlan.Keep.Count} value(s) " +
+                    "changed in the app are put back as you decided (merge). Refused if anyone saves a change before the import.",
                 0 => "\n\nThe live copy (what the Skills Matrix tab shows and edits) is rebuilt from this import. No changes have been made in the app since it was last built.",
                 _ => $"\n\nWARNING: the live copy (what the Skills Matrix tab shows and edits) is rebuilt from this import. " +
                      $"{edits} change(s) made in the app since it was last built will be REPLACED by the workbook's values. They stay listed in History.",
@@ -249,9 +319,10 @@ namespace EmployeeTrainingTracker
             {
                 SkillsMatrixService.EnsureImportUser(_adminEmployeeId);
                 conn.Open();
-                var r = SkillsMatrixImportWriter.Write(conn, _plan, _acknowledged, typed, _adminEmployeeId);
+                var r = SkillsMatrixImportWriter.Write(conn, _plan, _acknowledged, typed, _adminEmployeeId, _mergePlan);
                 MessageBox.Show(this, $"Import {r.ImportId} written and made current ({r.Columns} columns, {r.Cells} cells, {r.Formats} formatting rows, {r.Took.TotalSeconds:0.0} s)." +
-                                      (r.LiveCellsRebuilt is int live ? $"\n\nThe live copy was rebuilt from it ({live} cells). Refresh the Skills Matrix tab." : ""),
+                                      (r.LiveCellsRebuilt is int live ? $"\n\nThe live copy was rebuilt from it ({live} cells)" +
+                                          (_mergePlan != null ? $" and {r.AppValuesKept} value(s) changed in the app were kept" : "") + ". Refresh the Skills Matrix tab." : ""),
                                 "Skills Matrix import", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 DialogResult = DialogResult.OK;
             }

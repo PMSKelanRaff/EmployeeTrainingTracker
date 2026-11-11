@@ -80,10 +80,10 @@ namespace EmployeeTrainingTracker.Utilities
             return GetAreas(conn, GetAccess(conn, null, employeeId));
         }
 
-        public static SkillMatrixData GetMatrix(int employeeId, long liveAreaId)
+        public static SkillMatrixData GetMatrix(int employeeId, long liveAreaId, bool includeArchived = false)
         {
             using var conn = Open();
-            return GetMatrix(conn, liveAreaId, GetAccess(conn, null, employeeId));
+            return GetMatrix(conn, liveAreaId, GetAccess(conn, null, employeeId), includeArchived);
         }
 
         public static SaveResult SaveCells(int editorEmployeeId, long liveAreaId, IReadOnlyList<CellChange> changes)
@@ -188,7 +188,9 @@ namespace EmployeeTrainingTracker.Utilities
                 FROM public.SkillMatrixLiveAreas la
                 JOIN public.SkillMatrixAreas a ON a.AreaID = la.SourceAreaID
                 {(filter ? @"WHERE EXISTS (SELECT 1 FROM public.SkillMatrixLiveColumns c
-                                         WHERE c.AreaID = la.AreaID AND NOT c.IsDeleted AND c.EmployeeID = ANY(@people))" : "")}
+                                         JOIN public.Employees e ON e.EmployeeID = c.EmployeeID
+                                         WHERE c.AreaID = la.AreaID AND NOT c.IsDeleted AND NOT e.IsArchived
+                                           AND c.EmployeeID = ANY(@people))" : "")}
                 ORDER BY la.DisplayOrder, la.AreaID", conn);
             if (filter) cmd.Parameters.AddWithValue("people", access!.Managed.ToArray());
             var areas = new List<SkillAreaInfo>();
@@ -203,7 +205,11 @@ namespace EmployeeTrainingTracker.Utilities
         /// One sheet of the live copy, in the same shape as an imported sheet: IDs are LIVE IDs; legend, workbook
         /// references and formatting come from the import the sheet was copied from. Deleted rows are left out.
         /// </summary>
-        public static SkillMatrixData GetMatrix(NpgsqlConnection conn, long liveAreaId, Access? access = null)
+        /// <summary>
+        /// People archived in the Employees tab are left out (their levels are kept: unarchived, they reappear),
+        /// unless includeArchived (shown read-only; SaveCells refuses them).
+        /// </summary>
+        public static SkillMatrixData GetMatrix(NpgsqlConnection conn, long liveAreaId, Access? access = null, bool includeArchived = false)
         {
             SkillAreaInfo area;
             long sourceAreaId, scaleId;
@@ -360,13 +366,15 @@ namespace EmployeeTrainingTracker.Utilities
                     excluded.Add(new SkillExcludedColumn(r.GetString(0), r.GetString(1), r.GetString(2)));
             }
 
-            // A Manager sees only the people they manage (and themselves); no other columns, cells or exclusions
-            if (access is { IsAdmin: false })
+            // A Manager sees only the people they manage (and themselves); no other columns, cells or exclusions.
+            // Archived people (Employees tab) are hidden unless asked for.
+            bool manager = access is { IsAdmin: false };
+            if (manager || !includeArchived)
             {
-                members = members.Where(x => access.CanSee(x.EmployeeId)).ToList();
+                members = members.Where(x => (!manager || access!.CanSee(x.EmployeeId)) && (includeArchived || !x.EmployeeArchived)).ToList();
                 var shown = members.Select(x => x.MemberId).ToHashSet();
                 cells = cells.Where(kv => shown.Contains(kv.Key.Item2)).ToDictionary(kv => kv.Key, kv => kv.Value);
-                excluded = new List<SkillExcludedColumn>();
+                if (manager) excluded = new List<SkillExcludedColumn>();
             }
 
             var legend = new SkillLegend(scaleName, needsConfirmation, legendNote, scaleRef, entries);
@@ -507,10 +515,11 @@ namespace EmployeeTrainingTracker.Utilities
 
                 // Lock the cells being saved and read what they are now
                 var current = new Dictionary<(long, long), (long AreaId, string AreaName, string Status, int? Level, string? Raw, int Version,
-                    DateTime? UpdatedAt, string? UpdatedBy, string SkillName, bool SkillDeleted, long EmployeeId, string EmployeeName, bool ColumnDeleted)>();
+                    DateTime? UpdatedAt, string? UpdatedBy, string SkillName, bool SkillDeleted, long EmployeeId, string EmployeeName, bool ColumnDeleted,
+                    bool EmployeeArchived)>();
                 using (var cmd = new NpgsqlCommand(@"
                     SELECT c.SkillID, c.ColumnID, c.AreaID, a.Name, c.Status, c.Level, c.RawValue, c.Version, c.UpdatedAt, c.UpdatedByName,
-                           s.Name, s.IsDeleted, col.EmployeeID, e.FullName, col.IsDeleted
+                           s.Name, s.IsDeleted, col.EmployeeID, e.FullName, col.IsDeleted, e.IsArchived
                     FROM public.SkillMatrixLiveCells c
                     JOIN public.SkillMatrixLiveAreas a     ON a.AreaID = c.AreaID
                     JOIN public.SkillMatrixLiveSkills s    ON s.SkillID = c.SkillID
@@ -526,7 +535,7 @@ namespace EmployeeTrainingTracker.Utilities
                         current[(r.GetInt64(0), r.GetInt64(1))] = (r.GetInt64(2), r.GetString(3), r.GetString(4),
                             r.IsDBNull(5) ? null : r.GetInt16(5), r.IsDBNull(6) ? null : r.GetString(6), r.GetInt32(7),
                             r.IsDBNull(8) ? null : r.GetDateTime(8), r.IsDBNull(9) ? null : r.GetString(9),
-                            r.GetString(10), r.GetBoolean(11), Convert.ToInt64(r.GetValue(12)), r.GetString(13), r.GetBoolean(14));
+                            r.GetString(10), r.GetBoolean(11), Convert.ToInt64(r.GetValue(12)), r.GetString(13), r.GetBoolean(14), r.GetBoolean(15));
                 }
 
                 var conflicts = new List<CellConflict>();
@@ -536,6 +545,8 @@ namespace EmployeeTrainingTracker.Utilities
                         throw new ArgumentException("A cell being saved is not on this sheet (the matrix may have been re-imported). Refresh the tab. Nothing was saved.");
                     if (now.SkillDeleted || now.ColumnDeleted)
                         throw new ArgumentException($"'{now.SkillName}' / {now.EmployeeName} has been removed from the sheet. Refresh the tab. Nothing was saved.");
+                    if (now.EmployeeArchived)
+                        throw new ArgumentException($"{now.EmployeeName} is archived (Employees tab), so their levels are read-only. Nothing was saved.");
                     if (!access.CanEdit(now.EmployeeId))
                         throw new UnauthorizedAccessException(now.EmployeeId == editorEmployeeId
                             ? "You cannot change your own levels; ask your manager or an Admin. Nothing was saved."

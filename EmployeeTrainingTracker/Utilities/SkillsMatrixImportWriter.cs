@@ -25,13 +25,16 @@ namespace EmployeeTrainingTracker.Utilities
     ///   * When the live copy exists (migration 005), the same transaction rebuilds it from the new import
     ///     (SkillMatrixLive_Seed): edits made in the app since the last rebuild are replaced and stay in the change
     ///     log (decision 2026-11-11: the launch re-import resets the live copy). If that fails, nothing is kept.
+    ///   * With a merge (SkillsMatrixMerge, decided by the person importing): after the rebuild, the app's values
+    ///     chosen to be kept are put back, each logged. Refused if the live copy changed after the comparison
+    ///     (the live cells are locked against saves for the rest of the transaction).
     /// In the application the import step is switched off (SkillsMatrixImportForm.ImportExecutionEnabled).
     /// </summary>
     public static class SkillsMatrixImportWriter
     {
         /// <summary>LiveCellsRebuilt: cells in the rebuilt live copy, or null when the live copy (migration 005) is not installed.</summary>
         public sealed record WriteResult(long ImportId, int Areas, int Skills, int Columns, int Cells, int Formats, TimeSpan Took,
-            int? LiveCellsRebuilt = null);
+            int? LiveCellsRebuilt = null, int AppValuesKept = 0);
 
         /// <summary>
         /// The connection failed while committing, so it is not known whether the server committed the import.
@@ -48,7 +51,7 @@ namespace EmployeeTrainingTracker.Utilities
         public static string ExpectedConfirmation(ImportPlan plan) => "IMPORT " + plan.Import.SourceSha256[..8].ToUpperInvariant();
 
         public static WriteResult Write(NpgsqlConnection conn, ImportPlan plan, IReadOnlySet<string> acknowledged, string typedConfirmation,
-                                        long? importedByEmployeeId = null)
+                                        long? importedByEmployeeId = null, SkillsMatrixMerge.MergePlan? merge = null)
         {
             if (!plan.IsReady(acknowledged))
                 throw new InvalidOperationException("The import plan is not ready (blocking errors or missing acknowledgements). Nothing was written.");
@@ -68,6 +71,18 @@ namespace EmployeeTrainingTracker.Utilities
                 if (Scalar(conn, tx, "SELECT to_regclass('public.skillmatriximports') IS NOT NULL") is not true)
                     throw new InvalidOperationException("Migration 004 is not installed in this database. Nothing was written.");
                 VerifyEmployees(conn, tx, plan);   // before anything is inserted
+
+                // Merge: the live copy must be exactly as compared; no saves from here until COMMIT
+                if (merge != null)
+                {
+                    Exec(conn, tx, "LOCK TABLE public.SkillMatrixLiveCells IN SHARE ROW EXCLUSIVE MODE");
+                    long lastChange = Convert.ToInt64(Scalar(conn, tx, "SELECT COALESCE(MAX(ChangeID), 0) FROM public.SkillMatrixLiveChanges"));
+                    if (lastChange != merge.LastChangeId)
+                        throw new InvalidOperationException("The live copy has changed since the comparison (someone saved a change). " +
+                                                            "Compare with the live copy again. Nothing was written.");
+                }
+                var allSkillIds = new Dictionary<long, long>();    // plan skill key  -> snapshot SkillID
+                var allColumnIds = new Dictionary<long, long>();   // plan column key -> snapshot ColumnID
 
                 var i = plan.Import;
                 long importId = (long)Scalar(conn, tx,
@@ -125,6 +140,8 @@ namespace EmployeeTrainingTracker.Utilities
                         ("rule", f.ConditionalRule), ("fo", f.FontSource), ("font", f.FontRgb), ("frule", f.FontRule), ("b", f.Bold))));
 
                     skills += a.Skills.Count; columns += a.Columns.Count; cells += a.Cells.Count; formats += a.Formats.Count;
+                    foreach (var kv in skillIds) allSkillIds[kv.Key] = kv.Value;
+                    foreach (var kv in columnIds) allColumnIds[kv.Key] = kv.Value;
                 }
 
                 // Complete -> swap current (old snapshots are kept, unchanged) -> commit (triggers re-check at commit)
@@ -137,6 +154,45 @@ namespace EmployeeTrainingTracker.Utilities
                 if (Scalar(conn, tx, "SELECT to_regprocedure('public.skillmatrixlive_seed(bigint,bigint,text)') IS NOT NULL") is true)
                     liveCells = Convert.ToInt32(Scalar(conn, tx, "SELECT public.SkillMatrixLive_Seed(@id, @by, @name)",
                         ("id", importId), ("by", importedByEmployeeId), ("name", i.ImportedBy)));
+                else if (merge != null)
+                    throw new InvalidOperationException("A merge was requested but the live copy is not installed. Nothing was written.");
+
+                // Merge: put back the app's values chosen to be kept (each logged)
+                int kept = 0;
+                foreach (var k in merge?.Keep ?? Array.Empty<SkillsMatrixMerge.Keep>())
+                {
+                    if (!allSkillIds.TryGetValue(k.PlanSkillKey, out long snapSkill) || !allColumnIds.TryGetValue(k.PlanColumnKey, out long snapCol))
+                        throw new InvalidOperationException("A kept value refers to a skill or person that is not in this import. Compare again. Nothing was written.");
+                    using var upd = new NpgsqlCommand(@"
+                        UPDATE public.SkillMatrixLiveCells c
+                        SET Status = @st, Level = @lv, RawValue = NULL, FlagReason = NULL,
+                            UpdatedAt = @at, UpdatedByEmployeeID = @byId, UpdatedByName = @byName
+                        FROM public.SkillMatrixLiveSkills s, public.SkillMatrixLiveColumns col, public.SkillMatrixLiveAreas a, public.Employees e
+                        WHERE s.SkillID = c.SkillID AND col.ColumnID = c.ColumnID AND a.AreaID = c.AreaID AND e.EmployeeID = col.EmployeeID
+                          AND s.SourceSkillID = @sk AND col.SourceColumnID = @col
+                        RETURNING c.AreaID, a.Name, c.SkillID, s.Name, c.ColumnID, col.EmployeeID, e.FullName", conn, tx);
+                    foreach (var p in new[] { Param("st", k.Level.HasValue ? "Level" : "Unassessed"), Param("lv", k.Level.HasValue ? (short?)k.Level.Value : null),
+                                              Param("at", k.ChangedAt), Param("byId", k.ChangedByEmployeeId), Param("byName", k.ChangedBy),
+                                              Param("sk", snapSkill), Param("col", snapCol) })
+                        upd.Parameters.Add(p);
+                    var rows = new List<(long Area, string AreaName, long Skill, string SkillName, long Col, long Emp, string EmpName)>();
+                    using (var r = upd.ExecuteReader())
+                        while (r.Read())
+                            rows.Add((r.GetInt64(0), r.GetString(1), r.GetInt64(2), r.GetString(3), r.GetInt64(4), Convert.ToInt64(r.GetValue(5)), r.GetString(6)));
+                    if (rows.Count != 1)
+                        throw new InvalidOperationException("A kept value could not be placed in the rebuilt live copy. Nothing was written.");
+                    var x = rows[0];
+                    Exec(conn, tx, @"
+                        INSERT INTO public.SkillMatrixLiveChanges
+                            (ChangedByEmployeeID, ChangedByName, BasedOnImportID, Action, AreaID, AreaName, SkillID, SkillName,
+                             ColumnID, EmployeeID, EmployeeName, OldValue, NewValue, Note)
+                        VALUES (@by, @byName, @imp, 'SetCell', @a, @aName, @s, @sName, @c, @e, @eName, @old, @new, @note)",
+                        ("by", importedByEmployeeId), ("byName", i.ImportedBy), ("imp", importId), ("a", x.Area), ("aName", x.AreaName),
+                        ("s", x.Skill), ("sName", x.SkillName), ("c", x.Col), ("e", x.Emp), ("eName", x.EmpName),
+                        ("old", k.ExcelValue), ("new", k.AppValue),
+                        ("note", $"Kept the app's value over the workbook (import {importId}); changed in the app by {k.ChangedBy} on {k.ChangedAt:yyyy-MM-dd HH:mm}"));
+                    kept++;
+                }
                 try
                 {
                     tx.Commit();
@@ -147,7 +203,7 @@ namespace EmployeeTrainingTracker.Utilities
                     // Anything else (network, timeout) leaves the outcome unknown.
                     throw new CommitOutcomeUnknownException(ex);
                 }
-                return new WriteResult(importId, plan.Areas.Count, skills, columns, cells, formats, timer.Elapsed, liveCells);
+                return new WriteResult(importId, plan.Areas.Count, skills, columns, cells, formats, timer.Elapsed, liveCells, kept);
             }
             catch
             {

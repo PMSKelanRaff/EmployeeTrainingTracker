@@ -19,6 +19,36 @@ internal static class Program
     {
         // --import-test <connection string>: write a plan to a DISPOSABLE local test database (refuses anything else)
         if (args.Length == 2 && args[0] == "--import-test") return ImportTests.WriteToDisposableDatabase(args[1]);
+        // --preview-counts <workbook copy>: read a LOCAL workbook copy (read-only, as the app's preview) and print what is read per sheet
+        if (args.Length == 2 && args[0] == "--preview-counts")
+        {
+            var pv = SkillsMatrixWorkbookPreview.Load(args[1]);
+            Console.WriteLine($"SHA-256 {pv.Sha256Before} unchanged={pv.Sha256Before == pv.Sha256After} verifiedCopy={pv.MatchesVerifiedCopy}");
+            foreach (var a in pv.Areas)
+                Console.WriteLine($"{a.Area.Name,-28} people {a.Data.Members.Count,3}  skills {a.Data.Skills.Count,3}  cells {a.Data.Cells.Count,4}  " +
+                                  $"added columns: {string.Join(", ", a.ReviewItems.Where(i => i.Kind == ReviewKind.AddedColumn).Select(i => i.Cell))}");
+            Console.WriteLine($"TOTAL people columns {pv.Areas.Sum(a => a.Data.Members.Count)}, added automatically " +
+                              $"{pv.Areas.Sum(a => a.ReviewItems.Count(i => i.Kind == ReviewKind.AddedColumn))}");
+            return 0;
+        }
+        // --compare-readonly <workbook copy> <employee list csv> <decisions csv>: build the import plan and compare it with the
+        // live copy of the database given in the SM_COMPARE_CS environment variable, over a READ-ONLY session (the server
+        // refuses any write). Prints the comparison; writes nothing anywhere.
+        if (args.Length == 4 && args[0] == "--compare-readonly")
+        {
+            var csb = new Npgsql.NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("SM_COMPARE_CS") ?? "")
+            { Options = "-c default_transaction_read_only=on" };
+            var dryRun = SkillsMatrixDryRun.Run(SkillsMatrixWorkbookPreview.Load(args[1]), LoadRosterCsv(args[2]));
+            var plan = SkillsMatrixImportPlan.Build(dryRun, SkillsMatrixImportPlan.LoadDecisionsCsv(args[3]),
+                new SkillsMatrixImportPlan.ImportDetails("read-only comparison", "read-only comparison", null, null));
+            Console.WriteLine($"plan: errors {plan.Errors.Count}, columns {plan.Members}, cells {plan.Cells}");
+            using var conn = new Npgsql.NpgsqlConnection(csb.ConnectionString);
+            conn.Open();
+            using (var ro = new Npgsql.NpgsqlCommand("SHOW default_transaction_read_only", conn))
+                Console.WriteLine($"session read-only: {ro.ExecuteScalar()}");
+            Console.WriteLine(SkillsMatrixMerge.Render(SkillsMatrixMerge.Compare(conn, plan)));
+            return 0;
+        }
         // --live-test <connection string>: live-copy read/save tests on a DISPOSABLE local test database (refuses anything else)
         if (args.Length == 2 && args[0] == "--live-test") return LiveTests.Run(args[1]);
 
