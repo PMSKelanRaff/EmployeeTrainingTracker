@@ -1,6 +1,8 @@
+using Microsoft.Extensions.Configuration;
 using Npgsql;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace EmployeeTrainingTracker.Utilities
 {
@@ -46,8 +48,12 @@ namespace EmployeeTrainingTracker.Utilities
             string SourceHeaderText, string? SubGroupLabel, string SourceColumn,
             string? HeaderSourceRef = null, string? SubGroupSourceRef = null);
 
-        /// <summary>Status is 'Level', 'Unassessed' (blank in source) or 'Flagged'. A missing cell = outside the source range.</summary>
-        public sealed record SkillCellInfo(string Status, int? Level, string? RawValue, string? FlagReason, string SourceCell);
+        /// <summary>
+        /// Status is 'Level', 'Unassessed' (blank in source) or 'Flagged'. A missing cell = outside the source range.
+        /// Live copy only: Version (for the save check) and who last changed the cell in the app (null = as imported).
+        /// </summary>
+        public sealed record SkillCellInfo(string Status, int? Level, string? RawValue, string? FlagReason, string SourceCell,
+            int Version = 0, DateTime? UpdatedAt = null, string? UpdatedByName = null);
 
         public sealed record SkillExcludedColumn(string SourceColumn, string SourceHeaderText, string Reason);
 
@@ -87,6 +93,37 @@ namespace EmployeeTrainingTracker.Utilities
 
             if (cmd.ExecuteScalar() is not true)
                 throw new UnauthorizedAccessException("The Skills Matrix is available to Admin users only.");
+        }
+
+        /// <summary>
+        /// Employees who may use the workbook preview, dry run and import tools ("Skills Matrix Import" tab):
+        /// appsettings.json SkillsMatrix:ImportEmployeeIds, comma-separated (e.g. "5"). Empty or missing = nobody.
+        /// Application-level, like every check in this app (see docs/SkillsMatrix.md, access control).
+        /// </summary>
+        public static bool IsImportUser(int employeeId)
+        {
+            try
+            {
+                var config = new ConfigurationBuilder()
+                    .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
+                    .AddJsonFile("appsettings.json", optional: true)
+                    .Build();
+                string ids = config["SkillsMatrix:ImportEmployeeIds"] ?? "";
+                return employeeId > 0 && ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                                            .Any(s => int.TryParse(s, out var id) && id == employeeId);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>Throws unless the employee is an active Admin AND on the import list.</summary>
+        public static void EnsureImportUser(int employeeId)
+        {
+            if (!IsImportUser(employeeId))
+                throw new UnauthorizedAccessException("The Skills Matrix import tools are restricted to named users.");
+            EnsureAdmin(employeeId);
         }
 
         /// <summary>
@@ -282,26 +319,31 @@ namespace EmployeeTrainingTracker.Utilities
             }
 
             // The workbook's displayed formatting, as captured at import time
-            var formats = new Dictionary<string, SkillsMatrixWorkbookColours.CellDisplay>(StringComparer.Ordinal);
-            using (var cmd = new NpgsqlCommand(@"
-                SELECT SourceRef, FillSource, FillRgb, Pattern, PatternColorRgb, PatternBackRgb,
-                       ConditionalRule, FontSource, FontRgb, FontRule, Bold
-                FROM SkillMatrixCellFormats
-                WHERE AreaID = @areaId", conn))
-            {
-                cmd.Parameters.AddWithValue("areaId", areaId);
-                using var reader = cmd.ExecuteReader();
-                while (reader.Read())
-                {
-                    string? S(int i) => reader.IsDBNull(i) ? null : reader.GetString(i);
-                    formats[reader.GetString(0)] = new SkillsMatrixWorkbookColours.CellDisplay(
-                        FromHex(S(2)), FromHex(S(8)) ?? System.Drawing.Color.Black, reader.GetBoolean(10),
-                        S(3), FromHex(S(4)), FromHex(S(5)), reader.GetString(1), S(6), reader.GetString(7), S(9));
-                }
-            }
+            var formats = ReadFormats(conn, null, areaId);
 
             var legend = new SkillLegend(scaleName, needsConfirmation, legendNote, scaleSourceRef, entries);
             return new SkillMatrixData(area, legend, categories, skills, members, cells, excluded, formats);
+        }
+
+        /// <summary>The workbook's displayed formatting of one imported sheet (SkillMatrixCellFormats), keyed by "Sheet!A1".</summary>
+        internal static Dictionary<string, SkillsMatrixWorkbookColours.CellDisplay> ReadFormats(NpgsqlConnection conn, NpgsqlTransaction? tx, long snapshotAreaId)
+        {
+            var formats = new Dictionary<string, SkillsMatrixWorkbookColours.CellDisplay>(StringComparer.Ordinal);
+            using var cmd = new NpgsqlCommand(@"
+                SELECT SourceRef, FillSource, FillRgb, Pattern, PatternColorRgb, PatternBackRgb,
+                       ConditionalRule, FontSource, FontRgb, FontRule, Bold
+                FROM public.SkillMatrixCellFormats
+                WHERE AreaID = @areaId", conn, tx);
+            cmd.Parameters.AddWithValue("areaId", snapshotAreaId);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                string? S(int i) => reader.IsDBNull(i) ? null : reader.GetString(i);
+                formats[reader.GetString(0)] = new SkillsMatrixWorkbookColours.CellDisplay(
+                    FromHex(S(2)), FromHex(S(8)) ?? System.Drawing.Color.Black, reader.GetBoolean(10),
+                    S(3), FromHex(S(4)), FromHex(S(5)), reader.GetString(1), S(6), reader.GetString(7), S(9));
+            }
+            return formats;
         }
 
         private static System.Drawing.Color? FromHex(string? rgb) =>

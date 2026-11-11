@@ -129,14 +129,17 @@ internal static class ImportTests
         Check(Refusal(plan, acks, SkillsMatrixImportWriter.ExpectedConfirmation(plan)).Contains("must be open"), "unopened connection refused (no connection attempted)");
         Eq("IMPORT " + preview.Sha256Before[..8], SkillsMatrixImportWriter.ExpectedConfirmation(plan), "confirmation text = IMPORT + first 8 of the file's SHA-256");
 
-        Group("Import step is switched off in the application");
+        Group("Import step in the application is gated (switched on 2026-11-11 for the approved import)");
         string? dir = Path.GetDirectoryName(ThisSourceFile());
         while (dir != null && !File.Exists(Path.Combine(dir, "EmployeeTrainingTracker.sln"))) dir = Path.GetDirectoryName(dir);
         string form = File.ReadAllText(Path.Combine(dir!, "EmployeeTrainingTracker", "Forms", "SkillsMatrixImportForm.cs"));
-        Check(form.Contains("internal static readonly bool ImportExecutionEnabled = false;"), "ImportExecutionEnabled = false");
-        Check(form.Contains("btnImport.Enabled = ImportExecutionEnabled && ready;") && form.Contains("if (!ImportExecutionEnabled"),
-              "Import button disabled and the handler returns while switched off");
+        Check(form.Contains("internal static readonly bool ImportExecutionEnabled = true;"), "ImportExecutionEnabled = true");
+        Check(form.Contains("btnImport.Enabled = ImportExecutionEnabled && ready;") && form.Contains("if (!ImportExecutionEnabled || _plan == null || !_plan.IsReady(_acknowledged)) return;"),
+              "Import button needs a READY plan and the handler re-checks the flag and readiness");
     }
+
+    /// <summary>The dummy Innovation-layout plan (employees 1 'Alice Example', 2 'Bob O Test'), for the live-copy tests.</summary>
+    internal static ImportPlan DummyInnovationPlan(string root) => InnovationPlan(root, out _);
 
     /// <summary>Plan for the dummy Innovation-layout workbook (Alice and Bob confirmed).</summary>
     private static ImportPlan InnovationPlan(string root, out PreviewResult preview)

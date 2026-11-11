@@ -22,11 +22,16 @@ namespace EmployeeTrainingTracker.Utilities
     ///     is kept. The database's own triggers then re-check the snapshot rules at COMMIT.
     ///   * Only INSERTs into the new tables and UPDATEs of SkillMatrixImports.LoadState / IsCurrent - the
     ///     only changes migration 004 allows. No existing table is written.
+    ///   * When the live copy exists (migration 005), the same transaction rebuilds it from the new import
+    ///     (SkillMatrixLive_Seed): edits made in the app since the last rebuild are replaced and stay in the change
+    ///     log (decision 2026-11-11: the launch re-import resets the live copy). If that fails, nothing is kept.
     /// In the application the import step is switched off (SkillsMatrixImportForm.ImportExecutionEnabled).
     /// </summary>
     public static class SkillsMatrixImportWriter
     {
-        public sealed record WriteResult(long ImportId, int Areas, int Skills, int Columns, int Cells, int Formats, TimeSpan Took);
+        /// <summary>LiveCellsRebuilt: cells in the rebuilt live copy, or null when the live copy (migration 005) is not installed.</summary>
+        public sealed record WriteResult(long ImportId, int Areas, int Skills, int Columns, int Cells, int Formats, TimeSpan Took,
+            int? LiveCellsRebuilt = null);
 
         /// <summary>
         /// The connection failed while committing, so it is not known whether the server committed the import.
@@ -42,7 +47,8 @@ namespace EmployeeTrainingTracker.Utilities
         /// <summary>The text a person must type to confirm, e.g. "IMPORT 82DFD157".</summary>
         public static string ExpectedConfirmation(ImportPlan plan) => "IMPORT " + plan.Import.SourceSha256[..8].ToUpperInvariant();
 
-        public static WriteResult Write(NpgsqlConnection conn, ImportPlan plan, IReadOnlySet<string> acknowledged, string typedConfirmation)
+        public static WriteResult Write(NpgsqlConnection conn, ImportPlan plan, IReadOnlySet<string> acknowledged, string typedConfirmation,
+                                        long? importedByEmployeeId = null)
         {
             if (!plan.IsReady(acknowledged))
                 throw new InvalidOperationException("The import plan is not ready (blocking errors or missing acknowledgements). Nothing was written.");
@@ -125,6 +131,12 @@ namespace EmployeeTrainingTracker.Utilities
                 Exec(conn, tx, "UPDATE public.SkillMatrixImports SET LoadState = 'Complete' WHERE ImportID = @id", ("id", importId));
                 Exec(conn, tx, "UPDATE public.SkillMatrixImports SET IsCurrent = FALSE WHERE IsCurrent AND ImportID <> @id", ("id", importId));
                 Exec(conn, tx, "UPDATE public.SkillMatrixImports SET IsCurrent = TRUE WHERE ImportID = @id", ("id", importId));
+
+                // Live copy (migration 005): rebuild it from this import, in this transaction
+                int? liveCells = null;
+                if (Scalar(conn, tx, "SELECT to_regprocedure('public.skillmatrixlive_seed(bigint,bigint,text)') IS NOT NULL") is true)
+                    liveCells = Convert.ToInt32(Scalar(conn, tx, "SELECT public.SkillMatrixLive_Seed(@id, @by, @name)",
+                        ("id", importId), ("by", importedByEmployeeId), ("name", i.ImportedBy)));
                 try
                 {
                     tx.Commit();
@@ -135,7 +147,7 @@ namespace EmployeeTrainingTracker.Utilities
                     // Anything else (network, timeout) leaves the outcome unknown.
                     throw new CommitOutcomeUnknownException(ex);
                 }
-                return new WriteResult(importId, plan.Areas.Count, skills, columns, cells, formats, timer.Elapsed);
+                return new WriteResult(importId, plan.Areas.Count, skills, columns, cells, formats, timer.Elapsed, liveCells);
             }
             catch
             {

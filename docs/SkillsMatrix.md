@@ -397,7 +397,9 @@ migration 004's formatting rules. The copy's SHA-256 was unchanged.
 4. **Prepare import…** - choose the employee list used for the review, then the reviewed CSV, and enter
    *Approved by*. The window shows exactly what would be written (per table and sheet, every member and
    excluded column), the blocking errors, and the acknowledgements to tick. **Save plan summary…** writes it
-   to a new file. The **Import** button is disabled: `SkillsMatrixImportForm.ImportExecutionEnabled = false`.
+   to a new file. The **Import** button is enabled (`SkillsMatrixImportForm.ImportExecutionEnabled = true`,
+   switched on 2026-11-11 after the production pre-check: migration 004 installed and empty, all 49 plan
+   employees match the reviewed list). Set it to `false` to disable the button again.
 
 **Blocking errors** (nothing can be imported while any remain): a name still UNCONFIRMED (or any value other
 than CONFIRMED / EXCLUDED); a confirmed ID that is not a whole number or not in the employee list; an
@@ -442,6 +444,110 @@ states, reasons, formatting and the service's formatting query).
 3. **Migration 004 on production** (prerequisite checks and backup listed above).
 4. **Enabling the import step** for the approved run (`ImportExecutionEnabled`), and access for the new
    tables if the application does not connect as their owner.
+
+## Editing: live copy and change log (migration `Database/Migrations/005_skills_matrix_live.sql`)
+
+First import completed on production 2026-11-11 (import 1: 112 member columns, 2,522 cells, 3,091 formatting rows;
+verified read-only against the plan). Decisions (2026-11-11): edit in the app; Admins edit everything, managers
+edit levels of the people in the groups they manage; the planned re-import at company-wide launch (~2 months)
+**resets** the live copy to the new import (earlier edits stay in the change log); the app is expected to become
+the source of truth later.
+
+Additive only; requires 004 and changes none of its objects. Creates 7 tables, 5 functions, 14 triggers and
+5 named indexes, all marked `Skills Matrix live (migration 005)`. Undo with `005_skills_matrix_live_rollback.sql`
+(roll back 005 **before** 004 - 004's rollback refuses while 005 exists).
+
+```
+SkillMatrixLiveState       which import the live copy was built from (one row)
+SkillMatrixLiveAreas       sheets (legend and workbook refs through SourceAreaID -> the snapshot)
+  SkillMatrixLiveCategories, SkillMatrixLiveSkills, SkillMatrixLiveColumns (Member columns only)
+  SkillMatrixLiveCells     Level | Unassessed | Flagged (Flagged only as imported; resolvable to a level)
+SkillMatrixLiveChanges     append-only log: who, when, what (IDs + names as text), old -> new
+```
+
+- `Source*ID` links each live row to the snapshot row it came from (NULL = added in the app); it never changes.
+- Every update increases the row's `Version` (trigger): saves use `WHERE Version = <read version>`, so a save
+  over someone else's newer change updates nothing and is reported instead of overwriting.
+- Rows are not deleted (`IsDeleted`); only `SkillMatrixLive_Seed` deletes, while rebuilding the copy.
+- `SkillMatrixLive_Seed(importId, employeeId, name)` rebuilds the live copy from a Complete import in the
+  caller's transaction and logs a `Reseed` entry. The migration seeds from the current import.
+- Same side effect on `Employees` as 004 (foreign key: internal triggers, SHARE ROW EXCLUSIVE lock during the
+  migration; ACCESS EXCLUSIVE during the rollback).
+
+**Tests (2026-11-11)**, `Database/Tests/Run-005Tests.ps1` - a disposable local PostgreSQL 18.6 cluster on
+localhost:54329 (created and deleted by the script; stand-in Employees/Users/Groups with dummy people):
+**63/63** SQL tests (`tests_005.sql`: objects, seed fidelity, cell rules, versioning, new rows, no hard deletes,
+append-only log, re-seed from a second import, 004 rules intact) and **16/16** scenario checks (second run
+refused; rollback restores schema **and** data exactly, twice; 005 without 004 refused; rollback refuses an
+unmarked table; 004 rollback refused while 005 exists; no import yet; failure part-way leaves nothing).
+
+### Editing levels in the app (step 2: Admins)
+
+- The tab shows the live copy when 005 is installed and seeded (otherwise the import, read-only, as before).
+  The source line says which import the live copy was built from, and warns if a newer import is current.
+- **Edit** (tick box): select one or more cells and type `1`-`5`, or `Delete` / `Backspace` / `0` / `-` for not
+  assessed; or right-click (levels named as in the sheet's key; "Undo unsaved change"). `Ctrl+S` saves,
+  `Ctrl+Z` undoes the selected unsaved changes. Cells outside the sheet's range are not editable.
+- Unsaved changes are highlighted (bold on amber, tooltip `old -> new`) until **Save** or **Discard**.
+  Switching sheet, Refresh, opening a preview, leaving edit mode or closing the dashboard asks first.
+- **Save** (`SkillsMatrixLiveService.SaveCells`): one transaction; re-checks the editor is an active Admin;
+  locks the cells and refuses the whole save if any changed since it was read, naming who changed it; writes
+  each cell and one `SetCell` log entry (old -> new; resolving a flagged cell keeps its original value in the log).
+- Display: a level changed in the app takes the colour of that level's key cell on the sheet (workbook
+  colours on); hover shows who changed it and when. **History…** lists the sheet's change log.
+- Tests: `Run-005Tests.ps1` scenario H builds `Tests/SkillsMatrixTests` and runs `--live-test` (guarded:
+  localhost:54329/live with a sentinel table): **31/31** (reads, saves, stale-save refusal, all-or-nothing,
+  Employee/Manager/unknown/archived refused, invalid levels, cells outside the range or from another sheet,
+  flagged cell resolved, no-op save, snapshot unchanged). Existing suite: 176/176.
+
+Migration 005 applied to production 2026-11-11 11:31 (RDS snapshot taken beforehand; read-only checks before and
+after: 12 objects / 14 triggers; live copy = import 1 exactly: 9 sheets, 17 categories, 199 skills, 112 people,
+2,522 cells, 0 differences; import 1 unchanged).
+
+### Changes requested 2026-11-11
+
+- **People on a sheet** are managed with the employee records (Employees tab), not added/removed in the matrix.
+- **Undo from History**: select a level change, "Undo selected change". Only when the cell still holds that
+  change's new value (undo newer changes first); a resolved flagged value cannot be put back; logged with the
+  note "Undo of change N" (`SkillsMatrixLiveService.UndoChange`).
+- **Import tools moved** to a separate **Skills Matrix Import** tab (workbook preview, dry run, reconciliation,
+  prepare/import), shown only to the employees in `appsettings.json` `SkillsMatrix:ImportEmployeeIds` (currently
+  `5`) and re-checked when each tool is used (`SkillsMatrixService.EnsureImportUser`). The Skills Matrix tab is
+  view and edit only. Application-level control, like the rest of the app.
+- **Uniform keys and manager names** - migration `006_skills_matrix_live_keys.sql` (+ rollback): one wording per
+  level for every live sheet (`SkillMatrixLiveLevels`): where a key words a level twice, the wording used by most
+  sheets (H&S Environmental: `4: Skilled in Area`, not `4: Trained`); where a key leaves a level out, the most
+  common wording and colour (Admin: `2: In Training`, `3: Requires Supervision`). Sheets with their own scale
+  (Software and Data Analytics) keep it. The team row shows the manager's name from the workbook heading
+  (`SkillMatrixLiveTeamLabels`: 9 headings, e.g. `Dermot Leonard Lab Manager` -> `Dermot Leonard`); headings
+  without a manager stay as written. Both survive a re-seed (the seed function now also rebuilds the levels).
+  The imported snapshots keep the keys exactly as written. Read-only preview on production: only H&S level 4
+  and Admin levels 2-3 differ from the keys as written; all 9 headings matched.
+- Tests (disposable PostgreSQL 18.6): 006 SQL suite **21/21** (fixture plus a five-sheet import: duplicate
+  wording, missing levels, own scale, colours, re-seed, team names); scenarios now **30/30** (006 rollback
+  restores schema and data exactly twice, incl. 005's seed function; 006 without 005 refused; 005 rollback
+  refused while 006 exists; 006 -> 005 -> 004 rollback order; unmarked-table refusal); C# live tests **38/38**
+  (adds the live key, undo, undo refusals); existing suite 176/176.
+
+Migration 006 applied to production 2026-11-11 (read-only checks before and after: 3 objects; 45 key rows; only
+H&S level 4 and Admin levels 2-3 differ from the keys as written; 41 people show a manager's name; the 2,522 live
+cells byte-for-byte unchanged (fingerprint), the change log untouched; snapshot unchanged).
+
+### Managers (step 4) and re-import (step 5)
+
+- **Managers**: the Manager dashboard has a **Skills Matrix** tab (live copy only). It lists the sheets that have
+  at least one of their people, and on each sheet shows only the people in the groups they manage (Groups.ManagerID,
+  the same rule as `ManagerAccessService`) plus themselves. They can change those people's levels, **not their
+  own** (their column is read-only), use Undo, and see the history of their people. Admins are unchanged.
+  `SkillsMatrixLiveService.GetAccess` re-reads role, archived status and group membership on every call, and
+  `SaveCells` re-checks every cell inside the save transaction (a person removed from the group is refused at
+  once; a batch with one forbidden cell saves nothing).
+- **An approved import rebuilds the live copy** in the same transaction (`SkillsMatrixImportWriter.Write` calls
+  `SkillMatrixLive_Seed` when 005 is installed; failure keeps nothing). The confirmation box states how many
+  changes made in the app since the last rebuild would be replaced (they stay in History).
+- Tests: C# live tests **52/52** (adds manager access, filtering, own-level and other-people refusals, mixed
+  batch refused, group removal, manager undo, history filter, import rebuilding the live copy); database
+  suites and scenarios unchanged (63/63, 21/21, 30/30); existing suite 176/176.
 
 ## Access control and its limitations
 

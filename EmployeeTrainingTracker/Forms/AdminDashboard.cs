@@ -19,6 +19,8 @@ namespace EmployeeTrainingTracker
         private int loggedInUserId;
         private TabPage? tabSkillsMatrix;
         private SkillsMatrixView? skillsMatrixView;
+        private TabPage? tabSkillsMatrixImport;
+        private SkillsMatrixView? skillsMatrixImportView;
 
 
         private void SetCurrentEmployeeName(string employeeName)
@@ -78,6 +80,16 @@ namespace EmployeeTrainingTracker
                     tabSkillsMatrix = new TabPage("Skills Matrix") { Name = "tabSkillsMatrix" };
                     tabSkillsMatrix.Controls.Add(skillsMatrixView);
                     tabControl.TabPages.Add(tabSkillsMatrix);
+
+                    // Workbook preview, dry run and import: a separate tab, only for the employees named in
+                    // appsettings.json (SkillsMatrix:ImportEmployeeIds). Checked again when each tool is used.
+                    if (SkillsMatrixService.IsImportUser(loggedInUserId))
+                    {
+                        skillsMatrixImportView = new SkillsMatrixView(loggedInUserId, importTools: true) { Dock = DockStyle.Fill };
+                        tabSkillsMatrixImport = new TabPage("Skills Matrix Import") { Name = "tabSkillsMatrixImport" };
+                        tabSkillsMatrixImport.Controls.Add(skillsMatrixImportView);
+                        tabControl.TabPages.Add(tabSkillsMatrixImport);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -314,6 +326,8 @@ namespace EmployeeTrainingTracker
         {
             if (tabSkillsMatrix != null && tabControl.SelectedTab == tabSkillsMatrix)
                 skillsMatrixView?.EnsureLoaded();
+            if (tabSkillsMatrixImport != null && tabControl.SelectedTab == tabSkillsMatrixImport)
+                skillsMatrixImportView?.EnsureLoaded();
 
             // Departments tab: always show fresh data when the user switches to it
             if (tabControl.SelectedTab == Groups)

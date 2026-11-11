@@ -16,15 +16,17 @@ namespace EmployeeTrainingTracker
     /// "Prepare import": combines a dry run with the reviewer's recorded decisions into an import plan, shows
     /// exactly what would be written, lists blocking errors, and collects the required acknowledgements.
     ///
-    /// The final Import step is SWITCHED OFF in this build (ImportExecutionEnabled = false): the button stays
-    /// disabled and no database connection is made from this window. Enabling it is a deliberate, reviewed code
-    /// change for the approved first import. Even then it requires a READY plan, every acknowledgement, a
+    /// The final Import step is controlled by ImportExecutionEnabled (switched on 2026-11-11 for the approved
+    /// first import; set it to false to disable the button again). It requires a READY plan, every acknowledgement, a
     /// re-check of Admin access and typing "IMPORT &lt;first 8 characters of the file's SHA-256&gt;".
     /// </summary>
     internal sealed class SkillsMatrixImportForm : Form
     {
-        /// <summary>Import execution is switched off until the first import is separately approved.</summary>
-        internal static readonly bool ImportExecutionEnabled = false;
+        /// <summary>
+        /// Import execution: enabled 2026-11-11 for the approved first import (plan SkillsMatrix_IMPORTPLAN_20261111_093043,
+        /// production pre-check passed). Still requires a READY plan, every acknowledgement, Admin access and the typed confirmation.
+        /// </summary>
+        internal static readonly bool ImportExecutionEnabled = true;
 
         private readonly DryRunResult _dry;
         private readonly int _adminEmployeeId;
@@ -209,18 +211,47 @@ namespace EmployeeTrainingTracker
             if (!ImportExecutionEnabled || _plan == null || !_plan.IsReady(_acknowledged)) return;
 
             using var conn = DatabaseHelper.GetConnection();
-            string target = $"{conn.Host} / database '{conn.Database}'";
+            // NpgsqlConnection.Host is empty until the connection is open, so read the target from the connection string
+            var cs = new Npgsql.NpgsqlConnectionStringBuilder(conn.ConnectionString);
+            string target = $"{cs.Host}:{cs.Port} / database '{cs.Database}' as user '{cs.Username}'";
+            if (string.IsNullOrWhiteSpace(cs.Host) || string.IsNullOrWhiteSpace(cs.Database))
+            {
+                MessageBox.Show(this, "The database host or name is not configured, so the import was not started.", "Skills Matrix import",
+                                MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
             string expected = SkillsMatrixImportWriter.ExpectedConfirmation(_plan);
+            int? edits;
+            try
+            {
+                using var check = DatabaseHelper.GetConnection();
+                check.Open();
+                edits = SkillsMatrixLiveService.EditsSinceRebuild(check);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Could not check the live copy, so the import was not started:\n{ex.Message}", "Skills Matrix import",
+                                MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            string liveText = edits switch
+            {
+                null => "",
+                0 => "\n\nThe live copy (what the Skills Matrix tab shows and edits) is rebuilt from this import. No changes have been made in the app since it was last built.",
+                _ => $"\n\nWARNING: the live copy (what the Skills Matrix tab shows and edits) is rebuilt from this import. " +
+                     $"{edits} change(s) made in the app since it was last built will be REPLACED by the workbook's values. They stay listed in History.",
+            };
             string? typed = Prompt($"This writes the Skills Matrix import to:\n\n    {target}\n\n" +
                                    $"{_plan.Members} member columns, {_plan.Cells} cells, {_plan.Formats} formatting rows. It becomes the current snapshot; " +
-                                   $"earlier snapshots are kept unchanged.\n\nType  {expected}  to confirm:");
+                                   $"earlier snapshots are kept unchanged.{liveText}\n\nType  {expected}  to confirm:");
             if (typed == null) return;
             try
             {
-                SkillsMatrixService.EnsureAdmin(_adminEmployeeId);
+                SkillsMatrixService.EnsureImportUser(_adminEmployeeId);
                 conn.Open();
-                var r = SkillsMatrixImportWriter.Write(conn, _plan, _acknowledged, typed);
-                MessageBox.Show(this, $"Import {r.ImportId} written and made current ({r.Columns} columns, {r.Cells} cells, {r.Formats} formatting rows, {r.Took.TotalSeconds:0.0} s).",
+                var r = SkillsMatrixImportWriter.Write(conn, _plan, _acknowledged, typed, _adminEmployeeId);
+                MessageBox.Show(this, $"Import {r.ImportId} written and made current ({r.Columns} columns, {r.Cells} cells, {r.Formats} formatting rows, {r.Took.TotalSeconds:0.0} s)." +
+                                      (r.LiveCellsRebuilt is int live ? $"\n\nThe live copy was rebuilt from it ({live} cells). Refresh the Skills Matrix tab." : ""),
                                 "Skills Matrix import", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 DialogResult = DialogResult.OK;
             }
@@ -236,7 +267,7 @@ namespace EmployeeTrainingTracker
 
         private string? Prompt(string message)
         {
-            using var f = new Form { Text = "Confirm Skills Matrix import", Size = new Size(620, 300), StartPosition = FormStartPosition.CenterParent, MinimizeBox = false, MaximizeBox = false, ShowInTaskbar = false };
+            using var f = new Form { Text = "Confirm Skills Matrix import", Size = new Size(700, 400), StartPosition = FormStartPosition.CenterParent, MinimizeBox = false, MaximizeBox = false, ShowInTaskbar = false };
             var box = new TextBox { Dock = DockStyle.Bottom };
             var ok = new Button { Text = "Import", DialogResult = DialogResult.OK, Dock = DockStyle.Bottom };
             f.Controls.Add(new Label { Text = message, Dock = DockStyle.Fill, Padding = new Padding(8) });

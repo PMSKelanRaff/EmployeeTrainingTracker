@@ -19,6 +19,8 @@ internal static class Program
     {
         // --import-test <connection string>: write a plan to a DISPOSABLE local test database (refuses anything else)
         if (args.Length == 2 && args[0] == "--import-test") return ImportTests.WriteToDisposableDatabase(args[1]);
+        // --live-test <connection string>: live-copy read/save tests on a DISPOSABLE local test database (refuses anything else)
+        if (args.Length == 2 && args[0] == "--live-test") return LiveTests.Run(args[1]);
 
         // --sample <folder>: write the dummy fixture's dry-run report files there (for reviewing the format)
         if (args.Length == 2 && args[0] == "--sample")
