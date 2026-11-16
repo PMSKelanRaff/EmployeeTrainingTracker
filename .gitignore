@@ -9,3 +9,8 @@
 
 # CRITICAL: Ignore sensitive configuration files
 EmployeeTrainingTracker/appsettings.json
+
+# Personal files kept out of the repo
+Presentation/
+TimeLog.xlsx
+Time_Log.xlsx
