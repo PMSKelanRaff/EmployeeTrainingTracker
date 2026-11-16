@@ -138,6 +138,51 @@ internal static class ImportTests
               "Import button needs a READY plan and the handler re-checks the flag and readiness");
     }
 
+    /// <summary>Re-import: decisions pre-filled from an earlier import (SkillsMatrixDryRun.BuildPriorDecisions).</summary>
+    public static void PriorDecisionTests(PreviewResult preview, EmployeeRoster roster, string root)
+    {
+        Group("Re-import: decisions pre-filled from the earlier import");
+        var cols = new List<(string, string, long?, string?)>
+        {
+            ("Alice Example", "Member", 1, null), ("Alice Example", "Member", 1, null),        // same employee on two sheets
+            ("Bob O'Test", "Member", 2, null), ("Bob O'Test", "Member", 7, null),               // two different employees
+            ("Mixed Person", "Member", 3, null), ("Mixed Person", "Excluded", null, "student"), // decided differently
+            ("Frank Nomatch", "Excluded", null, "left the company"),
+            ("Gone Person", "Member", 99, null),                                                // not in this employee list
+            ("  Padded Name ", "Member", 3, null),
+        };
+        var prior = SkillsMatrixDryRun.BuildPriorDecisions(7, cols, roster);
+        Check(prior.ByName["Alice Example"] is { Decision: Confirmed, EmployeeId: "1" } d1 && d1.Notes.Contains("pre-filled from import 7") && d1.Notes.Contains("Alice Example"),
+              "same employee on every sheet -> CONFIRMED with the ID, marked as pre-filled");
+        Check(!prior.ByName.ContainsKey("Bob O'Test"), "name confirmed as different employees -> left to decide");
+        Check(!prior.ByName.ContainsKey("Mixed Person"), "name confirmed on one sheet and excluded on another -> left to decide");
+        Check(prior.ByName["Frank Nomatch"] is { Decision: Excluded, EmployeeId: "" } d2 && d2.Notes.StartsWith("left the company"),
+              "excluded -> EXCLUDED with the same reason");
+        Check(!prior.ByName.ContainsKey("Gone Person"), "confirmed employee not in this employee list -> left to decide");
+        Check(prior.ByName.ContainsKey("Padded Name"), "names are matched without surrounding spaces");
+
+        // End to end: decisions taken for the fixture, stored as an 'earlier import', pre-fill a new dry run's CSV;
+        // the plan built from that CSV equals the plan built from the hand-filled CSV
+        var asImported = FixtureDecisions.Select(kv => kv.Value.Decision == Confirmed
+            ? (kv.Key, "Member", (long?)long.Parse(kv.Value.Id), (string?)null)
+            : (kv.Key, "Excluded", (long?)null, (string?)kv.Value.Notes)).ToList();
+        var dry = SkillsMatrixDryRun.Run(preview, roster, prior: SkillsMatrixDryRun.BuildPriorDecisions(1, asImported, roster));
+        string prefilledCsv = Path.Combine(root, "prefilled.csv");
+        File.WriteAllText(prefilledCsv, ReconciliationCsv(dry), new System.Text.UTF8Encoding(true));
+        var fromPrefill = Build(dry, LoadDecisionsCsv(prefilledCsv), Details());
+        var byHand = Build(dry, LoadDecisionsCsv(WriteDecisions(dry, Path.Combine(root, "byhand.csv"), FixtureDecisions)), Details());
+        Check(fromPrefill.Errors.Count == 0, "plan from the pre-filled CSV has no blocking errors", string.Join(" | ", fromPrefill.Errors));
+        Check(fromPrefill.Areas.SelectMany(a => a.Columns).Select(c => (c.SourceHeaderText, c.Disposition, c.EmployeeId))
+                  .SequenceEqual(byHand.Areas.SelectMany(a => a.Columns).Select(c => (c.SourceHeaderText, c.Disposition, c.EmployeeId)))
+              && fromPrefill.Cells == byHand.Cells, "pre-filled plan = hand-filled plan (same members, exclusions and cells)");
+        Check(RenderReport(dry).Contains("pre-filled in the reconciliation CSV from import 1") && RenderReport(dry).Contains("0 name(s) still to decide"),
+              "the report says what was pre-filled and what is left");
+        var partial = SkillsMatrixDryRun.Run(preview, roster, prior: SkillsMatrixDryRun.BuildPriorDecisions(1, asImported.Where(c => c.Key != "Gina Twice").ToList(), roster));
+        File.WriteAllText(prefilledCsv + "2", ReconciliationCsv(partial), new System.Text.UTF8Encoding(true));
+        Check(Build(partial, LoadDecisionsCsv(prefilledCsv + "2"), Details()).Errors.Count(e => e.Contains("Gina Twice") && e.Contains("UNCONFIRMED")) == 1,
+              "a name without an earlier decision stays UNCONFIRMED and blocks the import until decided");
+    }
+
     /// <summary>The dummy Innovation-layout plan (employees 1 'Alice Example', 2 'Bob O Test'), for the live-copy tests.</summary>
     internal static ImportPlan DummyInnovationPlan(string root) => InnovationPlan(root, out _);
 

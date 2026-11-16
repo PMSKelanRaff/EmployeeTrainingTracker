@@ -49,6 +49,45 @@ internal static class Program
             Console.WriteLine(SkillsMatrixMerge.Render(SkillsMatrixMerge.Compare(conn, plan)));
             return 0;
         }
+        // --prefill-readonly <workbook copy> <employee list csv> <reviewed decisions csv> <output folder>: read the current import's
+        // decisions from the database in SM_COMPARE_CS over a READ-ONLY session, pre-fill a dry run of the workbook, write
+        // the pre-filled CSV to the output folder, and compare its plan with the plan from the reviewed decisions.
+        if (args.Length == 5 && args[0] == "--prefill-readonly")
+        {
+            var csb = new Npgsql.NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("SM_COMPARE_CS") ?? "")
+            { Options = "-c default_transaction_read_only=on" };
+            var cols = new List<(string, string, long?, string?)>();
+            long importId;
+            using (var conn = new Npgsql.NpgsqlConnection(csb.ConnectionString))
+            {
+                conn.Open();
+                using (var ro = new Npgsql.NpgsqlCommand("SHOW default_transaction_read_only", conn))
+                    Console.WriteLine($"session read-only: {ro.ExecuteScalar()}");
+                importId = Convert.ToInt64(new Npgsql.NpgsqlCommand("SELECT ImportID FROM public.SkillMatrixImports WHERE IsCurrent", conn).ExecuteScalar());
+                using var cmd = new Npgsql.NpgsqlCommand(@"SELECT c.SourceHeaderText, c.Disposition, c.EmployeeID, c.ExcludeReason FROM public.SkillMatrixColumns c
+                                                           JOIN public.SkillMatrixAreas a ON a.AreaID = c.AreaID WHERE a.ImportID = @i", conn);
+                cmd.Parameters.AddWithValue("i", importId);
+                using var r = cmd.ExecuteReader();
+                while (r.Read()) cols.Add((r.GetString(0), r.GetString(1), r.IsDBNull(2) ? null : Convert.ToInt64(r.GetValue(2)), r.IsDBNull(3) ? null : r.GetString(3)));
+            }
+            var rosterCsv = LoadRosterCsv(args[2]);
+            var pv = SkillsMatrixWorkbookPreview.Load(args[1]);
+            var dryP = SkillsMatrixDryRun.Run(pv, rosterCsv, prior: SkillsMatrixDryRun.BuildPriorDecisions(importId, cols, rosterCsv));
+            string outCsv = Path.Combine(args[4], $"prefilled_from_import_{importId}.csv");
+            File.WriteAllText(outCsv, ReconciliationCsv(dryP), new System.Text.UTF8Encoding(true));
+            var details = new SkillsMatrixImportPlan.ImportDetails("check", "check", null, null);
+            var pre = SkillsMatrixImportPlan.Build(dryP, SkillsMatrixImportPlan.LoadDecisionsCsv(outCsv), details);
+            var rev = SkillsMatrixImportPlan.Build(dryP, SkillsMatrixImportPlan.LoadDecisionsCsv(args[3]), details);
+            int filled = dryP.Reconciliation.Count(x => dryP.PriorFor(x.OriginalName) != null);
+            Console.WriteLine($"names {dryP.Reconciliation.Count}, pre-filled {filled}");
+            Console.WriteLine($"pre-filled plan: errors {pre.Errors.Count}, members {pre.Members}, excluded {pre.ExcludedColumns}, cells {pre.Cells}");
+            Console.WriteLine($"reviewed plan:   errors {rev.Errors.Count}, members {rev.Members}, excluded {rev.ExcludedColumns}, cells {rev.Cells}");
+            var a = pre.Areas.SelectMany(x => x.Columns.Select(c => (x.Sheet, c.SourceColumn, c.Disposition, c.EmployeeId))).ToList();
+            var b = rev.Areas.SelectMany(x => x.Columns.Select(c => (x.Sheet, c.SourceColumn, c.Disposition, c.EmployeeId))).ToList();
+            Console.WriteLine($"same member/excluded decisions for every column: {a.SequenceEqual(b)}");
+            foreach (var e in pre.Errors.Take(5)) Console.WriteLine("  error: " + e);
+            return 0;
+        }
         // --live-test <connection string>: live-copy read/save tests on a DISPOSABLE local test database (refuses anything else)
         if (args.Length == 2 && args[0] == "--live-test") return LiveTests.Run(args[1]);
 
@@ -87,6 +126,7 @@ internal static class Program
             IntegrityTests(workbook, originalBytes, originalWrite, preview);
             NoDatabaseTests();
             ImportTests.Run(preview, roster, root);
+            ImportTests.PriorDecisionTests(preview, roster, root);
         }
         catch (Exception ex)
         {

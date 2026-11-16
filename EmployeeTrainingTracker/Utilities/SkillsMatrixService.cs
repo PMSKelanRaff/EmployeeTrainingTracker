@@ -127,6 +127,33 @@ namespace EmployeeTrainingTracker.Utilities
         }
 
         /// <summary>
+        /// The current import's person columns (name as written, Member/Excluded, employee, reason), to pre-fill a
+        /// re-import's reconciliation CSV (SkillsMatrixDryRun.BuildPriorDecisions). Null when there is no current
+        /// import. Read-only; import users only. Read when a workbook preview is opened, so the dry run itself never
+        /// touches the database.
+        /// </summary>
+        public static (long ImportId, List<(string Header, string Disposition, long? EmployeeId, string? Reason)> Columns)? GetImportDecisions(int employeeId)
+        {
+            EnsureImportUser(employeeId);
+            var (state, import) = GetCurrentImport(employeeId);
+            if (state != SkillsMatrixState.Ready || import == null) return null;
+
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+            using var cmd = new NpgsqlCommand(@"
+                SELECT c.SourceHeaderText, c.Disposition, c.EmployeeID, c.ExcludeReason
+                FROM public.SkillMatrixColumns c
+                JOIN public.SkillMatrixAreas a ON a.AreaID = c.AreaID
+                WHERE a.ImportID = @imp", conn);
+            cmd.Parameters.AddWithValue("imp", import.ImportId);
+            var columns = new List<(string, string, long?, string?)>();
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+                columns.Add((r.GetString(0), r.GetString(1), r.IsDBNull(2) ? null : Convert.ToInt64(r.GetValue(2)), r.IsDBNull(3) ? null : r.GetString(3)));
+            return (import.ImportId, columns);
+        }
+
+        /// <summary>
         /// Whether the Skills Matrix is installed and, if so, the current approved import (null when there is none).
         /// </summary>
         public static (SkillsMatrixState State, SkillMatrixImportInfo? Import) GetCurrentImport(int adminEmployeeId)

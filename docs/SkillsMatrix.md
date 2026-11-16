@@ -593,6 +593,25 @@ versions of every cell - the import the live copy was built from, the app's valu
   0 added automatically (unchanged). Read-only comparison of that copy with production's live copy: 0 differences
   of any kind across 2,522 cells (both app edits had been set back to their imported values).
 
+### Re-import: decisions pre-filled from the current import (2026-11-11)
+
+When a workbook preview is opened on the Skills Matrix Import tab, the current import's decision for every person
+column is read (read-only; `SkillsMatrixService.GetImportDecisions`). The dry run then pre-fills the reconciliation
+CSV for each name **exactly as written** that was decided before (`SkillsMatrixDryRun.BuildPriorDecisions`):
+
+| In the current import | Pre-filled |
+|---|---|
+| confirmed as the same employee on every sheet, and that employee is in the chosen employee list | `CONFIRMED` + ID; ReviewerNotes "pre-filled from import N (confirmed as employee ...) - check" |
+| excluded | `EXCLUDED` + the same reason, "[pre-filled from import N]" |
+| new name; confirmed as different employees; confirmed on one sheet and excluded on another; employee not in the list | left `UNCONFIRMED` (blocks the import until decided) |
+
+The dry run says how many were pre-filled; the report (section 5) lists the names still to decide. The reviewer
+still checks the CSV, and Prepare import re-checks every decision as before. The dry-run handler itself still makes
+no database call (the decisions are read when the preview is opened; source-checked by a test).
+Tests: 9 new (rules, and a pre-filled plan identical to the hand-filled one); suite 186/186. Real data (read-only):
+the current workbook with import 1's decisions - 64/64 names pre-filled, plan identical to the reviewed one
+(0 errors, 112 members, 3 excluded, 2,522 cells, same decision for every column).
+
 ## Access control and its limitations
 
 - The tab exists only on the Admin dashboard, and `SkillsMatrixService` re-checks **on every call**

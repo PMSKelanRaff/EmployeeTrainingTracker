@@ -41,18 +41,61 @@ namespace EmployeeTrainingTracker.Utilities
         public sealed record ProposedCounts(int Imports, int Scales, int ScaleLevels, int Areas, int Categories, int Skills,
             int Columns, int MemberColumns, int ExcludedColumns, int Cells, int CellsHeldBack, int CellFormats);
 
+        /// <summary>
+        /// A decision taken for a name in an earlier import, used to pre-fill the reconciliation CSV of a re-import
+        /// (still reviewed by a person; the import plan checks every decision again).
+        /// </summary>
+        public sealed record PriorDecision(string Decision, string EmployeeId, string Notes);
+        public sealed record PriorDecisions(long ImportId, IReadOnlyDictionary<string, PriorDecision> ByName);
+
+        /// <summary>
+        /// Decisions of an earlier import, by the name exactly as written in the workbook: CONFIRMED (same employee on
+        /// every sheet the name was on) or EXCLUDED (with its reason). Names decided differently on different sheets,
+        /// and confirmations of an employee missing from this employee list, are left out (to be decided again).
+        /// </summary>
+        public static PriorDecisions BuildPriorDecisions(long importId,
+            IEnumerable<(string Header, string Disposition, long? EmployeeId, string? Reason)> columns, EmployeeRoster? roster)
+        {
+            var result = new Dictionary<string, PriorDecision>(StringComparer.Ordinal);
+            string from = $"pre-filled from import {importId}";
+            foreach (var g in columns.GroupBy(c => c.Header.Trim(), StringComparer.Ordinal))
+            {
+                var dispositions = g.Select(c => c.Disposition).Distinct().ToList();
+                if (dispositions.Count != 1) continue;
+                if (dispositions[0] == "Member")
+                {
+                    var ids = g.Select(c => c.EmployeeId).Distinct().ToList();
+                    if (ids.Count != 1 || ids[0] is not long id) continue;
+                    var listed = roster?.Employees.FirstOrDefault(e => e.EmployeeId == id);
+                    if (roster != null && listed == null) continue;   // not in this employee list: decide again
+                    result[g.Key] = new PriorDecision(SkillsMatrixImportPlan.Confirmed, id.ToString(CultureInfo.InvariantCulture),
+                        $"{from} (confirmed as employee {id}{(listed != null ? $" '{listed.FullName}'" : "")}) - check");
+                }
+                else
+                {
+                    string reason = string.Join("; ", g.Select(c => c.Reason?.Trim()).Where(s => !string.IsNullOrEmpty(s)).Distinct());
+                    if (reason.Length == 0) continue;
+                    result[g.Key] = new PriorDecision(SkillsMatrixImportPlan.Excluded, "", $"{reason} [{from}]");
+                }
+            }
+            return new PriorDecisions(importId, result);
+        }
+
         public sealed record DryRunResult(
             DateTime RunAtLocal, string RunBy, PreviewResult Workbook, EmployeeRoster? Roster,
             IReadOnlyList<SheetSummary> Sheets, IReadOnlyList<ReconciliationRow> Reconciliation,
-            IReadOnlyList<DryRunReviewItem> ReviewItems, IReadOnlyList<FormatRow> Formats, ProposedCounts Proposed)
+            IReadOnlyList<DryRunReviewItem> ReviewItems, IReadOnlyList<FormatRow> Formats, ProposedCounts Proposed,
+            PriorDecisions? Prior = null)
         {
+            public PriorDecision? PriorFor(string name) => Prior != null && Prior.ByName.TryGetValue(name.Trim(), out var d) ? d : null;
             public bool WorkbookUnchanged => string.Equals(Workbook.Sha256Before, Workbook.Sha256After, StringComparison.OrdinalIgnoreCase);
             public int Count(MatchStatus s) => Reconciliation.Count(r => r.Status == s);
         }
 
         // ---------------------------------------------------------------------------------------------
 
-        public static DryRunResult Run(PreviewResult workbook, EmployeeRoster? roster, DateTime? runAt = null, string? runBy = null)
+        public static DryRunResult Run(PreviewResult workbook, EmployeeRoster? roster, DateTime? runAt = null, string? runBy = null,
+                                       PriorDecisions? prior = null)
         {
             var sheets = new List<SheetSummary>();
             var items = new List<DryRunReviewItem>();
@@ -106,7 +149,7 @@ namespace EmployeeTrainingTracker.Utilities
                 CellFormats: formats.Count);
 
             return new DryRunResult(runAt ?? DateTime.Now, runBy ?? Environment.UserName, workbook, roster,
-                                    sheets, reconciliation, items, formats, proposed);
+                                    sheets, reconciliation, items, formats, proposed, prior);
         }
 
         private static FormatRow ToFormatRow(string sheet, string cell, SkillsMatrixWorkbookColours.CellDisplay d)
@@ -196,6 +239,16 @@ namespace EmployeeTrainingTracker.Utilities
 
             L("5. EMPLOYEE RECONCILIATION (ALL UNCONFIRMED)");
             L(new string('-', 78));
+            if (r.Prior != null)
+            {
+                var pre = r.Reconciliation.Select(x => r.PriorFor(x.OriginalName)).Where(d => d != null).ToList();
+                L($"Decisions pre-filled in the reconciliation CSV from import {r.Prior.ImportId} (same name as written - CHECK them): " +
+                  $"{pre.Count(d => d!.Decision == SkillsMatrixImportPlan.Confirmed)} CONFIRMED, {pre.Count(d => d!.Decision == SkillsMatrixImportPlan.Excluded)} EXCLUDED; " +
+                  $"{r.Reconciliation.Count - pre.Count} name(s) still to decide:");
+                foreach (var x in r.Reconciliation.Where(x => r.PriorFor(x.OriginalName) == null))
+                    L($"   '{x.OriginalName}' [{string.Join(", ", x.Occurrences.Select(o => o.HeaderCell))}]");
+                L();
+            }
             L($"Distinct names as written: {r.Reconciliation.Count}");
             foreach (MatchStatus st in Enum.GetValues<MatchStatus>())
                 L($"   {StatusText(st),-42}{r.Count(st),5}");
@@ -248,10 +301,13 @@ namespace EmployeeTrainingTracker.Utilities
                 "ProposedEmployeeID", "ProposedEmployeeName", "ProposedEmployeeArchived", "Reason",
                 "HumanConfirmation", "ConfirmedEmployeeID", "ReviewerNotes");
             foreach (var x in r.Reconciliation)
+            {
+                var prior = r.PriorFor(x.OriginalName);   // decided for this exact name in the earlier import (to check)
                 Csv(sb, "DRY RUN", x.OriginalName, string.Join("; ", x.Occurrences.Select(o => o.HeaderCell)), StatusText(x.Status),
                     x.MatchType, x.Confidence, x.ProposedEmployeeId?.ToString(CultureInfo.InvariantCulture), x.ProposedEmployeeName,
                     x.ProposedEmployeeArchived switch { true => "Yes", false => "No", null => x.ProposedEmployeeId == null ? "" : "Unknown" },
-                    x.Reason, x.Confirmation, "", "");
+                    x.Reason, prior?.Decision ?? x.Confirmation, prior?.EmployeeId ?? "", prior?.Notes ?? "");
+            }
             return sb.ToString();
         }
 

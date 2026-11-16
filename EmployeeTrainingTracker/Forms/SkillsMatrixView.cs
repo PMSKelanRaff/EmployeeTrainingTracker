@@ -78,6 +78,8 @@ namespace EmployeeTrainingTracker
 
         // PREVIEW ONLY: data read in memory from a local workbook copy (never from or to the database)
         private SkillsMatrixWorkbookPreview.PreviewResult? _preview;
+        // Import tab: the current import's decision per name, read when a preview is opened (pre-fills the dry run's CSV)
+        private (long ImportId, List<(string Header, string Disposition, long? EmployeeId, string? Reason)> Columns)? _importDecisions;
         private SkillsMatrixWorkbookPreview.PreviewArea? _previewArea;
         // Workbook colours for the sheet shown: from the preview, or from an imported snapshot's SkillMatrixCellFormats
         private SkillsMatrixWorkbookPreview.PreviewColours? _colours;
@@ -541,6 +543,18 @@ namespace EmployeeTrainingTracker
                                 "Skills Matrix preview", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
                 return;
 
+            // For a re-import: the current import's decision per name (read-only), to pre-fill the dry run's CSV
+            try
+            {
+                _importDecisions = SkillsMatrixService.GetImportDecisions(_adminEmployeeId);
+            }
+            catch (Exception ex)
+            {
+                _importDecisions = null;
+                MessageBox.Show($"Could not read the current import's decisions, so the dry run will not pre-fill any:\n{ex.Message}",
+                                "Skills Matrix preview", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+
             ShowPreview(result);
         }
 
@@ -635,7 +649,19 @@ namespace EmployeeTrainingTracker
                 }
             }
 
-            var result = SkillsMatrixDryRun.Run(_preview, roster);
+            // Re-import: pre-fill each name's decision from the current import (same name as written), to be checked.
+            // Uses the decisions read when the preview was opened - the dry run itself makes no database call.
+            var prior = roster != null && _importDecisions is { } d
+                ? SkillsMatrixDryRun.BuildPriorDecisions(d.ImportId, d.Columns, roster) : null;
+            var result = SkillsMatrixDryRun.Run(_preview, roster, prior: prior);
+            if (prior != null)
+            {
+                int filled = result.Reconciliation.Count(x => result.PriorFor(x.OriginalName) != null);
+                MessageBox.Show($"{filled} of {result.Reconciliation.Count} names have their decision pre-filled from import {prior.ImportId} " +
+                                "(same name as written). They are marked 'pre-filled' in ReviewerNotes - check them.\n\n" +
+                                $"{result.Reconciliation.Count - filled} name(s) are new or changed and still need a decision; " +
+                                "the report lists them (section 5).", "Skills Matrix dry run", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
             using var form = new SkillsMatrixDryRunForm(result);
             form.ShowDialog(this);
         }
