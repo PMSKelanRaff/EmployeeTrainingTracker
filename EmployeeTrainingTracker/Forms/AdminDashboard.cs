@@ -1,4 +1,4 @@
-﻿using EmployeeTrainingTracker.Helpers;
+using EmployeeTrainingTracker.Helpers;
 using EmployeeTrainingTracker.Utilities;
 using Microsoft.VisualBasic.ApplicationServices;
 using Npgsql; 
@@ -50,11 +50,13 @@ namespace EmployeeTrainingTracker
         private SplitContainer splitApprovalsDeleted = null!;
         private DataGridView dgvDeletedCerts = null!;
         private Button btnRestoreCert = null!;
+        private CheckBox chkShowDeletedCerts = null!;
 
         /// <summary>
-        /// Splits the lower half of the Tasks tab so the soft-deleted certificates (migration 008) sit under the
-        /// approvals, then adds the coloured title bars and buttons. Runs before ResponsiveScaler.Attach so the new
-        /// controls scale with the window like the designer's.
+        /// Adds the soft-deleted certificates (migration 008) to the Tasks tab as a separate view: the tab shows the
+        /// deletion requests and approvals as before, and "Show deleted certificates" (bottom-left, like "Show archived
+        /// employees") switches the whole tab to the Deleted certificates table. Then adds the coloured title bars and
+        /// buttons. Runs before ResponsiveScaler.Attach so the new controls scale with the window like the designer's.
         /// </summary>
         private void BuildTasksLayout()
         {
@@ -107,13 +109,42 @@ namespace EmployeeTrainingTracker
             // 3. Title bars, colours and button names
             DashboardHelper.DecorateTaskGrids(dgvTasks, btnApproveDeletion, btnRejectDeletion, dgvPendingAcks, btnApproveAck, btnRejectAck);
             DashboardHelper.DecorateDeletedGrid(dgvDeletedCerts, btnRestoreCert);
+
+            // 4. "Show deleted certificates" in a strip along the bottom of the tab (the split fills the rest)
+            var strip = new Panel { Dock = DockStyle.Bottom, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(0, 2, 0, 2) };
+            chkShowDeletedCerts = new CheckBox { Name = "chkShowDeletedCerts", Text = "Show deleted certificates", AutoSize = true, Location = new Point(6, 3) };
+            chkShowDeletedCerts.CheckedChanged += (_, _) => ShowDeletedCertificatesView(chkShowDeletedCerts.Checked);
+            strip.Controls.Add(chkShowDeletedCerts);
+            Tasks.Controls.Add(strip);
+            splitContainer1.BringToFront();   // docking: the Fill control must be in front of the Bottom strip
+
+            // 5. Start on the normal view (deletion requests + approvals)
+            ShowDeletedCertificatesView(false);
+        }
+
+        /// <summary>Deleted certificates view (whole tab) on / off. The deleted list is refreshed when it is shown.</summary>
+        private void ShowDeletedCertificatesView(bool show)
+        {
+            if (show)
+            {
+                splitContainer1.Panel1Collapsed = true;          // hide the deletion requests
+                splitApprovalsDeleted.Panel1Collapsed = true;    // hide the approvals -> the deleted table fills the tab
+                if (IsHandleCreated) LoadDeletedCertificates();
+            }
+            else
+            {
+                splitApprovalsDeleted.Panel2Collapsed = true;    // approvals only in the lower half
+                splitContainer1.Panel1Collapsed = false;
+            }
         }
 
         private void LoadDeletedCertificates()
         {
             try
             {
-                DashboardHelper.BindDeletedCertificates(dgvDeletedCerts, CertificateService.GetDeletedCertificates());
+                var deleted = CertificateService.GetDeletedCertificates();
+                DashboardHelper.BindDeletedCertificates(dgvDeletedCerts, deleted);
+                chkShowDeletedCerts.Text = deleted.Rows.Count > 0 ? $"Show deleted certificates ({deleted.Rows.Count})" : "Show deleted certificates";
             }
             catch (Exception ex)
             {
@@ -162,9 +193,8 @@ namespace EmployeeTrainingTracker
         {
             try
             {
-                // Tasks tab in thirds: deletion requests / awaiting approval / deleted certificates
-                splitContainer1.SplitterDistance = splitContainer1.Height / 3;
-                splitApprovalsDeleted.SplitterDistance = splitApprovalsDeleted.Height / 2;
+                // Tasks tab: deletion requests / awaiting approval in halves (deleted certificates: separate view)
+                splitContainer1.SplitterDistance = splitContainer1.Height / 2;
 
                 LoadEmployees();
                 LoadGroupsForReports();
@@ -697,7 +727,7 @@ namespace EmployeeTrainingTracker
             int certId = Convert.ToInt32(dgvCertificates.CurrentRow.Cells["CertificateID"].Value);
             string certName = dgvCertificates.CurrentRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
 
-            var confirm = MessageBox.Show($"Delete the certificate '{certName}'?\n\nIt can be restored from Tasks > Deleted certificates.", "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            var confirm = MessageBox.Show($"Delete the certificate '{certName}'?\n\nIt can be restored from Tasks > Show deleted certificates.", "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (confirm == DialogResult.No) return;
 
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
@@ -1299,7 +1329,7 @@ namespace EmployeeTrainingTracker
             int certId = Convert.ToInt32(dgvTasks.CurrentRow.Cells["CertificateID"].Value);
             string certName = dgvTasks.CurrentRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
 
-            var confirm = MessageBox.Show($"Delete '{certName}'?\n\nIt can be restored from Deleted certificates below.", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            var confirm = MessageBox.Show($"Delete '{certName}'?\n\nIt can be restored under Show deleted certificates.", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (confirm == DialogResult.No) return;
 
             try
@@ -1307,7 +1337,7 @@ namespace EmployeeTrainingTracker
                 // Soft delete (migration 008): the record and its S3 file are kept, so it can be restored
                 CertificateService.SoftDeleteCertificate(certId, loggedInUserId, CertificateService.ReasonDeletionRequestApproved);
 
-                MessageBox.Show("Certificate deleted. It can be restored from Deleted certificates.");
+                MessageBox.Show("Certificate deleted. It can be restored under Show deleted certificates.");
 
                 // Refresh the grids
                 LoadDeletionTasks();
@@ -1412,7 +1442,7 @@ namespace EmployeeTrainingTracker
             string topic = selectedRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
 
             var confirm = MessageBox.Show(
-                $"Reject the certificate '{topic}'?\n\nIt is removed from the employee's certificates; it can be restored from Deleted certificates below.",
+                $"Reject the certificate '{topic}'?\n\nIt is removed from the employee's certificates; it can be restored under Show deleted certificates.",
                 "Confirm Rejection",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
