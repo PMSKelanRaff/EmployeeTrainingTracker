@@ -473,10 +473,12 @@ internal static class Program
             string src = File.ReadAllText(f);
             foreach (System.Text.RegularExpressions.Match m in statement.Matches(src))
             {
-                // The rest of the SQL literal: up to the end of the verbatim string ("; or ", or ")
+                // The whole SQL literal around the match: from the opening quote to the closing one (verbatim strings)
                 int end = src.IndexOfAny(new[] { '"' }, m.Index);
                 while (end >= 0 && end + 1 < src.Length && src[end + 1] == '"') end = src.IndexOf('"', end + 2);   // skip "" escapes
-                string sql = end > m.Index ? src[m.Index..end] : src[m.Index..];
+                int start = src.LastIndexOf('"', m.Index);
+                if (start < 0) start = m.Index;
+                string sql = end > m.Index ? src[start..end] : src[start..];
                 checkedQueries++;
                 if (!sql.Contains("DeletedAt", StringComparison.OrdinalIgnoreCase))
                     missing.Add($"{Path.GetFileName(f)} line {src[..m.Index].Count(c => c == '\n') + 1}");

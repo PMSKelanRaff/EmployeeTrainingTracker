@@ -1,4 +1,4 @@
-﻿
+
 namespace EmployeeTrainingTracker
 {
     partial class ManagerDashboard
@@ -376,9 +376,9 @@ namespace EmployeeTrainingTracker
             // btnUpload
             // 
             btnUpload.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnUpload.Location = new Point(939, 320);
+            btnUpload.Location = new Point(917, 320);
             btnUpload.Name = "btnUpload";
-            btnUpload.Size = new Size(53, 22);
+            btnUpload.Size = new Size(75, 22);
             btnUpload.TabIndex = 51;
             btnUpload.Text = "Upload";
             btnUpload.UseVisualStyleBackColor = true;

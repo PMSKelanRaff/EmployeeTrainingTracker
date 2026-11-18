@@ -269,6 +269,49 @@ try {
     Check 'W1 008 rollback refuses a column without the 008 marker and drops nothing' ($r.Code -ne 0 -and $r.Out -match 'marker missing' -and
         (Scalar 'w' "SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'trainingcertificates' AND column_name LIKE 'deleted%'") -eq '4') $r.Out
 
+    # X-Z. Migration 009 (Skills Matrix cell evidence) - needs 005 (live copy) and 008 (certificate soft delete)
+    $m009 = Join-Path $mig '009_skills_matrix_cell_evidence.sql'
+    $r009 = Join-Path $mig '009_skills_matrix_cell_evidence_rollback.sql'
+    NewDb 'x' -With004 -WithImport
+    if ((Sql 'x' -file $m005).Code -or (Sql 'x' -file $m008).Code) { throw 'X: 005/008 failed' }
+    $r = Sql 'x' -file $m009
+    Check 'X1 migration 009 applies on 005 + 008' ($r.Code -eq 0) $r.Out
+    $t = Sql 'x' -file (Join-Path $here 'tests_009.sql')
+    $t.Out.Trim()
+    $m = [regex]::Match($t.Out, 'RESULT (\d+)/(\d+)')
+    Check 'X2 009 SQL test suite ran and every test passed' ($t.Code -eq 0 -and $m.Success -and $m.Groups[1].Value -eq $m.Groups[2].Value) "exit $($t.Code)"
+    $r = Sql 'x' -file $m009
+    Check 'X3 running 009 a second time fails (table exists) and changes nothing' ($r.Code -ne 0 -and (Scalar 'x' 'SELECT COUNT(*) FROM public.SkillMatrixCellEvidence') -eq '2') $r.Out
+    $schemaX = Dump 'x' 'schema'; $dataX = Dump 'x' 'data'
+    $r = Sql 'x' -file $r009
+    Check 'X4 009 rollback refuses while links exist, and changes nothing' ($r.Code -ne 0 -and $r.Out -match 'evidence link' -and
+        (Dump 'x' 'schema') -eq $schemaX -and (Dump 'x' 'data') -eq $dataX) $r.Out
+
+    NewDb 'y' -With004 -WithImport
+    if ((Sql 'y' -file $m005).Code -or (Sql 'y' -file $m008).Code) { throw 'Y: 005/008 failed' }
+    $schemaY = Dump 'y' 'schema'; $dataY = Dump 'y' 'data'
+    foreach ($cycle in 1, 2) {
+        if ((Sql 'y' -file $m009).Code) { throw "Y: 009 failed (cycle $cycle)" }
+        $r = Sql 'y' -file $r009
+        Check "Y$cycle-1 009 rollback succeeds (cycle $cycle)" ($r.Code -eq 0) $r.Out
+        Check "Y$cycle-2 schema identical to before 009 (cycle $cycle)" ((Dump 'y' 'schema') -eq $schemaY)
+        Check "Y$cycle-3 data identical to before 009 (cycle $cycle)" ((Dump 'y' 'data') -eq $dataY)
+    }
+
+    NewDb 'z' -With004 -WithImport
+    $schemaZ = Dump 'z' 'schema'
+    $r = Sql 'z' -file $m009
+    Check 'Z1 009 without 005 fails with a clear message and creates nothing' ($r.Code -ne 0 -and $r.Out -match 'Migration 005' -and (Dump 'z' 'schema') -eq $schemaZ) $r.Out
+    if ((Sql 'z' -file $m005).Code) { throw 'Z: 005 failed' }
+    $schemaZ2 = Dump 'z' 'schema'
+    $r = Sql 'z' -file $m009
+    Check 'Z2 009 without 008 fails with a clear message and creates nothing' ($r.Code -ne 0 -and $r.Out -match 'Migration 008' -and (Dump 'z' 'schema') -eq $schemaZ2) $r.Out
+    if ((Sql 'z' -file $m008).Code -or (Sql 'z' -file $m009).Code) { throw 'Z: 008/009 failed' }
+    Sql 'z' -cmd "COMMENT ON TABLE public.SkillMatrixCellEvidence IS 'someone else''s table'" | Out-Null
+    $r = Sql 'z' -file $r009
+    Check 'Z3 009 rollback refuses a table without the 009 marker and drops nothing' ($r.Code -ne 0 -and $r.Out -match 'marker missing' -and
+        (Scalar 'z' "SELECT to_regclass('public.skillmatrixcellevidence') IS NOT NULL") -eq 't') $r.Out
+
     # H. The application's live-copy service (C#) against this database: reads, saves, conflicts, permissions
     if (-not $SkipAppTests) {
         NewDb 'live' -With004 -WithImport
@@ -276,6 +319,7 @@ try {
         if ((Sql 'live' -file $m006).Code) { throw 'H: 006 failed' }
         if ((Sql 'live' -file $m007).Code) { throw 'H: 007 failed' }
         if ((Sql 'live' -file $m008).Code) { throw 'H: 008 failed' }
+        if ((Sql 'live' -file $m009).Code) { throw 'H: 009 failed' }
         Sql 'live' -cmd 'CREATE TABLE public.disposable_test_sentinel (x INT)' | Out-Null
         $repo = Split-Path -Parent (Split-Path -Parent $here)
         $bin = Join-Path $WorkDir 'testbin'

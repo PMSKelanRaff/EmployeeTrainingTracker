@@ -36,7 +36,8 @@ namespace EmployeeTrainingTracker
         private const int LineHeight = 24;
         private const int BarHeight = 32;
         private const int GridHeaderHeight = 44;
-        private const int GridRowHeight = 22;
+        private const int GridRowHeight = 24;        // room for the evidence square in the corner of each level cell
+        private const int EvidenceBoxSize = 11;
         private const int SkillColWidth = 290;
         private const int InabColWidth = 92;
         private const int MemberColMinWidth = 92;
@@ -65,6 +66,8 @@ namespace EmployeeTrainingTracker
         private bool _live;
         private sealed record PendingEdit(int? NewLevel, int ExpectedVersion, string OldText);
         private readonly Dictionary<(long SkillId, long MemberId), PendingEdit> _pending = new();
+        // Supporting evidence (migration 009) of the live sheet shown; null = not shown (preview, import, not installed)
+        private Dictionary<(long SkillId, long ColumnId), SkillsMatrixEvidenceService.CellEvidence>? _evidence;
         private int _areaIndex = -1;
         private bool _suppressAreaChange;
         private bool _closeHooked;
@@ -219,6 +222,10 @@ namespace EmployeeTrainingTracker
             grid.KeyPress += Grid_KeyPress;
             grid.KeyDown += Grid_KeyDown;
             grid.CellMouseDown += Grid_CellMouseDown;
+            grid.CellPainting += Grid_CellPainting;          // evidence square in each level cell's corner
+            grid.CellMouseClick += Grid_CellMouseClick;
+            grid.CellMouseMove += Grid_CellMouseMove;
+            grid.CellMouseLeave += (_, _) => grid.Cursor = Cursors.Default;
             BuildCellMenu();
             toolTip.SetToolTip(chkEdit, "Edit levels: select one or more cells and type 1-5, or press Delete for 'not assessed' " +
                                         "(or right-click). Changes are highlighted until you Save. Every saved change is logged.");
@@ -759,6 +766,7 @@ namespace EmployeeTrainingTracker
                 if (cmbArea.SelectedItem is not SkillAreaInfo previewArea) return;
                 _previewArea = _preview.Areas.First(a => a.Area.AreaId == previewArea.AreaId);
                 _matrix = _previewArea.Data;
+                _evidence = null;
                 _colours = _previewArea.Colours;
                 RenderLegend(_matrix.Legend);
                 RenderMatrix();
@@ -771,6 +779,7 @@ namespace EmployeeTrainingTracker
             {
                 _matrix = _live ? SkillsMatrixLiveService.GetMatrix(_adminEmployeeId, area.AreaId, chkShowArchived.Checked)
                                 : SkillsMatrixService.GetMatrix(_adminEmployeeId, _import.ImportId, area.AreaId);
+                _evidence = _live ? LoadEvidence(area.AreaId) : null;
                 _colours = ImportedColours(_matrix);
                 chkColour.Visible = _colours != null;
                 RenderLegend(_matrix.Legend);
@@ -1073,8 +1082,9 @@ namespace EmployeeTrainingTracker
             footerTip.Add(_preview != null
                 ? "PREVIEW of a local workbook copy - not an approved database import. Not previewed: " + string.Join("; ", _preview.ExcludedSheets)
                 : _live
-                    ? "Live copy: levels changed in the app use the colour of that level in the sheet's key and show who changed them (hover). " +
-                      "Every change is in History."
+                    ? "Live copy: every level is shown in the colour of that level in the sheet's key (the workbook's own cell colours " +
+                      "are not always consistent; the Import tab's preview shows them exactly). Levels changed in the app show who " +
+                      "changed them (hover). Every change is in History."
                     : "Read-only view of the approved import. The audited workbook remains the reference document.");
             toolTip.SetToolTip(lblFooter, string.Join("\n", footerTip));
 
@@ -1121,10 +1131,11 @@ namespace EmployeeTrainingTracker
             {
                 case "Level":
                     cell.Value = data.Level;
-                    // As imported: the cell's colour exactly as in the workbook. Changed in the app: the colour of that
-                    // level in the sheet's own key, so it follows the workbook's colour standard.
-                    PaintStyle(cell.Style, data.UpdatedAt != null ? LevelColour(data.Level!.Value) : Look(data.SourceCell));
-                    cell.ToolTipText = LevelLabel(data.Level!.Value) + changed + where;
+                    // Live matrix: every level in the colour of that level in the sheet's key (the workbook itself is
+                    // not consistent: e.g. some Laboratory 2s/3s have no fill or a dark blue one - decision 2026-11-18).
+                    // Preview / imported snapshot: the cell's colour exactly as in the workbook, for checking against it.
+                    PaintStyle(cell.Style, _live || data.UpdatedAt != null ? LevelColour(data.Level!.Value) : Look(data.SourceCell));
+                    cell.ToolTipText = LevelLabel(data.Level!.Value) + changed + where + EvidenceTip(skill, member, data);
                     break;
                 case "Unassessed":
                     cell.Value = UnassessedText;
@@ -1261,6 +1272,301 @@ namespace EmployeeTrainingTracker
                 undo.Enabled = grid.SelectedCells.Cast<DataGridViewCell>().Any(c =>
                     TryEditable(c, out var s, out var m, out _) && _pending.ContainsKey((s.SkillId, m.MemberId)));
             };
+        }
+
+        // ------------------------------------------------------------------------------------------
+        // SUPPORTING EVIDENCE (migration 009): a square in the bottom-right corner of every level (1-5) cell.
+        //   white "+"        no evidence: click to link one of that person's approved certificates
+        //   green tick       evidence valid (linked at this level): click to open the document
+        //   orange outline   needs relinking (the level changed since, or the certificate was deleted)
+        // Linking follows the edit rights (Admins; Managers on their sheets, not their own column); anyone who can see
+        // the sheet can open a valid document. Not drawn on a cell with an unsaved change (save it first).
+
+        private static readonly Color EvidenceGreen = Color.FromArgb(30, 132, 73);
+        private static readonly Color EvidenceAmber = Color.FromArgb(214, 120, 0);
+
+        private bool EvidenceShown => _live && _preview == null && _evidence != null && _matrix != null;
+
+        private Dictionary<(long, long), SkillsMatrixEvidenceService.CellEvidence>? LoadEvidence(long areaId)
+        {
+            try
+            {
+                return SkillsMatrixEvidenceService.IsInstalled() ? SkillsMatrixEvidenceService.GetEvidence(_adminEmployeeId, areaId) : null;
+            }
+            catch
+            {
+                return null;   // the matrix still works without the evidence squares
+            }
+        }
+
+        private bool TryCellAt(int row, int col, out SkillRowInfo skill, out SkillMemberInfo member, out SkillCellInfo data)
+        {
+            skill = null!; member = null!; data = null!;
+            if (_matrix == null || row < 0 || col < 2 || row >= grid.Rows.Count) return false;
+            if (grid.Rows[row].Tag is not SkillRowInfo s) return false;
+            int i = col - 2;
+            if (i >= _matrix.Members.Count) return false;
+            if (!_matrix.Cells.TryGetValue((s.SkillId, _matrix.Members[i].MemberId), out var d)) return false;
+            skill = s; member = _matrix.Members[i]; data = d;
+            return true;
+        }
+
+        private bool CanLinkEvidence(SkillMemberInfo member) =>
+            _access != null && _matrix != null && !member.EmployeeArchived && _access.CanEdit(_matrix.Area.AreaId, member.EmployeeId);
+
+        // A level cell that shows the square: live sheet, level 1-5, no unsaved change
+        private bool HasEvidenceBox(SkillRowInfo skill, SkillMemberInfo member, SkillCellInfo data) =>
+            EvidenceShown && data.Status == "Level" && !_pending.ContainsKey((skill.SkillId, member.MemberId));
+
+        private SkillsMatrixEvidenceService.CellEvidence? EvidenceOf(SkillRowInfo skill, SkillMemberInfo member) =>
+            _evidence != null && _evidence.TryGetValue((skill.SkillId, member.MemberId), out var ev) ? ev : null;
+
+        private Rectangle EvidenceBox(Rectangle cell)
+        {
+            int size = S(EvidenceBoxSize), gap = Math.Max(2, S(2));
+            return new Rectangle(cell.Right - size - gap - 1, cell.Bottom - size - gap - 1, size, size);
+        }
+
+        private string EvidenceTip(SkillRowInfo skill, SkillMemberInfo member, SkillCellInfo data)
+        {
+            if (!HasEvidenceBox(skill, member, data)) return "";
+            var ev = EvidenceOf(skill, member);
+            bool canLink = CanLinkEvidence(member);
+            return SkillsMatrixEvidenceService.StateOf(ev, data) switch
+            {
+                SkillsMatrixEvidenceService.EvidenceState.Valid =>
+                    $"\n\nEvidence: {ev!.CertificateName} (linked by {ev.LinkedBy} on {ev.LinkedAt:yyyy-MM-dd}) - click the green square to open it",
+                SkillsMatrixEvidenceService.EvidenceState.NeedsRelinking =>
+                    $"\n\nEvidence needs relinking: '{ev!.CertificateName}' was linked at level {ev.LinkedLevel}" + (canLink ? " - click the square" : ""),
+                SkillsMatrixEvidenceService.EvidenceState.CertificateRemoved =>
+                    $"\n\nEvidence needs relinking: '{ev!.CertificateName}' has been deleted or is no longer approved" + (canLink ? " - click the square" : ""),
+                _ => canLink ? "\n\nNo evidence yet - click the + square to link a certificate" : "",
+            };
+        }
+
+        private void Grid_CellPainting(object? sender, DataGridViewCellPaintingEventArgs e)
+        {
+            if (!EvidenceShown || e.RowIndex < 0 || e.ColumnIndex < 2 || e.Graphics == null) return;
+            if (!TryCellAt(e.RowIndex, e.ColumnIndex, out var skill, out var member, out var data) || !HasEvidenceBox(skill, member, data)) return;
+            var ev = EvidenceOf(skill, member);
+            var state = SkillsMatrixEvidenceService.StateOf(ev, data);
+            if (state == SkillsMatrixEvidenceService.EvidenceState.None && !CanLinkEvidence(member)) return;   // nothing to show or do
+
+            e.Paint(e.CellBounds, DataGridViewPaintParts.All);
+            var g = e.Graphics;
+            var box = EvidenceBox(e.CellBounds);
+            var smoothing = g.SmoothingMode;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            float w = Math.Max(1.5f, box.Width / 6f);
+            if (state == SkillsMatrixEvidenceService.EvidenceState.Valid)
+            {
+                using var fill = new SolidBrush(EvidenceGreen);
+                using var tick = new Pen(Color.White, w);
+                g.FillRectangle(fill, box);
+                g.DrawLines(tick, new[]
+                {
+                    new PointF(box.Left + box.Width * 0.22f, box.Top + box.Height * 0.52f),
+                    new PointF(box.Left + box.Width * 0.42f, box.Top + box.Height * 0.74f),
+                    new PointF(box.Left + box.Width * 0.80f, box.Top + box.Height * 0.28f),
+                });
+            }
+            else
+            {
+                Color line = state == SkillsMatrixEvidenceService.EvidenceState.None ? Color.FromArgb(110, 110, 110) : EvidenceAmber;
+                using var border = new Pen(line, state == SkillsMatrixEvidenceService.EvidenceState.None ? 1f : 1.6f);
+                using var plus = new Pen(line, w);
+                g.FillRectangle(Brushes.White, box);
+                g.DrawRectangle(border, box);
+                float cx = box.Left + box.Width / 2f, cy = box.Top + box.Height / 2f, arm = box.Width * 0.28f;
+                g.DrawLine(plus, cx - arm, cy, cx + arm, cy);
+                g.DrawLine(plus, cx, cy - arm, cx, cy + arm);
+            }
+            g.SmoothingMode = smoothing;
+            e.Handled = true;
+        }
+
+        // Is the mouse (relative to the cell) on the evidence square of a cell that shows one?
+        private bool OnEvidenceBox(int row, int col, Point inCell, out SkillRowInfo skill, out SkillMemberInfo member, out SkillCellInfo data)
+        {
+            if (!EvidenceShown || !TryCellAt(row, col, out skill, out member, out data) || !HasEvidenceBox(skill, member, data)) { skill = null!; member = null!; data = null!; return false; }
+            if (EvidenceOf(skill, member) == null && !CanLinkEvidence(member)) return false;
+            var rect = grid.GetCellDisplayRectangle(col, row, false);
+            var box = EvidenceBox(new Rectangle(0, 0, rect.Width, rect.Height));
+            box.Inflate(2, 2);
+            return box.Contains(inCell);
+        }
+
+        private void Grid_CellMouseMove(object? sender, DataGridViewCellMouseEventArgs e)
+        {
+            var cursor = OnEvidenceBox(e.RowIndex, e.ColumnIndex, e.Location, out _, out _, out _) ? Cursors.Hand : Cursors.Default;
+            if (grid.Cursor != cursor) grid.Cursor = cursor;
+        }
+
+        private void Grid_CellMouseClick(object? sender, DataGridViewCellMouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left || !OnEvidenceBox(e.RowIndex, e.ColumnIndex, e.Location, out var skill, out var member, out var data)) return;
+            var ev = EvidenceOf(skill, member);
+            if (SkillsMatrixEvidenceService.StateOf(ev, data) == SkillsMatrixEvidenceService.EvidenceState.Valid)
+            {
+                DashboardHelper.OpenCertificateFile(ev!.S3Key);
+                return;
+            }
+            if (!CanLinkEvidence(member))
+            {
+                MessageBox.Show(this, $"The evidence for this level needs relinking ('{ev?.CertificateName}' was linked at level {ev?.LinkedLevel}).\n\n" +
+                                      "An Admin or the sheet's manager can link a certificate.", "Supporting evidence",
+                                MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            ShowEvidenceDialog(skill, member, data, ev);
+        }
+
+        /// <summary>Pick one of the person's approved certificates as the evidence for this level (or open / remove the current one).</summary>
+        private void ShowEvidenceDialog(SkillRowInfo skill, SkillMemberInfo member, SkillCellInfo data,
+            SkillsMatrixEvidenceService.CellEvidence? current)
+        {
+            if (_matrix == null) return;
+            long areaId = _matrix.Area.AreaId;
+            List<SkillsMatrixEvidenceService.LinkableCertificate> certs;
+            try
+            {
+                certs = SkillsMatrixEvidenceService.GetLinkableCertificates(_adminEmployeeId, areaId, member.MemberId);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Could not load {member.EmployeeName}'s certificates:\n{ex.Message}", "Supporting evidence",
+                                MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            var state = SkillsMatrixEvidenceService.StateOf(current, data);
+            string status = state switch
+            {
+                SkillsMatrixEvidenceService.EvidenceState.NeedsRelinking =>
+                    $"Needs relinking: '{current!.CertificateName}' was linked at level {current.LinkedLevel}; the level is now {data.Level}.",
+                SkillsMatrixEvidenceService.EvidenceState.CertificateRemoved =>
+                    $"Needs relinking: '{current!.CertificateName}' has been deleted or is no longer approved.",
+                SkillsMatrixEvidenceService.EvidenceState.Valid =>
+                    $"Linked: '{current!.CertificateName}' (by {current.LinkedBy} on {current.LinkedAt:yyyy-MM-dd}).",
+                _ => "No evidence linked yet.",
+            };
+
+            using var dialog = new Form
+            {
+                Text = $"Supporting evidence - {skill.Name} / {member.EmployeeName}",
+                Size = new Size(S(1000), S(560)),
+                MinimumSize = new Size(S(720), S(400)),
+                StartPosition = FormStartPosition.CenterParent,
+                Font = Font,
+                ShowInTaskbar = false,
+                MinimizeBox = false,
+            };
+            // Heading (sizes to its text) | certificates | buttons
+            var layoutRoot = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(S(10)) };
+            layoutRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layoutRoot.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            layoutRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            var info = new Label
+            {
+                AutoSize = true, Margin = new Padding(0, 0, 0, S(8)),
+                Text = $"{skill.Name}  -  {member.EmployeeName}  -  {LevelLabel(data.Level ?? 0)}\n{status}\n\n" +
+                       (certs.Count > 0 ? "Choose one of their approved certificates as the evidence for this level:"
+                                        : $"{member.EmployeeName} has no approved certificates yet. They appear here once uploaded and approved."),
+            };
+            var list = new DataGridView
+            {
+                Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, AllowUserToDeleteRows = false, MultiSelect = false,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect, RowHeadersVisible = false, AllowUserToResizeRows = false,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, AutoGenerateColumns = false, Margin = new Padding(0),
+            };
+            UIHelpers.StyleDataGridView(list);
+            // Readable at the dashboard's size: the dialog's (scaled) font, rows and headers tall enough for it
+            list.DefaultCellStyle.Font = Font;
+            list.ColumnHeadersDefaultCellStyle.Font = new Font(Font, FontStyle.Bold);
+            list.DefaultCellStyle.Padding = new Padding(S(4), 0, S(4), 0);
+            list.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+            list.ColumnHeadersHeight = TextRenderer.MeasureText("Ag", list.ColumnHeadersDefaultCellStyle.Font).Height + S(12);
+            list.RowTemplate.Height = TextRenderer.MeasureText("Ag", Font).Height + S(12);
+            list.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Certificate", FillWeight = 30, MinimumWidth = S(160) });
+            list.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Key", FillWeight = 8, MinimumWidth = S(50) });
+            list.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Provider", FillWeight = 16, MinimumWidth = S(90) });
+            list.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Issue Date", FillWeight = 13, MinimumWidth = S(100) });
+            list.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Expiry Date", FillWeight = 13, MinimumWidth = S(100) });
+            list.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "File", FillWeight = 26, MinimumWidth = S(120) });
+            foreach (var c in certs)
+            {
+                string file = System.IO.Path.GetFileName(c.S3Key ?? "");
+                int i = list.Rows.Add(c.Name + (current?.CertificateId == c.CertificateId ? "  (linked)" : ""), c.Key, c.Provider,
+                    c.IssueDate?.ToString("yyyy-MM-dd"), c.ExpiryDate?.ToString("yyyy-MM-dd"), file);
+                list.Rows[i].Tag = c;
+                list.Rows[i].Cells[0].ToolTipText = c.Name;
+                list.Rows[i].Cells[5].ToolTipText = file;
+            }
+
+            var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Margin = new Padding(0, S(8), 0, 0), WrapContents = false };
+            var close = new Button { Text = "Close", AutoSize = true, DialogResult = DialogResult.Cancel };
+            var link = new Button { Text = current == null ? "Link selected" : "Link selected instead", AutoSize = true, Enabled = certs.Count > 0,
+                                    BackColor = EvidenceGreen, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, UseVisualStyleBackColor = false };
+            var openSelected = new Button { Text = "Open selected document", AutoSize = true, Enabled = certs.Count > 0 };
+            var openLinked = new Button { Text = "Open linked document", AutoSize = true, Visible = current != null };
+            var remove = new Button { Text = "Remove link", AutoSize = true, Visible = current != null };
+            buttons.Controls.AddRange(new Control[] { close, link, openSelected, openLinked, remove });
+
+            SkillsMatrixEvidenceService.LinkableCertificate? Selected() =>
+                list.CurrentRow?.Tag as SkillsMatrixEvidenceService.LinkableCertificate;
+            bool changed = false;
+
+            void DoLink()
+            {
+                if (Selected() is not { } c) return;
+                try
+                {
+                    SkillsMatrixEvidenceService.LinkCertificate(_adminEmployeeId, areaId, skill.SkillId, member.MemberId, c.CertificateId);
+                    changed = true;
+                    dialog.Close();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(dialog, $"Nothing was linked:\n{ex.Message}", "Supporting evidence", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
+            link.Click += (_, _) => DoLink();
+            list.CellDoubleClick += (_, a) => { if (a.RowIndex >= 0) DoLink(); };
+            openSelected.Click += (_, _) => { if (Selected() is { } c) DashboardHelper.OpenCertificateFile(c.S3Key); };
+            openLinked.Click += (_, _) => DashboardHelper.OpenCertificateFile(current?.S3Key);
+            remove.Click += (_, _) =>
+            {
+                if (MessageBox.Show(dialog, $"Remove '{current?.CertificateName}' as the evidence for this level?", "Supporting evidence",
+                                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+                try
+                {
+                    SkillsMatrixEvidenceService.RemoveLink(_adminEmployeeId, areaId, skill.SkillId, member.MemberId);
+                    changed = true;
+                    dialog.Close();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(dialog, $"Nothing was removed:\n{ex.Message}", "Supporting evidence", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            };
+
+            foreach (Button b in buttons.Controls)
+            {
+                b.Padding = new Padding(S(8), S(3), S(8), S(3));
+                b.Margin = new Padding(S(6), 0, 0, 0);
+            }
+            layoutRoot.Controls.Add(info, 0, 0);
+            layoutRoot.Controls.Add(list, 0, 1);
+            layoutRoot.Controls.Add(buttons, 0, 2);
+            dialog.Controls.Add(layoutRoot);
+            dialog.CancelButton = close;
+            dialog.ShowDialog(this);
+
+            if (changed && _matrix != null && _matrix.Area.AreaId == areaId)
+            {
+                _evidence = LoadEvidence(areaId);
+                RenderMatrix(keepScroll: true);
+            }
         }
 
         /// <summary>Asks what to do with unsaved changes. Returns false when the user cancels (or a save failed).</summary>

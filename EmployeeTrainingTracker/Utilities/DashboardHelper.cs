@@ -350,8 +350,12 @@ namespace EmployeeTrainingTracker.Utilities
             if (dgv.Columns[e.ColumnIndex].Name != "FileLink") return;
             if (dgv.Rows[e.RowIndex].DataBoundItem is not DataRowView rowView) return;
 
-            string? s3Key = rowView["S3Key"]?.ToString();
+            OpenCertificateFile(rowView["S3Key"]?.ToString());
+        }
 
+        /// <summary>Opens a certificate's document (secure, pre-signed S3 link) in the default viewer.</summary>
+        public static void OpenCertificateFile(string? s3Key)
+        {
             if (string.IsNullOrEmpty(s3Key))
             {
                 MessageBox.Show("No cloud file linked for this certificate.", "File Not Found", MessageBoxButtons.OK, MessageBoxIcon.Information);
