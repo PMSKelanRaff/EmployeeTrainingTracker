@@ -36,19 +36,16 @@
             txtPassword = new TextBox();
             Lbl_FullName = new Label();
             Lbl_JobTitle = new Label();
-            Lbl_Department = new Label();
-            txtDepartment = new TextBox();
             txtFullName = new TextBox();
             txtJobTitle = new TextBox();
-            chkLinkWindows = new CheckBox();
             SuspendLayout();
             // 
             // btnCreate
             // 
-            btnCreate.Location = new Point(143, 301);
+            btnCreate.Location = new Point(154, 228);
             btnCreate.Name = "btnCreate";
             btnCreate.Size = new Size(102, 23);
-            btnCreate.TabIndex = 0;
+            btnCreate.TabIndex = 7;
             btnCreate.Text = "Create Account";
             btnCreate.UseVisualStyleBackColor = true;
             btnCreate.Click += btnCreate_Click;
@@ -93,7 +90,7 @@
             txtPassword.Location = new Point(84, 97);
             txtPassword.Name = "txtPassword";
             txtPassword.Size = new Size(131, 23);
-            txtPassword.TabIndex = 6;
+            txtPassword.TabIndex = 2;
             // 
             // Lbl_FullName
             // 
@@ -107,62 +104,33 @@
             // Lbl_JobTitle
             // 
             Lbl_JobTitle.AutoSize = true;
-            Lbl_JobTitle.Location = new Point(9, 230);
+            Lbl_JobTitle.Location = new Point(9, 187);
             Lbl_JobTitle.Name = "Lbl_JobTitle";
             Lbl_JobTitle.Size = new Size(57, 15);
             Lbl_JobTitle.TabIndex = 8;
             Lbl_JobTitle.Text = "Job Title :";
-            // 
-            // Lbl_Department
-            // 
-            Lbl_Department.AutoSize = true;
-            Lbl_Department.Location = new Point(9, 187);
-            Lbl_Department.Name = "Lbl_Department";
-            Lbl_Department.Size = new Size(76, 15);
-            Lbl_Department.TabIndex = 9;
-            Lbl_Department.Text = "Department :";
-            // 
-            // txtDepartment
-            // 
-            txtDepartment.Location = new Point(84, 184);
-            txtDepartment.Name = "txtDepartment";
-            txtDepartment.Size = new Size(131, 23);
-            txtDepartment.TabIndex = 10;
-            // 
+            //
             // txtFullName
             // 
             txtFullName.Location = new Point(84, 140);
             txtFullName.Name = "txtFullName";
             txtFullName.Size = new Size(131, 23);
-            txtFullName.TabIndex = 11;
+            txtFullName.TabIndex = 3;
             // 
             // txtJobTitle
             // 
-            txtJobTitle.Location = new Point(84, 227);
+            txtJobTitle.Location = new Point(84, 184);
             txtJobTitle.Name = "txtJobTitle";
             txtJobTitle.Size = new Size(131, 23);
-            txtJobTitle.TabIndex = 12;
-            // 
-            // chkLinkWindows
-            // 
-            chkLinkWindows.AutoSize = true;
-            chkLinkWindows.Location = new Point(12, 266);
-            chkLinkWindows.Name = "chkLinkWindows";
-            chkLinkWindows.Size = new Size(188, 19);
-            chkLinkWindows.TabIndex = 13;
-            chkLinkWindows.Text = "Store details for windows login";
-            chkLinkWindows.UseVisualStyleBackColor = true;
+            txtJobTitle.TabIndex = 4;
             // 
             // SignUpForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(268, 348);
-            Controls.Add(chkLinkWindows);
+            ClientSize = new Size(268, 263);
             Controls.Add(txtJobTitle);
             Controls.Add(txtFullName);
-            Controls.Add(txtDepartment);
-            Controls.Add(Lbl_Department);
             Controls.Add(Lbl_JobTitle);
             Controls.Add(Lbl_FullName);
             Controls.Add(txtPassword);
@@ -187,10 +155,7 @@
         private TextBox txtPassword;
         private Label Lbl_FullName;
         private Label Lbl_JobTitle;
-        private Label Lbl_Department;
-        private TextBox txtDepartment;
         private TextBox txtFullName;
         private TextBox txtJobTitle;
-        private CheckBox chkLinkWindows;
     }
 }

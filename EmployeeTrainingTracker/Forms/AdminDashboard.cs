@@ -1,42 +1,94 @@
-﻿using System;
-using System.Data;
-using Microsoft.Data.Sqlite;
-using System.Windows.Forms;
-using System.Text;
+﻿using EmployeeTrainingTracker.Helpers;
 using EmployeeTrainingTracker.Utilities;
+using Microsoft.VisualBasic.ApplicationServices;
+using Npgsql; 
+using System;
+using System.Data;
+using System.Security.Cryptography;
+using System.Text;
+using System.Windows.Forms;
+using static System.ComponentModel.Design.ObjectSelectorEditor;
 
 namespace EmployeeTrainingTracker
 {
     public partial class AdminDashboard : Form
     {
-
         private string currentEmployeeName = "None";
-
         private bool _loadingManagerCombo = false;
+        private bool _isSyncingSelection = false;
+        private int loggedInUserId;
+
 
         private void SetCurrentEmployeeName(string employeeName)
         {
             currentEmployeeName = employeeName;
         }
 
+
+        public AdminDashboard(int userId)
+        {
+            InitializeComponent();
+            ResponsiveScaler.Attach(this);
+            loggedInUserId = userId; // Save the ID when the form opens
+        }
+
         public AdminDashboard()
         {
             InitializeComponent();
-            LoadEmployees();
-            LoadGroupsForReports();
-            LoadEmployeeList();
-            LoadPlannedTraining();
-            tabCertificates.Enabled = false;
-            LoadReportSettings();
-            StyleAllDGVs();
-            LoadManagers();
-            LoadGroups();
+            ResponsiveScaler.Attach(this);
 
-            var plannedSessions = PlannedTrainingService.GetPlannedTraining();
-            if (plannedSessions.Rows.Count > 0)
+        }
+
+        private void AdminDashboard_Load(object sender, EventArgs e)
+        {
+            try
             {
-                int sessionId = Convert.ToInt32(plannedSessions.Rows[0]["SessionID"]);
-                LoadEmployeesForPlanning(sessionId);
+                // Perfectly divide the split container in half dynamically
+                splitContainer1.SplitterDistance = splitContainer1.Height / 2;
+
+                LoadEmployees();
+                LoadGroupsForReports();
+                LoadEmployeeList();
+                LoadPlannedTraining();
+                LoadDeletionTasks();
+
+                dgvPendingAcks.CellContentClick += dgvPendingAcks_CellContentClick;
+                dgvPendingAcks.CellFormatting += dgvPendingAcks_CellFormatting;
+                dgvTasks.CellFormatting += dgvTasks_CellFormatting;
+                dgvTasks.CellContentClick += dgvTasks_CellContentClick;
+                dgvCertificates.CellFormatting += dgvCertificates_CellFormatting;
+                dgvPlannedTraining.CellFormatting += dgvPlannedTraining_CellFormatting;
+                dgvCertificates.DataBindingComplete += dgvCertificates_DataBindingComplete;
+                LoadPendingApprovals();
+
+                LoadReportSettings();
+                StyleAllDGVs();
+                LoadManagers();
+                LoadGroups();
+
+                LoadDepartmentOptions();
+
+                cbManager.SelectedIndexChanged += cbManager_SelectedIndexChanged;
+                tabControl.SelectedIndexChanged += tabControl_SelectedIndexChanged_Refresh;
+
+                // Select the logged-in user once the grid is on screen (the grid picks row 0 when first shown)
+                this.Shown += (s, args) => SelectEmployeeRow(loggedInUserId);
+                dgvGroups.DataBindingComplete += dgvGroupGrids_DataBindingComplete;
+                dgvGroupMembers.DataBindingComplete += dgvGroupGrids_DataBindingComplete;
+
+                var plannedSessions = PlannedTrainingService.GetPlannedTraining();
+                if (plannedSessions.Rows.Count > 0)
+                {
+                    int sessionId = Convert.ToInt32(plannedSessions.Rows[0]["SessionID"]);
+                    LoadEmployeesForPlanning(sessionId);
+                }
+            }
+            catch (Exception ex)
+            {
+                // This will show you the error if an Admin logs in and it fails
+                MessageBox.Show($"A critical error occurred while loading the admin dashboard:\n\n{ex.Message}\n\n{ex.StackTrace}",
+                                "Load Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                this.Close();
             }
         }
 
@@ -44,125 +96,81 @@ namespace EmployeeTrainingTracker
         // Load data for each tab
         private void LoadEmployees()
         {
-            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
+            using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
 
-                using (var cmd = new SqliteCommand(@"
-                SELECT 
-                    u.UserID,
-                    u.Email AS Email,
-                    u.Role,
-                    e.EmployeeID,
-                    IFNULL(e.FullName, u.Email) AS FullName,
-                    IFNULL(e.Department, 'Unknown') AS Department,
-                    IFNULL(e.JobTitle, 'Unknown') AS JobTitle
-                FROM Users u
-                LEFT JOIN Employees e ON u.EmployeeID = e.EmployeeID", conn))
+                // Active employees by default; "Show archived employees" switches to the archive.
+                // Archived employees show the department(s) they were in when archived.
+                using (var cmd = new NpgsqlCommand(@"
+            SELECT
+                u.UserID,
+                COALESCE(e.FullName, u.Email) AS FullName,
+                u.Email AS Email,
+                u.Role,
+                e.EmployeeID,
+                CASE WHEN e.EmployeeID IS NULL THEN 'Unassigned'
+                     WHEN e.IsArchived THEN COALESCE(e.Department, 'Unassigned')
+                     ELSE " + GroupService.EmployeeDepartmentsSql + @" END AS Department,
+                COALESCE(e.JobTitle, 'Unknown') AS JobTitle,
+                e.ArchivedAt
+            FROM Users u
+            LEFT JOIN Employees e ON u.EmployeeID = e.EmployeeID
+            WHERE COALESCE(e.IsArchived, FALSE) = @archived
+            ORDER BY FullName ASC", conn))
                 {
+                    cmd.Parameters.AddWithValue("archived", chkShowArchived.Checked);
+
                     using (var reader = cmd.ExecuteReader())
                     {
                         DataTable table = new DataTable();
                         table.Load(reader);
+
+                        // 1. Bind original data to DataGridView
                         dgvEmployees.DataSource = table;
 
-                        // Optional: hide technical ID columns so UI looks cleaner
+                        // Hide technical ID columns
                         if (dgvEmployees.Columns.Contains("UserID"))
                             dgvEmployees.Columns["UserID"].Visible = false;
 
                         if (dgvEmployees.Columns.Contains("EmployeeID"))
                             dgvEmployees.Columns["EmployeeID"].Visible = false;
 
-                        // Populate ComboBox
-                        cmbCurrentEmployee.DataSource = table;
+                        if (dgvEmployees.Columns.Contains("ArchivedAt"))
+                        {
+                            dgvEmployees.Columns["ArchivedAt"].Visible = chkShowArchived.Checked;
+                            dgvEmployees.Columns["ArchivedAt"].HeaderText = "Archived On";
+                        }
+
+                        // ---------------------------------------------------------
+                        // NEW: Populate ComboBox independently with an "All" option
+                        // ---------------------------------------------------------
+                        DataTable comboTable = table.Copy();
+
+                        DataRow allRow = comboTable.NewRow();
+                        allRow["EmployeeID"] = 0; // Using 0 as our "All" flag
+                        allRow["FullName"] = "All Employees";
+                        comboTable.Rows.InsertAt(allRow, 0);
+
+                        // Unhook event to prevent errors while the data source is setting
+                        cmbCurrentEmployee.SelectedIndexChanged -= cmbCurrentEmployee_SelectedIndexChanged;
+
+                        cmbCurrentEmployee.DataSource = comboTable;
                         cmbCurrentEmployee.DisplayMember = "FullName";
                         cmbCurrentEmployee.ValueMember = "EmployeeID";
+
+                        // Re-hook the event
+                        cmbCurrentEmployee.SelectedIndexChanged += cmbCurrentEmployee_SelectedIndexChanged;
+                        // ---------------------------------------------------------
                     }
                 }
             }
-        } //Employees
+        }
 
         private void LoadCertificates(int employeeId)
         {
             DataTable table = CertificateService.GetCertificates(employeeId);
-
-            dgvCertificates.Columns.Clear();
-            dgvCertificates.AutoGenerateColumns = false;
-
-            // Hidden ID column (needed for editing/deleting)
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "CertificateID",
-                DataPropertyName = "CertificateID",
-                HeaderText = "ID",
-                Visible = false
-            });
-            // Certificate Name
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "CertificateName",
-                DataPropertyName = "CertificateName",
-                HeaderText = "Certificate Name"
-            });
-
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "Key",
-                DataPropertyName = "Key",
-                HeaderText = "Training Key"
-            });
-
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "HRS",
-                DataPropertyName = "HRS",  // or CPDHrs depending on your DB
-                HeaderText = "CPD Hrs"
-            });
-
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "Provider",
-                DataPropertyName = "Provider",
-                HeaderText = "Provider"
-            });
-
-            // Issue Date
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "IssueDate",
-                DataPropertyName = "IssueDate",
-                HeaderText = "Issue Date"
-            });
-
-            // Expiry Date
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "ExpiryDate",
-                DataPropertyName = "ExpiryDate",
-                HeaderText = "Expiry Date"
-            });
-
-            // FileLink
-            dgvCertificates.Columns.Add(new DataGridViewLinkColumn
-            {
-                Name = "FileLink",
-                DataPropertyName = "FilePath",
-                HeaderText = "Certificate File",
-                TrackVisitedState = true,
-                Width = 200 // width (pixels)
-            });
-
-            dgvCertificates.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "LastNotifiedDate",
-                DataPropertyName = "LastNotifiedDate",
-                HeaderText = "Last Notified"
-            });
-
-
-
-            // Set DataSource last
-            dgvCertificates.DataSource = table;
+            DashboardHelper.BindCertificates(dgvCertificates, table);
 
             // update buttons correctly
             UpdateCertificateButtons();
@@ -171,10 +179,10 @@ namespace EmployeeTrainingTracker
         private void LoadEmployeeList()
         {
             clbEmployees.Items.Clear();
-            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
+            using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
-                var cmd = new SqliteCommand("SELECT EmployeeID, FullName FROM Employees ORDER BY FullName", conn);
+                var cmd = new NpgsqlCommand("SELECT EmployeeID, FullName FROM Employees WHERE NOT IsArchived ORDER BY FullName", conn);
                 using (var reader = cmd.ExecuteReader())
                 {
                     while (reader.Read())
@@ -191,11 +199,10 @@ namespace EmployeeTrainingTracker
 
         private void LoadPlannedTraining()
         {
-            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+            using var conn = DatabaseHelper.GetConnection();
             conn.Open();
 
-            // No transaction needed for a simple SELECT
-            var cmd = new SqliteCommand(@"
+            var cmd = new NpgsqlCommand(@"
         SELECT 
             ts.SessionID,
             ts.CertificateName,
@@ -205,7 +212,7 @@ namespace EmployeeTrainingTracker
             ts.PlannedDate,
             ts.Status,
             ts.Notes,
-            GROUP_CONCAT(e.FullName, ', ') AS Participants
+            STRING_AGG(e.FullName, ', ') AS Participants
         FROM TrainingSessions ts
         LEFT JOIN TrainingParticipants tp ON ts.SessionID = tp.SessionID
         LEFT JOIN Employees e ON tp.EmployeeID = e.EmployeeID
@@ -220,9 +227,9 @@ namespace EmployeeTrainingTracker
 
             dgvPlannedTraining.DataSource = table;
 
-            // Optional: nicer UI setup
             dgvPlannedTraining.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             dgvPlannedTraining.CellFormatting += dgvPlannedTraining_CellFormatting;
+            dgvCertificates.CellFormatting += dgvCertificates_CellFormatting;
 
             if (dgvPlannedTraining.Columns.Contains("SessionID"))
                 dgvPlannedTraining.Columns["SessionID"].Visible = false;
@@ -231,9 +238,10 @@ namespace EmployeeTrainingTracker
         private void LoadGroups()
         {
             // Fetch all groups
-            DataTable dtGroups = GroupHelper.GetAllGroups(DatabaseHelper.ConnectionString);
+            DataTable dtGroups = GroupService.GetAllGroups();
 
             dgvGroups.AutoGenerateColumns = true;
+            dgvGroups.AllowUserToAddRows = true;    // empty bottom row = "new department" (fill the boxes, then click Add)
             dgvGroups.DataSource = dtGroups;
 
             // Format DGV
@@ -248,21 +256,87 @@ namespace EmployeeTrainingTracker
                 dgvGroups.Columns["ManagerID"].Visible = false;
 
             // Optional: pre-select first row if you want auto-population
+            ApplyGroupGridHeaders();
+
             if (dgvGroups.Rows.Count > 0)
                 dgvGroups.Rows[0].Selected = true;
         }
 
+        // Re-reads everything that depends on the employee list (groups, members,
+        // manager names, report pickers) so the other tabs never show stale data.
+        private void RefreshEmployeeDependentTabs()
+        {
+            int? selectedGroupId = null;
+            if (dgvGroups.SelectedRows.Count > 0 && dgvGroups.Columns.Contains("GroupID")
+                && dgvGroups.SelectedRows[0].Cells["GroupID"].Value is not (null or DBNull))
+                selectedGroupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
+
+            LoadGroups();   // re-selects row 0, which reloads members + manager combo
+
+            if (selectedGroupId.HasValue)
+            {
+                foreach (DataGridViewRow row in dgvGroups.Rows)
+                {
+                    if (Convert.ToInt32(row.Cells["GroupID"].Value) == selectedGroupId.Value)
+                    {
+                        dgvGroups.ClearSelection();
+                        row.Selected = true;
+                        dgvGroups.CurrentCell = row.Cells["GroupName"];
+                        break;
+                    }
+                }
+            }
+
+            LoadEmployeeList();
+            LoadGroupsForReports();
+            LoadDepartmentOptions();
+        }
+
+        private void tabControl_SelectedIndexChanged_Refresh(object? sender, EventArgs e)
+        {
+            // Departments tab: always show fresh data when the user switches to it
+            if (tabControl.SelectedTab == Groups)
+                RefreshEmployeeDependentTabs();
+
+            // Employees tab: department memberships may have changed on the Departments tab
+            if (tabControl.SelectedTab == tabEmployees)
+            {
+                int? selectedEmpId = GetSelectedEmployeeId();
+                LoadDepartmentOptions();
+                LoadEmployees();
+                if (selectedEmpId.HasValue) SelectEmployeeRow(selectedEmpId.Value);
+            }
+        }
+
+        // Department drop-down on the Employees tab lists the real departments (Groups)
+        private void LoadDepartmentOptions()
+        {
+            string current = cmbDept.Text;
+            cmbDept.Items.Clear();
+            foreach (string name in GroupService.GetDepartmentNames())
+                cmbDept.Items.Add(name);
+            cmbDept.Text = current;
+        }
+
+        private bool IsRealDepartment(string department)
+            => cmbDept.Items.Cast<object>().Any(i => string.Equals(i.ToString(), department, StringComparison.OrdinalIgnoreCase));
+
+        // Selects an employee in the Employees grid, which also loads them on the Certificates tab
+        private void SelectEmployeeRow(int employeeId)
+            => DashboardHelper.SelectEmployeeRow(dgvEmployees, employeeId);
+
         private void LoadManagers()
         {
-            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+            using var conn = DatabaseHelper.GetConnection();
             conn.Open();
 
             string query = @"
-            SELECT EmployeeID, FullName 
+            SELECT EmployeeID, FullName
             FROM Employees
+            WHERE NOT IsArchived
             ORDER BY FullName;";
 
-            using var cmd = new SqliteCommand(query, conn);
+            using var cmd = new NpgsqlCommand(query, conn);
             using var reader = cmd.ExecuteReader();
 
             DataTable dtManagers = new DataTable();
@@ -278,7 +352,7 @@ namespace EmployeeTrainingTracker
         private void LoadGroupMembers(int groupId)
         {
             // Fetch members from DB
-            DataTable dtMembers = GroupHelper.GetMembersByGroup(DatabaseHelper.ConnectionString, groupId);
+            DataTable dtMembers = GroupService.GetMembersByGroup(groupId);
 
             // Debug: confirm rows returned
             Console.WriteLine($"GroupID {groupId} Members returned: {dtMembers.Rows.Count}");
@@ -290,13 +364,44 @@ namespace EmployeeTrainingTracker
 
             foreach (DataGridViewColumn col in dgvGroupMembers.Columns)
                 col.ReadOnly = true;
+
+            ApplyGroupGridHeaders();
         }
+
+        // Friendly headers for the Departments tab grids. Matches column names
+        // case-insensitively (Postgres returns them lowercase) and is re-applied
+        // after every data bind so a refresh can never put the raw names back.
+        private void ApplyGroupGridHeaders()
+        {
+            var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "GroupName", "Department" },
+                { "Description", "Description" },
+                { "ManagerName", "Manager Name" },
+                { "EmployeeID", "Emp ID" },
+                { "FullName", "Full Name" },
+                { "Department", "Department" },
+                { "JobTitle", "Job Title" },
+            };
+
+            foreach (var grid in new[] { dgvGroups, dgvGroupMembers })
+            {
+                foreach (DataGridViewColumn col in grid.Columns)
+                {
+                    if (headers.TryGetValue(col.Name, out var text) ||
+                        (!string.IsNullOrEmpty(col.DataPropertyName) && headers.TryGetValue(col.DataPropertyName, out text)))
+                        col.HeaderText = text;
+                }
+            }
+        }
+
+        private void dgvGroupGrids_DataBindingComplete(object? sender, DataGridViewBindingCompleteEventArgs e)
+            => ApplyGroupGridHeaders();
 
         private void LoadEmployeesForPlanning(int sessionId)
         {
             clbEmployeesPlan.Items.Clear();
 
-            // Load all individual employees
             var allEmployees = PlannedTrainingService.GetAllEmployees();
             var participantIds = PlannedTrainingService.GetPlannedEmployeeIds(sessionId);
 
@@ -306,7 +411,7 @@ namespace EmployeeTrainingTracker
             }
 
             // Load groups
-            var allGroups = GroupHelper.GetAllGroups(DatabaseHelper.ConnectionString);
+            var allGroups = GroupService.GetAllGroups();
             foreach (DataRow row in allGroups.Rows)
             {
                 int groupId = Convert.ToInt32((long)row["GroupID"]);
@@ -319,7 +424,7 @@ namespace EmployeeTrainingTracker
                 };
 
                 // Get all member IDs for this group
-                var members = GroupHelper.GetMembersByGroup(DatabaseHelper.ConnectionString, groupId)
+                var members = GroupService.GetMembersByGroup(groupId)
                                          .AsEnumerable()
                                          .Select(r => Convert.ToInt32((long)r["EmployeeID"]))
                                          .ToList();
@@ -335,7 +440,7 @@ namespace EmployeeTrainingTracker
         {
             clbGroups.Items.Clear();
 
-            var allGroups = GroupHelper.GetAllGroups(DatabaseHelper.ConnectionString);
+            var allGroups = GroupService.GetAllGroups();
 
             foreach (DataRow row in allGroups.Rows)
             {
@@ -350,181 +455,252 @@ namespace EmployeeTrainingTracker
             }
         }
 
-
-        // CRUD for certificates
-        private void btnAddCert_Click(object sender, EventArgs e)
+        private void LoadAvailableMembersForGroup(int groupId)
         {
-            if (dgvEmployees.CurrentRow == null) return;
+            // Reuse the exact service call used in your AddMemberForm
+            DataTable dt = GroupService.GetAvailableEmployeesForGroup(groupId);
 
-            int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
-            string name = txtCertName.Text.Trim();
-            string key = txtKeyCertsTab.Text.Trim();
-            string hrsText = txtHrsCertsTab.Text.Trim();
-            string provider = txtProviderCertsTab.Text.Trim();
-            DateTime issue = dtpIssueDate.Value;
-            DateTime expiry = dtpExpiryDate.Value;
-            string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim()) ? null : txtFilePath.Text.Trim('"').Trim();
+            // Bind to the new ComboBox
+            cmbPotentialMembers.DataSource = dt;
+            cmbPotentialMembers.DisplayMember = "FullName"; // Assumed column name based on other queries
+            cmbPotentialMembers.ValueMember = "EmployeeID"; // The PK for the employee
 
-            if (string.IsNullOrEmpty(name))
+            // Reset selection so it doesn't default to the first person immediately
+            cmbPotentialMembers.SelectedIndex = -1;
+
+            // Disable the button if no one is available to add
+            btnAddMemberDirect.Enabled = dt.Rows.Count > 0;
+        }
+
+        private void LoadDeletionTasks()
+        {
+            try
             {
-                MessageBox.Show("Certificate name is required.");
-                return;
+                DataTable pendingDeletions = CertificateService.GetPendingDeletions();
+                DashboardHelper.BindDeletionTasks(dgvTasks, pendingDeletions);
             }
-
-            double.TryParse(hrsText, out double cpdHrs);
-
-            CertificateService.AddCertificate(empId, name, key, cpdHrs, provider, issue, expiry, filePath);
-
-            LoadCertificates(empId);
-
-            if (chkAddToTrainingFolder.Checked)
+            catch (Exception ex)
             {
-                try
-                {
-                    LegacyExcelService.AppendTrainingRecord(empId, name, issue);
-                    MessageBox.Show("Record also added to employee's training sheet.");
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Certificate added, but failed to update Excel sheet:\n{ex.Message}");
-                }
+                MessageBox.Show($"Error loading tasks: {ex.Message}", "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
+        private void LoadPendingApprovals()
+        {
+            try
+            {
+                // 1. Point this to our NEW Certificate method
+                DataTable pendingAcks = CertificateService.GetPendingCertificateApprovals(loggedInUserId); // Use loggedInUserId for AdminDashboard
+                DashboardHelper.BindPendingApprovals(dgvPendingAcks, pendingAcks);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading pending approvals: {ex.Message}");
+            }
+        }
+
+
+        // CRUD for certificates
         private void btnEditCert_Click(object sender, EventArgs e)
         {
             if (dgvCertificates.CurrentRow == null) return;
 
             int certId = Convert.ToInt32(dgvCertificates.CurrentRow.Cells["CertificateID"].Value);
             string name = txtCertName.Text.Trim();
-            string key = txtKeyCertsTab.Text.Trim();
+            string key = string.IsNullOrWhiteSpace(txtKeyCertsTab.Text)
+                ? string.Empty
+                : txtKeyCertsTab.Text.Trim()[0].ToString();
             string hrsText = txtHrsCertsTab.Text.Trim();
             string provider = txtProviderCertsTab.Text.Trim();
-            DateTime issue = dtpIssueDate.Value;
-            DateTime expiry = dtpExpiryDate.Value;
-            string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim())
-                ? null
-                : txtFilePath.Text.Trim('"').Trim();
 
+            // Check dates before processing
+            if (dtpExpiryDate.Checked && dtpExpiryDate.Value.Date < dtpIssueDate.Value.Date)
+            {
+                MessageBox.Show("Expiry Date cannot be earlier than Issue Date.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            DateTime issue = dtpIssueDate.Value.Date;
+            DateTime? expiry = dtpExpiryDate.Checked ? dtpExpiryDate.Value.Date : null;
             double.TryParse(hrsText, out double cpdHrs);
 
-            CertificateService.UpdateCertificate(certId, name, key, cpdHrs, provider, issue, expiry, filePath);
-
+            CertificateService.UpdateCertificate(certId, name, key, cpdHrs, provider, issue, expiry, null);
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
             LoadCertificates(empId);
 
-            if (chkAddToTrainingFolder.Checked)
-            {
-                try
-                {
-                    LegacyExcelService.UpdateTrainingRecord(empId, name, issue);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Certificate updated, but failed to update Excel sheet:\n{ex.Message}");
-                }
-            }
+            // clear the boxes 
+            txtCertName.Clear();
+            txtHrsCertsTab.Clear();
+            txtProviderCertsTab.Clear();
+            txtKeyCertsTab.SelectedIndex = -1;
 
             MessageBox.Show("Certificate updated successfully!");
+
         }
 
-        private void btnDeleteCert_Click(object sender, EventArgs e)
+        private async void btnDeleteCert_Click(object sender, EventArgs e)
         {
             if (dgvCertificates.CurrentRow == null) return;
 
             int certId = Convert.ToInt32(dgvCertificates.CurrentRow.Cells["CertificateID"].Value);
-            string certName = dgvCertificates.CurrentRow.Cells["CertificateName"].Value.ToString();
+            string certName = dgvCertificates.CurrentRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
+            string? s3Key = dgvCertificates.CurrentRow.Cells["FileLink"].Value?.ToString();
 
-            var confirm = MessageBox.Show("Delete this certificate?", "Confirm", MessageBoxButtons.YesNo);
+            var confirm = MessageBox.Show($"Are you sure you want to permanently delete the certificate '{certName}'?", "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (confirm == DialogResult.No) return;
 
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
 
-            // Delete from database
-            CertificateService.DeleteCertificate(certId);
-
-            // Delete from Excel
             try
             {
-                LegacyExcelService.DeleteTrainingRecord(empId, certName);
+                // 1. Delete the physical file from S3
+                if (!string.IsNullOrEmpty(s3Key))
+                {
+                    await S3Service.DeleteCertificateAsync(s3Key);
+                }
+
+                // 2. Delete the record from database
+                CertificateService.DeleteCertificate(certId);
+
+                // 3. Refresh UI
+                LoadCertificates(empId);
+
+                // Optional: Clear the textboxes if the deleted row was selected
+                txtCertName.Clear();
+                txtHrsCertsTab.Clear();
+                txtProviderCertsTab.Clear();
+                txtKeyCertsTab.SelectedIndex = -1;
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Deleted from database, but failed to update Excel: {ex.Message}");
+                MessageBox.Show($"An error occurred while deleting:\n{ex.Message}", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-
-            LoadCertificates(empId);
         }
 
-        private void btnBrowseFile_Click(object sender, EventArgs e)
+
+        private async void btnUpload_Click(object sender, EventArgs e)
         {
+            int? currentEmployeeId = GetSelectedEmployeeId();
+
+            if (currentEmployeeId == null)
+            {
+                MessageBox.Show("Please select an employee first before uploading a certificate.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             using (OpenFileDialog ofd = new OpenFileDialog())
             {
-                ofd.Title = "Select Report File";
-                ofd.Filter = "PDF Files (*.pdf)|*.pdf|Excel Files (*.xlsx;*.xls)|*.xlsx;*.xls|CSV Files (*.csv)|*.csv|All Files (*.*)|*.*";
-                ofd.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                ofd.RestoreDirectory = true;
+                ofd.Filter = "PDF Files (*.pdf)|*.pdf|Image Files (*.jpg;*.png)|*.jpg;*.png|All Files (*.*)|*.*";
+                ofd.Title = "Select a Certificate to Upload";
 
                 if (ofd.ShowDialog() == DialogResult.OK)
                 {
-                    txtFilePath.Text = ofd.FileName;
+                    string localFilePath = ofd.FileName;
+
+                    // 1. Gather ALL the data from the UI
+                    string certName = txtCertName.Text.Trim();
+                    string key = string.IsNullOrWhiteSpace(txtKeyCertsTab.Text) ? string.Empty : txtKeyCertsTab.Text.Trim()[0].ToString();
+                    string hrsText = txtHrsCertsTab.Text.Trim();
+                    string provider = txtProviderCertsTab.Text.Trim();
+                    DateTime issueDate = dtpIssueDate.Value.Date;
+                    DateTime expiryDate = dtpExpiryDate.Value.Date;
+
+                    if (string.IsNullOrEmpty(certName))
+                    {
+                        MessageBox.Show("Please enter a name for the certificate.");
+                        return;
+                    }
+
+                    // Parse the hours safely
+                    double? cpdHrs = double.TryParse(hrsText, out double parsedHrs) ? parsedHrs : (double?)null;
+
+                    btnUpload.Enabled = false;
+                    btnUpload.Text = "Uploading...";
+
+                    // 2. Pass all data to the service
+                    bool success = await CertificateService.SaveCertificateAsync(
+                        currentEmployeeId.Value, currentEmployeeName, certName, localFilePath,
+                        issueDate, expiryDate, key, cpdHrs, provider);
+
+                    if (success)
+                    {
+                        MessageBox.Show("Certificate successfully uploaded to the cloud!");
+
+                        // 3. Clear UI and Reload Grid
+                        txtCertName.Clear();
+                        txtKeyCertsTab.SelectedIndex = -1;
+                        txtHrsCertsTab.Clear();
+                        txtProviderCertsTab.Clear();
+
+                        LoadCertificates(currentEmployeeId.Value);
+                    }
+                    else
+                    {
+                        MessageBox.Show("Upload failed. Please try again.");
+                    }
+
+                    btnUpload.Enabled = true;
+                    btnUpload.Text = "Upload";
                 }
             }
         }
 
 
-        // CRUD for employees
         private void btnAddEmployee_Click(object sender, EventArgs e)
         {
-            // Get Windows username
-            string windowsUser = System.Security.Principal.WindowsIdentity.GetCurrent().Name;
-            string shortUser = windowsUser.Contains("\\")
-                ? windowsUser.Split('\\')[1]
-                : windowsUser;
-
-            string username = shortUser;  // Store the short name as Username
+            // 1. Gather Input from TextBoxes (instead of Windows Identity)
+            string fullName = txtFullName.Text.Trim();
+            string email = txtUsername.Text.Trim(); // Assuming txtUsername is your Email box
             string role = cmbRole.SelectedItem?.ToString() ?? "Employee";
             string department = string.IsNullOrEmpty(cmbDept.Text.Trim()) ? "Unknown" : cmbDept.Text.Trim();
             string jobTitle = string.IsNullOrEmpty(txtJobTitle.Text.Trim()) ? "Unknown" : txtJobTitle.Text.Trim();
+            string password = txtPassword.Text.Trim();
 
-            long newEmpId;
-            long newUserId;
-
-            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
+            // 2. Basic Validation
+            if (string.IsNullOrEmpty(fullName) || string.IsNullOrEmpty(email))
             {
-                conn.Open();
-
-                // Create Employee row
-                using (var cmdEmp = new SqliteCommand(
-                    "INSERT INTO Employees (FullName, Department, JobTitle) VALUES (@name, @dept, @title); SELECT last_insert_rowid();", conn))
-                {
-                    cmdEmp.Parameters.AddWithValue("@name", username);
-                    cmdEmp.Parameters.AddWithValue("@dept", department);
-                    cmdEmp.Parameters.AddWithValue("@title", jobTitle);
-                    newEmpId = (long)cmdEmp.ExecuteScalar();
-                }
-
-                // Create User row (no password)
-                using (var cmdUser = new SqliteCommand(
-                    "INSERT INTO Users (Email, Role, EmployeeID) VALUES (@u, @r, @eid); SELECT last_insert_rowid();", conn))
-                {
-                    cmdUser.Parameters.AddWithValue("@u", username);
-                    cmdUser.Parameters.AddWithValue("@r", role);
-                    cmdUser.Parameters.AddWithValue("@eid", newEmpId);
-                    newUserId = (long)cmdUser.ExecuteScalar();
-                }
+                MessageBox.Show("Full Name and Email are required.");
+                return;
             }
 
-            LoadEmployees();
-            ClearEmployeeInputs();
+            // Returning employee: offer to restore their archived record (keeps their history)
+            int? archivedId = EmployeeAdminService.FindArchivedEmployeeByEmail(email);
+            if (archivedId.HasValue)
+            {
+                var restore = MessageBox.Show(
+                    $"{email} belongs to an archived employee.\n\nRestore their previous record, including their certificates and training history?",
+                    "Returning Employee", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (restore == DialogResult.Yes)
+                    RestoreAndShow(archivedId.Value, fullName);
+                else
+                    MessageBox.Show("That email is still in use by the archived record, so a new account can't be created with it.", "Email In Use");
+                return;
+            }
 
-            // Select the newly added user
+            if (string.IsNullOrEmpty(password))
+            {
+                MessageBox.Show("A password is required for new users.");
+                return;
+            }
+
+            // 3. Create the employee + linked user account, placed in the chosen department (group)
+            int newEmployeeId = EmployeeAdminService.AddEmployee(fullName, email, role, department, jobTitle, password);
+            if (IsRealDepartment(department))
+                EmployeeAdminService.SetEmployeeDepartment(newEmployeeId, department);
+
+            // 6. Refresh UI
+            LoadEmployees();
+            RefreshEmployeeDependentTabs();
+            ClearEmployeeInputs();
+            MessageBox.Show("Employee added successfully.");
+
+            // Select the newly added user in the grid
             foreach (DataGridViewRow row in dgvEmployees.Rows)
             {
-                if (row.Cells["Username"].Value?.ToString() == username)
+                if (row.Cells["Email"].Value?.ToString() == email)
                 {
                     row.Selected = true;
-                    dgvEmployees.CurrentCell = row.Cells["Username"];
+                    dgvEmployees.CurrentCell = row.Cells["Email"];
                     break;
                 }
             }
@@ -532,6 +708,7 @@ namespace EmployeeTrainingTracker
 
         private void btnUpdateEmployee_Click(object sender, EventArgs e)
         {
+            // 1. Basic Validation
             if (dgvEmployees.CurrentRow == null) return;
 
             var empIdObj = dgvEmployees.CurrentRow.Cells["EmployeeID"].Value;
@@ -539,70 +716,43 @@ namespace EmployeeTrainingTracker
 
             if (userIdObj == null || userIdObj == DBNull.Value)
             {
-                MessageBox.Show("Please select a valid employee.");
+                MessageBox.Show("Please select a valid user row.");
                 return;
             }
 
             int userId = Convert.ToInt32(userIdObj);
-            int? employeeId = empIdObj == null || empIdObj == DBNull.Value ? (int?)null : Convert.ToInt32(empIdObj);
+            int? employeeId = empIdObj == null || empIdObj == DBNull.Value
+                ? (int?)null
+                : Convert.ToInt32(empIdObj);
 
-            string username = txtUsername.Text.Trim();
+            // 2. Gather Input Data
+            string fullName = txtFullName.Text.Trim();
+            string email = txtUsername.Text.Trim(); // Assuming this is the email/username field
             string role = cmbRole.SelectedItem?.ToString() ?? "Employee";
             string department = string.IsNullOrEmpty(cmbDept.Text.Trim()) ? "Unknown" : cmbDept.Text.Trim();
             string jobTitle = string.IsNullOrEmpty(txtJobTitle.Text.Trim()) ? "Unknown" : txtJobTitle.Text.Trim();
 
-            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
+            // Get Password Input
+            string newPassword = txtPassword.Text.Trim();
+
+            // Departments are group memberships - only a real department name is applied
+            bool realDepartment = IsRealDepartment(department);
+            EmployeeAdminService.UpdateEmployee(userId, employeeId, fullName, email, role, realDepartment ? department : null, jobTitle, newPassword);
+
+            string departmentNote = "";
+            if (realDepartment && employeeId.HasValue
+                && EmployeeAdminService.SetEmployeeDepartment(employeeId.Value, department) == EmployeeAdminService.DepartmentChangeResult.MultipleDepartments)
             {
-                conn.Open();
-
-                if (employeeId.HasValue)
-                {
-                    // Update existing Employee
-                    using (var cmdEmp = new SqliteCommand(
-                        "UPDATE Employees SET FullName=@name, Department=@dept, JobTitle=@title WHERE EmployeeID=@id", conn))
-                    {
-                        cmdEmp.Parameters.AddWithValue("@name", username);
-                        cmdEmp.Parameters.AddWithValue("@dept", department);
-                        cmdEmp.Parameters.AddWithValue("@title", jobTitle);
-                        cmdEmp.Parameters.AddWithValue("@id", employeeId.Value);
-                        cmdEmp.ExecuteNonQuery();
-                    }
-                }
-                else
-                {
-                    // Insert new Employee
-                    using (var cmdInsertEmp = new SqliteCommand(
-                        "INSERT INTO Employees (FullName, Department, JobTitle) VALUES (@name,@dept,@title); SELECT last_insert_rowid();", conn))
-                    {
-                        cmdInsertEmp.Parameters.AddWithValue("@name", username);
-                        cmdInsertEmp.Parameters.AddWithValue("@dept", department);
-                        cmdInsertEmp.Parameters.AddWithValue("@title", jobTitle);
-
-                        long newEmpId = (long)cmdInsertEmp.ExecuteScalar();
-
-                        // Link back to Users
-                        using (var cmdUpdateUserEmp = new SqliteCommand(
-                            "UPDATE Users SET EmployeeID=@empId WHERE UserID=@uid", conn))
-                        {
-                            cmdUpdateUserEmp.Parameters.AddWithValue("@empId", newEmpId);
-                            cmdUpdateUserEmp.Parameters.AddWithValue("@uid", userId);
-                            cmdUpdateUserEmp.ExecuteNonQuery();
-                        }
-                    }
-                }
-
-                // Always update Users table (username + role)
-                using (var cmdUser = new SqliteCommand(
-                    "UPDATE Users SET Email=@u, Role=@r WHERE UserID=@uid", conn))
-                {
-                    cmdUser.Parameters.AddWithValue("@u", username);
-                    cmdUser.Parameters.AddWithValue("@r", role);
-                    cmdUser.Parameters.AddWithValue("@uid", userId);
-                    cmdUser.ExecuteNonQuery();
-                }
+                departmentNote = "\n\nThis employee belongs to more than one department, so their departments were not changed. Use the Departments tab to manage them.";
             }
 
+            // 6. Refresh UI
+            MessageBox.Show("Employee updated successfully." + departmentNote);
             LoadEmployees();
+            RefreshEmployeeDependentTabs();
+
+            // Clear the password box so it doesn't stay on screen
+            txtPassword.Text = "";
         }
 
         private void btnDeleteEmployee_Click(object sender, EventArgs e)
@@ -614,60 +764,80 @@ namespace EmployeeTrainingTracker
                 return;
             }
 
-            var confirm = MessageBox.Show("Delete this employee and all their certificates?", "Confirm", MessageBoxButtons.YesNo);
-            if (confirm == DialogResult.No) return;
-
-            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
+            if (empId.Value == loggedInUserId)
             {
-                conn.Open();
-
-                // Delete certificates first
-                using (var cmdCert = new SqliteCommand("DELETE FROM TrainingCertificates WHERE EmployeeID=@id", conn))
-                {
-                    cmdCert.Parameters.AddWithValue("@id", empId.Value);
-                    cmdCert.ExecuteNonQuery();
-                }
-
-                // Then delete user
-                using (var cmdUser = new SqliteCommand("DELETE FROM Users WHERE EmployeeID=@id", conn))
-                {
-                    cmdUser.Parameters.AddWithValue("@id", empId.Value);
-                    cmdUser.ExecuteNonQuery();
-                }
-
-                // Finally, delete the employee record
-                using (var cmdEmp = new SqliteCommand("DELETE FROM Employees WHERE EmployeeID=@id", conn))
-                {
-                    cmdEmp.Parameters.AddWithValue("@id", empId.Value);
-                    cmdEmp.ExecuteNonQuery();
-                }
+                MessageBox.Show("You can't delete your own account while logged in.", "Not Allowed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
             }
 
+            var confirm = MessageBox.Show(
+                "Delete this employee?\n\n" +
+                "They will be archived: removed from all active lists and unable to log in, but their record and " +
+                "certificates are kept. You can restore them from 'Show archived employees' if they return.",
+                "Confirm", MessageBoxButtons.YesNo);
+            if (confirm == DialogResult.No) return;
+
+            EmployeeAdminService.DeleteEmployee(empId.Value);
+
             LoadEmployees();
+            RefreshEmployeeDependentTabs();
             dgvCertificates.DataSource = null;
             tabCertificates.Enabled = false;
         }
 
+        private void btnRestoreEmployee_Click(object? sender, EventArgs e)
+        {
+            int? empId = GetSelectedEmployeeId();
+            if (empId == null)
+            {
+                MessageBox.Show("Please select an archived employee to restore.");
+                return;
+            }
+
+            string name = dgvEmployees.CurrentRow?.Cells["FullName"].Value?.ToString() ?? "this employee";
+            var confirm = MessageBox.Show($"Restore {name}? They will be able to log in again.", "Restore Employee", MessageBoxButtons.YesNo);
+            if (confirm == DialogResult.No) return;
+
+            RestoreAndShow(empId.Value, name);
+        }
+
+        // Restores an archived employee, switches back to the active list and selects them
+        private void RestoreAndShow(int employeeId, string name)
+        {
+            var rejoined = EmployeeAdminService.RestoreEmployee(employeeId);
+
+            chkShowArchived.Checked = false; // reloads the active list
+            RefreshEmployeeDependentTabs();
+            SelectEmployeeRow(employeeId);
+
+            string departments = rejoined.Count > 0
+                ? $"They have been put back into: {string.Join(", ", rejoined)}."
+                : "Their previous department no longer exists, so they are Unassigned - pick a department and click Edit.";
+            MessageBox.Show($"{name} has been restored.\n\n{departments}", "Employee Restored", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void chkShowArchived_CheckedChanged(object? sender, EventArgs e)
+        {
+            bool archiveView = chkShowArchived.Checked;
+
+            // The archive is read-only apart from Restore
+            btnRestoreEmployee.Visible = archiveView;
+            btnDeleteEmployee.Enabled = !archiveView;
+            btnEditEmployee.Enabled = !archiveView;
+            btnAddEmployee.Enabled = !archiveView;
+
+            ClearEmployeeInputs();
+            LoadEmployees();
+        }
+
         private void ClearEmployeeInputs()
         {
-            txtUsername.Text = "";
-            txtPassword.Text = "";
-            cmbRole.SelectedIndex = -1;
-            cmbDept.Text = "";
-            txtJobTitle.Text = "";
+            DashboardHelper.ClearEmployeeInputs(txtUsername, txtPassword, cmbRole, cmbDept, txtJobTitle);
         }
 
         private int? GetSelectedEmployeeId()
         {
-            if (dgvEmployees.CurrentRow == null || dgvEmployees.CurrentRow.IsNewRow)
-                return null;
-
-            var empIdObj = dgvEmployees.CurrentRow.Cells["EmployeeID"]?.Value;
-
-            if (empIdObj == null || empIdObj == DBNull.Value)
-                return null;
-
-            return Convert.ToInt32(empIdObj);
+            return DashboardHelper.GetSelectedEmployeeId(dgvEmployees);
         }
 
 
@@ -736,8 +906,7 @@ namespace EmployeeTrainingTracker
         //CRUD for Groups
         private void btnAddGroup_Click(object sender, EventArgs e)
         {
-            GroupHelper.AddGroup(
-                DatabaseHelper.ConnectionString,
+            GroupService.AddGroup(
                 txtGroupName.Text.Trim(),
                 txtDescription.Text.Trim(),
                 cbManager.SelectedValue as int?
@@ -746,9 +915,17 @@ namespace EmployeeTrainingTracker
             LoadGroups();
         }
 
+        // True only when a saved department (not the empty "new" row) is selected
+        private bool HasSavedGroupSelected()
+        {
+            return dgvGroups.SelectedRows.Count > 0
+                && !dgvGroups.SelectedRows[0].IsNewRow
+                && dgvGroups.SelectedRows[0].Cells["GroupID"].Value is not (null or DBNull);
+        }
+
         private void btnEditGroup_Click(object sender, EventArgs e)
         {
-            if (dgvGroups.SelectedRows.Count == 0)
+            if (!HasSavedGroupSelected())
             {
                 MessageBox.Show("Please select a group to edit.", "Edit Group", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -764,8 +941,7 @@ namespace EmployeeTrainingTracker
                 managerId = Convert.ToInt32(cbManager.SelectedValue);
 
             // Update the group
-            GroupHelper.UpdateGroup(
-                DatabaseHelper.ConnectionString,
+            GroupService.UpdateGroup(
                 groupId,
                 groupName,
                 description,
@@ -791,7 +967,7 @@ namespace EmployeeTrainingTracker
 
         private void btnDeleteGroup_Click(object sender, EventArgs e)
         {
-            if (dgvGroups.SelectedRows.Count == 0)
+            if (!HasSavedGroupSelected())
             {
                 MessageBox.Show("Please select a group to delete.", "Delete Group", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -808,32 +984,52 @@ namespace EmployeeTrainingTracker
 
             if (confirm == DialogResult.Yes)
             {
-                GroupHelper.DeleteGroup(DatabaseHelper.ConnectionString, groupId);
+                GroupService.DeleteGroup(groupId);
                 LoadGroups();
                 dgvGroupMembers.DataSource = null; // clear members grid
             }
         }
 
-        private void btnAddMember_Click(object sender, EventArgs e)
+        private void btnAddMemberDirect_Click(object sender, EventArgs e)
         {
-            if (dgvGroups.SelectedRows.Count == 0)
+            // 1. Validation: Is a group selected?
+            if (!HasSavedGroupSelected())
             {
-                MessageBox.Show("Please select a group first.", "Add Member", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Please select a group first.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            int groupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
-
-            using var addForm = new AddMemberForm(groupId);
-            if (addForm.ShowDialog() == DialogResult.OK)
+            // 2. Validation: Is a user selected in the dropdown?
+            if (cmbPotentialMembers.SelectedIndex == -1 || cmbPotentialMembers.SelectedValue == null)
             {
-                LoadGroupMembers(groupId); // refresh after adding
+                MessageBox.Show("Please select an employee to add.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                int groupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
+                int employeeId = Convert.ToInt32(cmbPotentialMembers.SelectedValue);
+
+                // 3. Call the service (Same logic as AddMemberForm.cs)
+                GroupService.AddMemberToGroup(groupId, employeeId);
+
+                // 4. Refresh the grids and the dropdown
+                LoadGroupMembers(groupId); // Show the new member in the grid
+                LoadAvailableMembersForGroup(groupId); // Remove the added member from the dropdown
+
+                // Optional: Show success message (or keep it silent for speed)
+                // MessageBox.Show("Member added successfully.");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error adding member: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         private void btnRemoveMember_Click(object sender, EventArgs e)
         {
-            if (dgvGroups.SelectedRows.Count == 0 || dgvGroupMembers.SelectedRows.Count == 0)
+            if (!HasSavedGroupSelected() || dgvGroupMembers.SelectedRows.Count == 0)
             {
                 MessageBox.Show("Please select a group and a member to remove.", "Remove Member", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -851,7 +1047,7 @@ namespace EmployeeTrainingTracker
 
             if (confirm == DialogResult.Yes)
             {
-                GroupHelper.RemoveMemberFromGroup(DatabaseHelper.ConnectionString, groupId, employeeId);
+                GroupService.RemoveMemberFromGroup(groupId, employeeId);
                 LoadGroupMembers(groupId); // refresh members DGV
             }
         }
@@ -877,7 +1073,8 @@ namespace EmployeeTrainingTracker
             {
                 if (!group.IsGroup) continue;
 
-                var members = GroupHelper.GetMembersByGroup(DatabaseHelper.ConnectionString, group.Id)
+                // CHANGED: Assumes GroupHelper is refactored
+                var members = GroupService.GetMembersByGroup(group.Id)
                                          .AsEnumerable()
                                          .Select(r => Convert.ToInt32((long)r["EmployeeID"]))
                                          .ToList();
@@ -900,6 +1097,7 @@ namespace EmployeeTrainingTracker
 
             try
             {
+                // CHANGED: Assumes ReportService is refactored
                 DataTable results = ReportService.GenerateReport(reportType, start, end, selectedEmployees);
                 dgvReportResults.DataSource = results;
 
@@ -917,50 +1115,7 @@ namespace EmployeeTrainingTracker
 
         private void btnExportCsv_Click(object sender, EventArgs e)
         {
-            if (dgvReportResults.Rows.Count == 0)
-            {
-                MessageBox.Show("No data to export.");
-                return;
-            }
-
-            using (SaveFileDialog sfd = new SaveFileDialog())
-            {
-                sfd.Filter = "CSV files (*.csv)|*.csv";
-                sfd.FileName = $"Report_{DateTime.Now:yyyyMMdd}.csv";
-
-                if (sfd.ShowDialog() != DialogResult.OK) return;
-
-                try
-                {
-                    StringBuilder sb = new StringBuilder();
-
-                    // Header row
-                    var columnNames = dgvReportResults.Columns
-                                       .Cast<DataGridViewColumn>()
-                                       .Where(c => c.Visible)
-                                       .Select(c => c.HeaderText);
-                    sb.AppendLine(string.Join(",", columnNames));
-
-                    // Data rows
-                    foreach (DataGridViewRow row in dgvReportResults.Rows)
-                    {
-                        if (!row.IsNewRow)
-                        {
-                            var cells = row.Cells.Cast<DataGridViewCell>()
-                                           .Where(c => c.OwningColumn.Visible)
-                                           .Select(c => EscapeCsvValue(c.Value?.ToString() ?? ""));
-                            sb.AppendLine(string.Join(",", cells));
-                        }
-                    }
-
-                    System.IO.File.WriteAllText(sfd.FileName, sb.ToString());
-                    MessageBox.Show("CSV exported successfully!");
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Error exporting CSV: {ex.Message}");
-                }
-            }
+            DashboardHelper.ExportDataGridViewToCsv(dgvReportResults, "Report");
         }
 
         private void cmbReportType_SelectedIndexChanged(object sender, EventArgs e)
@@ -986,10 +1141,174 @@ namespace EmployeeTrainingTracker
             dtpEnd.MaxDate = DateTime.Today;
         }
 
+        // Tasks
+        private async void btnApproveDeletion_Click(object sender, EventArgs e)
+        {
+            if (dgvTasks.CurrentRow == null)
+            {
+                MessageBox.Show("Please select a task to approve.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            int certId = Convert.ToInt32(dgvTasks.CurrentRow.Cells["CertificateID"].Value);
+            string certName = dgvTasks.CurrentRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
+            string s3Key = dgvTasks.CurrentRow.Cells["FileLink"].Value?.ToString();
+
+            var confirm = MessageBox.Show($"Are you sure you want to PERMANENTLY delete '{certName}'?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            if (confirm == DialogResult.No) return;
+
+            try
+            {
+                // 1. Delete the physical file from S3 Cloud (Reusing your existing logic)
+                if (!string.IsNullOrEmpty(s3Key))
+                {
+                    await S3Service.DeleteCertificateAsync(s3Key);
+                }
+
+                // 2. Delete the record from the database
+                CertificateService.DeleteCertificate(certId);
+
+                MessageBox.Show("Certificate permanently deleted.");
+
+                // 3. Refresh the grids
+                LoadDeletionTasks();
+
+                // Optional: Refresh the main employee cert grid if that specific employee happens to be selected
+                int? currentEmp = GetSelectedEmployeeId();
+                if (currentEmp != null) LoadCertificates(currentEmp.Value);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error approving deletion: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void btnRejectDeletion_Click(object sender, EventArgs e)
+        {
+            if (dgvTasks.CurrentRow == null)
+            {
+                MessageBox.Show("Please select a task to reject.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            int certId = Convert.ToInt32(dgvTasks.CurrentRow.Cells["CertificateID"].Value);
+            string certName = dgvTasks.CurrentRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
+
+            var confirm = MessageBox.Show($"Reject deletion request for '{certName}'? It will be restored to the employee's active dashboard.", "Confirm Reject", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+            if (confirm == DialogResult.No) return;
+
+            try
+            {
+                // Un-flag it in the database
+                CertificateService.UnmarkCertificateForDeletion(certId);
+
+                MessageBox.Show("Deletion request rejected. Certificate restored.");
+
+                // Refresh the grids
+                LoadDeletionTasks();
+
+                int? currentEmp = GetSelectedEmployeeId();
+                if (currentEmp != null) LoadCertificates(currentEmp.Value);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error rejecting deletion: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void btnApproveAck_Click(object sender, EventArgs e)
+        {
+            // Changed to check CurrentRow instead of SelectedRows
+            if (dgvPendingAcks.CurrentRow == null)
+            {
+                MessageBox.Show("Please select a record to approve.", "Selection Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Grab the row the user is currently clicked into
+            DataGridViewRow selectedRow = dgvPendingAcks.CurrentRow;
+
+            int ackId = Convert.ToInt32(selectedRow.Cells["CertificateID"].Value);
+
+            // Grab the typed-in Trainer Name (if any)
+            string trainerName = selectedRow.Cells["trainername"].Value?.ToString() ?? "";
+
+            var confirm = MessageBox.Show(
+                "Are you sure you want to approve this training record? This will digitally sign it as Completed.",
+                "Confirm Approval",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Information);
+
+            if (confirm == DialogResult.Yes)
+            {
+                try
+                {
+                    // Note: Make sure this uses CertificateService!
+                    CertificateService.ApproveCertificate(ackId, trainerName);
+                    MessageBox.Show("Record Approved Successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                    LoadPendingApprovals(); // Refresh the grid
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error approving record: {ex.Message}");
+                }
+            }
+        }
+
+        private async void btnRejectAck_Click(object sender, EventArgs e)
+        {
+            // Changed to check CurrentRow
+            if (dgvPendingAcks.CurrentRow == null)
+            {
+                MessageBox.Show("Please select a record to reject.", "Selection Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Grab the row the user is currently clicked into
+            DataGridViewRow selectedRow = dgvPendingAcks.CurrentRow;
+
+            int certId = Convert.ToInt32(selectedRow.Cells["CertificateID"].Value);
+            string topic = selectedRow.Cells["trainingtopic"].Value?.ToString() ?? "Unknown";
+            string? s3Key = selectedRow.Cells["FileLink"].Value?.ToString();
+
+            var confirm = MessageBox.Show(
+                $"Are you sure you want to REJECT and DELETE the pending certificate for '{topic}'?",
+                "Confirm Rejection",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (confirm == DialogResult.Yes)
+            {
+                try
+                {
+                    // 1. Delete the bad file from the S3 Cloud
+                    if (!string.IsNullOrEmpty(s3Key))
+                    {
+                        await S3Service.DeleteCertificateAsync(s3Key);
+                    }
+
+                    // 2. Delete the record from the database
+                    CertificateService.DeleteCertificate(certId);
+
+                    MessageBox.Show("Record Rejected and Deleted Successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                    LoadPendingApprovals(); // Refresh the grid
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error rejecting record: {ex.Message}");
+                }
+            }
+        }
+
 
         // Events
         private void dgvEmployees_SelectionChanged(object sender, EventArgs e)
         {
+            // Prevent infinite loop if we are currently syncing from the ComboBox
+            if (_isSyncingSelection) return;
+
             if (dgvEmployees.CurrentRow != null)
             {
                 var empIdObj = dgvEmployees.CurrentRow.Cells["EmployeeID"].Value;
@@ -997,20 +1316,24 @@ namespace EmployeeTrainingTracker
 
                 if (userIdObj != null && userIdObj != DBNull.Value)
                 {
-                    int userId = Convert.ToInt32(userIdObj);
-
-                    // Load employee + user details directly from DataGridView (faster than requerying DB)
+                    // Load employee details into textboxes
+                    txtFullName.Text = dgvEmployees.CurrentRow.Cells["FullName"].Value?.ToString();
                     txtUsername.Text = dgvEmployees.CurrentRow.Cells["Email"].Value?.ToString();
                     cmbRole.SelectedItem = dgvEmployees.CurrentRow.Cells["Role"].Value?.ToString();
                     cmbDept.Text = dgvEmployees.CurrentRow.Cells["Department"].Value?.ToString();
                     txtJobTitle.Text = dgvEmployees.CurrentRow.Cells["JobTitle"].Value?.ToString();
 
-                    // If EmployeeID exists, load certificates
                     if (empIdObj != null && empIdObj != DBNull.Value)
                     {
                         int empId = Convert.ToInt32(empIdObj);
                         string fullName = dgvEmployees.CurrentRow.Cells["FullName"].Value?.ToString() ?? "Unknown";
                         SetCurrentEmployeeName(fullName);
+
+                        // TURN ON THE FLAG before changing the ComboBox
+                        _isSyncingSelection = true;
+                        cmbCurrentEmployee.SelectedValue = empId; // This syncs the dropdown!
+                        _isSyncingSelection = false; // TURN IT OFF
+
                         LoadCertificates(empId);
                         tabCertificates.Enabled = true;
                     }
@@ -1023,7 +1346,6 @@ namespace EmployeeTrainingTracker
                 }
                 else
                 {
-                    // No valid user selected
                     ClearEmployeeInputs();
                     dgvCertificates.DataSource = null;
                     tabCertificates.Enabled = false;
@@ -1035,7 +1357,6 @@ namespace EmployeeTrainingTracker
                 tabCertificates.Enabled = false;
             }
 
-            // Update certificate buttons (add/edit/delete)
             UpdateCertificateButtons();
         }
 
@@ -1050,7 +1371,7 @@ namespace EmployeeTrainingTracker
                 dtpIssueDate.Value = DateTime.Today;
                 dtpExpiryDate.Value = DateTime.Today;
                 txtFilePath.Text = "";
-                chkAddToTrainingFolder.Checked = false; // reset when nothing selected
+                //chkAddToTrainingFolder.Checked = false; // reset when nothing selected
                 return;
             }
 
@@ -1075,7 +1396,6 @@ namespace EmployeeTrainingTracker
 
             txtFilePath.Text = rowView["FilePath"]?.ToString() ?? "";
 
-            // NEW SECTION: check if the training record already exists in legacy Excel
             try
             {
                 // Make sure your DataTable contains EmployeeID or similar identifier
@@ -1084,46 +1404,70 @@ namespace EmployeeTrainingTracker
                     int employeeId = Convert.ToInt32(rowView["EmployeeID"]);
                     string certName = txtCertName.Text;
 
-                    bool exists = LegacyExcelService.TrainingRecordExists(employeeId, certName);
-                    chkAddToTrainingFolder.Checked = exists;
-                }
-                else
-                {
-                    // If no EmployeeID in table, just default to unchecked
-                    chkAddToTrainingFolder.Checked = false;
                 }
             }
             catch (Exception ex)
             {
-                chkAddToTrainingFolder.Checked = false;
                 Console.WriteLine($"Error checking Excel: {ex.Message}");
             }
         }
 
         private void cmbCurrentEmployee_SelectedIndexChanged(object sender, EventArgs e)
         {
+            // Prevent infinite loop if we are currently syncing from the DataGridView
+            if (_isSyncingSelection) return;
+
             if (cmbCurrentEmployee.SelectedItem == null) return;
 
             if (cmbCurrentEmployee.SelectedItem is DataRowView drv)
             {
                 int empId = Convert.ToInt32(drv["EmployeeID"]);
-                LoadCertificates(empId);
-                SyncDgvSelection(empId);
+
+                if (empId == 0)
+                {
+                    // "All Employees" is selected
+                    SetCurrentEmployeeName("All Employees");
+                    LoadCertificates(0);
+
+                    // Turn on flag, clear grid selection, turn off flag
+                    _isSyncingSelection = true;
+                    dgvEmployees.ClearSelection();
+                    _isSyncingSelection = false;
+                }
+                else
+                {
+                    // Specific employee selected
+                    SetCurrentEmployeeName(drv["FullName"].ToString());
+                    LoadCertificates(empId);
+
+                    // Turn on flag, update grid selection, turn off flag
+                    _isSyncingSelection = true;
+                    SyncDgvSelection(empId);
+                    _isSyncingSelection = false;
+                }
+
+                // Enable/Disable buttons
+                bool employeeSelected = (empId != 0);
+                btnEdit.Enabled = employeeSelected;
+                btnDelete.Enabled = employeeSelected;
+
+                tabCertificates.Enabled = true;
             }
         }
 
-        private void cbManager_SelectedIndexChanged(object sender, EventArgs e)
+
+
+        private void cbManager_SelectedIndexChanged(object? sender, EventArgs e)
         {
             if (_loadingManagerCombo) return; // skip if combo is still loading
-            if (dgvGroups.SelectedRows.Count == 0) return;
+            if (!HasSavedGroupSelected()) return;
             if (cbManager.SelectedValue == null) return;
 
             int groupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
             int newManagerId = Convert.ToInt32(cbManager.SelectedValue);
 
             // Update DB
-            GroupHelper.UpdateGroup(
-                DatabaseHelper.ConnectionString,
+            GroupService.UpdateGroup(
                 groupId,
                 dgvGroups.SelectedRows[0].Cells["GroupName"].Value.ToString(),
                 dgvGroups.SelectedRows[0].Cells["Description"].Value.ToString(),
@@ -1164,60 +1508,18 @@ namespace EmployeeTrainingTracker
         }
 
         private void dgvCertificates_CellContentClick(object sender, DataGridViewCellEventArgs e)
-        {
-            // Ignore header clicks or invalid clicks
-            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            => DashboardHelper.FileLinkCellClick(sender, e);
 
-            // Only handle clicks on the FileLink column
-            if (dgvCertificates.Columns[e.ColumnIndex].Name != "FileLink")
-                return;
-
-            if (dgvCertificates.Rows[e.RowIndex].DataBoundItem is not DataRowView rowView)
-                return;
-
-            string? path = rowView["FilePath"]?.ToString()?.Trim('"').Trim();
-
-            if (string.IsNullOrEmpty(path))
-            {
-                MessageBox.Show("No file linked for this certificate.");
-                return;
-            }
-
-            // Allowed extensions
-            string[] allowedExtensions = { ".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx" };
-            string ext = System.IO.Path.GetExtension(path).ToLower();
-
-            if (!System.IO.File.Exists(path))
-            {
-                MessageBox.Show($"File not found:\n{path}");
-                return;
-            }
-
-            if (!allowedExtensions.Contains(ext))
-            {
-                MessageBox.Show($"Unsupported file type: {ext}");
-                return;
-            }
-
-            try
-            {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = path,
-                    UseShellExecute = true
-                });
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Could not open file:\n{ex.Message}");
-            }
-        }
+        private void dgvCertificates_DataBindingComplete(object sender, DataGridViewBindingCompleteEventArgs e)
+            => DashboardHelper.ApplyStandardRowStyling((DataGridView)sender);
 
         private void UpdateCertificateButtons()
         {
-            // Always enable all certificate buttons if an employee is selected
-            bool employeeSelected = dgvEmployees.CurrentRow != null;
-            btnAdd.Enabled = employeeSelected;
+            // Check if an employee is selected in the grid AND the dropdown is NOT set to "All" (0)
+            bool employeeSelected = dgvEmployees.CurrentRow != null &&
+                                    cmbCurrentEmployee.SelectedValue != null &&
+                                    Convert.ToInt32(cmbCurrentEmployee.SelectedValue) != 0;
+
             btnEdit.Enabled = employeeSelected;
             btnDelete.Enabled = employeeSelected;
         }
@@ -1269,27 +1571,50 @@ namespace EmployeeTrainingTracker
 
         private void dgvGroups_SelectionChanged(object sender, EventArgs e)
         {
-            if (dgvGroups.SelectedRows.Count == 0) return;
+            try
+            {
+                if (dgvGroups.SelectedRows.Count == 0) return;
 
-            int groupId = Convert.ToInt32(dgvGroups.SelectedRows[0].Cells["GroupID"].Value);
+                var selected = dgvGroups.SelectedRows[0];
+                if (selected.IsNewRow || selected.Cells["GroupID"].Value == null || selected.Cells["GroupID"].Value == DBNull.Value)
+                {
+                    // "New department" row: clear the form so a fresh department can be typed in
+                    _loadingManagerCombo = true;
+                    txtGroupName.Clear();
+                    txtDescription.Clear();
+                    dgvGroupMembers.DataSource = null;
+                    cbManager.DataSource = null;
+                    cmbPotentialMembers.DataSource = null;
+                    _loadingManagerCombo = false;
+                    txtGroupName.Focus();
+                    return;
+                }
 
-            // Load members for the selected group
-            LoadGroupMembers(groupId);
+                int groupId = Convert.ToInt32(selected.Cells["GroupID"].Value);
 
-            // Populate group details
-            var row = dgvGroups.SelectedRows[0];
-            txtGroupName.Text = row.Cells["GroupName"].Value.ToString();
-            txtDescription.Text = row.Cells["Description"].Value.ToString();
+                LoadGroupMembers(groupId); // Your log message
 
-            // Populate manager ComboBox with current group members
-            PopulateManagerComboBox(groupId, row.Cells["ManagerID"].Value);
+                var row = dgvGroups.SelectedRows[0];
+                txtGroupName.Text = row.Cells["GroupName"].Value.ToString();
+                txtDescription.Text = row.Cells["Description"].Value.ToString();
+
+                // --- APPLY THIS CHANGE ---
+                _loadingManagerCombo = true;
+                PopulateManagerComboBox(groupId, row.Cells["ManagerID"].Value);
+                _loadingManagerCombo = false;
+
+                LoadAvailableMembersForGroup(groupId);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"An error occurred while selecting the group:\n\n{ex.Message}\n\n{ex.StackTrace}",
+                                "Event Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void PopulateManagerComboBox(int groupId, object currentManagerId)
         {
-
-            _loadingManagerCombo = true;
-            DataTable dtMembers = GroupHelper.GetMembersByGroup(DatabaseHelper.ConnectionString, groupId);
+            DataTable dtMembers = GroupService.GetMembersByGroup(groupId);
 
             cbManager.DataSource = dtMembers;
             cbManager.DisplayMember = "FullName";
@@ -1300,12 +1625,13 @@ namespace EmployeeTrainingTracker
                 cbManager.SelectedValue = Convert.ToInt32(currentManagerId);
             else
                 cbManager.SelectedIndex = -1;
-
-            // Handle selection change event to update manager in DB
-            cbManager.SelectedIndexChanged -= cbManager_SelectedIndexChanged;
-            cbManager.SelectedIndexChanged += cbManager_SelectedIndexChanged;
-            _loadingManagerCombo = false;
         }
+
+        private void dgvPendingAcks_CellContentClick(object sender, DataGridViewCellEventArgs e)
+            => DashboardHelper.FileLinkCellClick(sender, e);
+
+        private void dgvPendingAcks_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+            => DashboardHelper.FileLinkCellFormatting(sender, e);
 
 
         // Helper Functions
@@ -1334,16 +1660,6 @@ namespace EmployeeTrainingTracker
 
         }
 
-        private string EscapeCsvValue(string value)
-        {
-            if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
-            {
-                value = value.Replace("\"", "\"\"");
-                value = $"\"{value}\"";
-            }
-            return value;
-        }
-
         private List<int> GetSelectedEmployees()
         {
             var selectedIds = new List<int>();
@@ -1355,7 +1671,7 @@ namespace EmployeeTrainingTracker
                     if (empItem.IsGroup)
                     {
                         // Add all members of the group
-                        var members = GroupHelper.GetMembersByGroup(DatabaseHelper.ConnectionString, empItem.Id)
+                        var members = GroupService.GetMembersByGroup(empItem.Id)
                                                  .AsEnumerable()
                                                  .Select(r => Convert.ToInt32((long)r["EmployeeID"]))
                                                  .ToList();
@@ -1371,6 +1687,123 @@ namespace EmployeeTrainingTracker
             return selectedIds.Distinct().ToList(); // remove duplicates in case multiple groups overlap
         }
 
+        private void dgvTasks_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+            => DashboardHelper.FileLinkCellFormatting(sender, e);
+
+        private void dgvTasks_CellContentClick(object sender, DataGridViewCellEventArgs e)
+            => DashboardHelper.FileLinkCellClick(sender, e);
+
+        private void dgvCertificates_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+            => DashboardHelper.FileLinkCellFormatting(sender, e);
+
+        private void btnExportHTSF13_Click(object sender, EventArgs e)
+        {
+            // 1. Ensure an employee is selected
+            int? currentEmployeeId = GetSelectedEmployeeId();
+            if (currentEmployeeId == null || currentEmployeeId == 0)
+            {
+                MessageBox.Show("Please select a specific employee to generate their record.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // 2. Locate your blank template file 
+            // (Put your blank template in the same folder as your .exe, or hardcode your desktop path here if preferred)
+            string templatePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "HTSF13_Template.xlsx");
+
+            if (!System.IO.File.Exists(templatePath))
+            {
+                MessageBox.Show($"Could not find the blank template file at:\n{templatePath}", "Template Missing", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            // 3. Ask the user where they want to save the new file
+            using (SaveFileDialog sfd = new SaveFileDialog())
+            {
+                sfd.Filter = "Excel Workbook (*.xlsx)|*.xlsx";
+                sfd.FileName = $"{currentEmployeeName.Replace(" ", "_")}_HTSF13_Record_{DateTime.Now:yyyyMMdd}.xlsx";
+                sfd.Title = "Save HTSF13 Record";
+
+                if (sfd.ShowDialog() == DialogResult.OK)
+                {
+                    try
+                    {
+                        // Generate!
+                        LegacyExcelService.GenerateHTSF13(currentEmployeeId.Value, currentEmployeeName, templatePath, sfd.FileName);
+
+                        MessageBox.Show("HTSF13 Record generated successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                        // Open the file immediately so they can see it
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = sfd.FileName,
+                            UseShellExecute = true
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Error generating Excel file:\n{ex.Message}", "Export Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
+        }
+
+        private void btnExportAllHTSF13_Click(object sender, EventArgs e)
+        {
+            string templatePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "HTSF13_Template.xlsx");
+
+            if (!System.IO.File.Exists(templatePath))
+            {
+                MessageBox.Show($"Could not find the template at:\n{templatePath}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            using (FolderBrowserDialog fbd = new FolderBrowserDialog())
+            {
+                fbd.Description = "Select a folder to save ALL company HTSF13 Records";
+
+                if (fbd.ShowDialog() == DialogResult.OK)
+                {
+                    string saveFolder = fbd.SelectedPath;
+
+                    try
+                    {
+                        // ADMIN SETTINGS: Set to true so it grabs the entire company!
+                        bool isAdmin = true;
+                        int dummyUserId = 0; // The query ignores this when isAdmin is true
+
+                        DataTable employeesToExport = LegacyExcelService.GetEmployeesForExport(dummyUserId, isAdmin);
+
+                        if (employeesToExport.Rows.Count == 0)
+                        {
+                            MessageBox.Show("No employees found in the database.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            return;
+                        }
+
+                        int count = 0;
+
+                        foreach (DataRow row in employeesToExport.Rows)
+                        {
+                            int empId = Convert.ToInt32(row["EmployeeID"]);
+                            string empName = row["FullName"].ToString();
+                            string safeName = empName.Replace(" ", "_");
+
+                            string savePath = System.IO.Path.Combine(saveFolder, $"{safeName}_HTSF13_{DateTime.Now:yyyyMMdd}.xlsx");
+
+                            LegacyExcelService.GenerateHTSF13(empId, empName, templatePath, savePath);
+                            count++;
+                        }
+
+                        MessageBox.Show($"Success! Generated {count} HTSF13 records.", "Export Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                        System.Diagnostics.Process.Start("explorer.exe", saveFolder);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"A bulk export error occurred:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
+        }
     }
 
 }

@@ -1,8 +1,9 @@
-﻿using System;
-using System.Data;
-using Microsoft.Data.Sqlite;
-using System.Windows.Forms;
+﻿using EmployeeTrainingTracker.Helpers;
 using EmployeeTrainingTracker.Utilities;
+using Npgsql;
+using System;
+using System.Data;
+using System.Windows.Forms;
 
 namespace EmployeeTrainingTracker
 {
@@ -13,123 +14,151 @@ namespace EmployeeTrainingTracker
         public EmployeeDashboard(int empId)
         {
             InitializeComponent();
+            ResponsiveScaler.Attach(this);
             employeeId = empId;
-            LoadCertificates(employeeId);
 
-            // Style the DGV
-            UIHelpers.StyleDataGridView(dataGridView1);
+        }
 
-            // Rename the columns after DataSource is assigned
-            UIHelpers.RenameColumns(dataGridView1);
+        private void EmployeeDashboard_Load(object sender, EventArgs e)
+        {
+            try
+            {
+                dataGridView1.DataBindingComplete += DataGridView1_DataBindingComplete;
+                dataGridView1.CellFormatting += dataGridView1_CellFormatting;
+
+                // Show the employee's real department(s), same source as the Admin/Manager grids
+                this.Text = $"Employee Dashboard - {GroupService.GetEmployeeDepartmentNames(employeeId)}";
+
+                LoadCertificates(employeeId);
+                LoadPlannedTraining(employeeId);
+
+                UIHelpers.StyleDataGridView(dataGridView1);
+                UIHelpers.RenameColumns(dataGridView1);
+                UIHelpers.StyleDataGridView(dgvPlannedTraining);
+                UIHelpers.RenameColumns(dgvPlannedTraining);
+
+                dataGridView1.DataBindingComplete += DataGridView1_DataBindingComplete;
+                dataGridView1.CellFormatting += dataGridView1_CellFormatting;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"A critical error occurred while loading your dashboard:\n\n{ex.Message}\n\n{ex.StackTrace}",
+                                "Load Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                this.Close();
+            }
         }
 
         // Load certificates for the employee
         private void LoadCertificates(int employeeId)
         {
             DataTable table = CertificateService.GetCertificates(employeeId);
+            DashboardHelper.BindCertificates(dataGridView1, table, includeDeletionFlagColumn: true, sortPendingDeletionLast: true);
+        }
 
-            dataGridView1.Columns.Clear();
-            dataGridView1.AutoGenerateColumns = false;
-
-            // Hidden ID column (needed for editing/deleting)
-            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "CertificateID",
-                DataPropertyName = "CertificateID",
-                HeaderText = "ID",
-                Visible = false
-            });
-
-            // Certificate Name
-            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "CertificateName",
-                DataPropertyName = "CertificateName",
-                HeaderText = "Certificate Name"
-            });
-
-            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "Key",
-                DataPropertyName = "Key",
-                HeaderText = "Training Key"
-            });
-
-            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "HRS",
-                DataPropertyName = "HRS",
-                HeaderText = "CPD Hrs"
-            });
-
-            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "Provider",
-                DataPropertyName = "Provider",
-                HeaderText = "Provider"
-            });
-
-            // Issue Date
-            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "IssueDate",
-                DataPropertyName = "IssueDate",
-                HeaderText = "Issue Date"
-            });
-
-            // Expiry Date
-            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "ExpiryDate",
-                DataPropertyName = "ExpiryDate",
-                HeaderText = "Expiry Date"
-            });
-
-            // FileLink
-            dataGridView1.Columns.Add(new DataGridViewLinkColumn
-            {
-                Name = "FileLink",
-                DataPropertyName = "FilePath",
-                HeaderText = "Certificate File",
-                TrackVisitedState = true,
-                UseColumnTextForLinkValue = false,
-                Width = 200
-            });
-
-            // Last Notified
-            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "LastNotifiedDate",
-                DataPropertyName = "LastNotifiedDate",
-                HeaderText = "Last Notified"
-            });
-
-            // Bind DataSource last
-            dataGridView1.DataSource = table;
-
-            // Apply consistent styling
-            UIHelpers.StyleDataGridView(dataGridView1);
-        }  
-
-        private void btnAdd_Click(object sender, EventArgs e)
+        private void LoadPlannedTraining(int employeeId)
         {
-            string certName = txtCertName.Text.Trim();
-            string key = txtKey.Text.Trim();
-            double.TryParse(txtHrs.Text.Trim(), out double hrs);
-            string provider = txtProvider.Text.Trim();
-            DateTime issueDate = dtpIssueDate.Value;
-            DateTime expiryDate = dtpExpiryDate.Value;
-            string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim()) ? null : txtFilePath.Text.Trim('"').Trim();
+            // 1. Define the SQL Query
+            // We join TrainingSessions to TrainingParticipants and filter by the employeeId.
+            string sql = @"
+        SELECT
+            ts.SessionID,
+            ts.CertificateName,
+            ts.HRS,
+            ts.Provider,
+            ts.PlannedDate,
+            ts.Status,
+            ts.Notes
+        FROM public.TrainingSessions ts
+        INNER JOIN public.TrainingParticipants tp ON ts.SessionID = tp.SessionID
+        WHERE tp.EmployeeID = @EmployeeID
+        ORDER BY ts.PlannedDate;";
 
-            if (string.IsNullOrEmpty(certName))
+            DataTable table = new DataTable();
+
+            try
             {
-                MessageBox.Show("Certificate name is required.");
-                return;
-            }
+                // 2. Execute the Query
+                using (var conn = DatabaseHelper.GetConnection())
+                {
+                    conn.Open();
+                    using (var cmd = new NpgsqlCommand(sql, conn))
+                    {
+                        // Add the parameter for the logged-in employee ID
+                        cmd.Parameters.AddWithValue("EmployeeID", employeeId);
 
-            CertificateService.AddCertificate(employeeId, certName, key, hrs, provider, issueDate, expiryDate, filePath);
-            LoadCertificates(employeeId);
-            ClearInputs();
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            table.Load(reader);
+                        }
+                    }
+                }
+
+                // 3. Configure the DataGridView
+                dgvPlannedTraining.Columns.Clear();
+                dgvPlannedTraining.AutoGenerateColumns = false;
+                dgvPlannedTraining.DataSource = table;
+
+                // Add Columns (Match the SELECT statement aliases)
+                dgvPlannedTraining.Columns.Add(new DataGridViewTextBoxColumn { Name = "SessionID", DataPropertyName = "SessionID", HeaderText = "ID", Visible = false });
+                dgvPlannedTraining.Columns.Add(new DataGridViewTextBoxColumn { Name = "CertificateName", DataPropertyName = "CertificateName", HeaderText = "Training Name", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
+                dgvPlannedTraining.Columns.Add(new DataGridViewTextBoxColumn { Name = "HRS", DataPropertyName = "HRS", HeaderText = "CPD Hrs" });
+                dgvPlannedTraining.Columns.Add(new DataGridViewTextBoxColumn { Name = "Provider", DataPropertyName = "Provider", HeaderText = "Provider" });
+                dgvPlannedTraining.Columns.Add(new DataGridViewTextBoxColumn { Name = "PlannedDate", DataPropertyName = "PlannedDate", HeaderText = "Planned Date" });
+                dgvPlannedTraining.Columns.Add(new DataGridViewTextBoxColumn { Name = "Status", DataPropertyName = "Status", HeaderText = "Status" });
+                dgvPlannedTraining.Columns.Add(new DataGridViewTextBoxColumn { Name = "Notes", DataPropertyName = "Notes", HeaderText = "Notes", Visible = false });
+
+                // Apply consistent styling (assuming UIHelpers.StyleDataGridView exists)
+                UIHelpers.StyleDataGridView(dgvPlannedTraining);
+                UIHelpers.RenameColumns(dgvPlannedTraining); // If you still want to run your renaming utility
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading planned training sessions:\n{ex.Message}", "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private async void btnUpload_Click(object sender, EventArgs e)
+        {
+            using (OpenFileDialog ofd = new OpenFileDialog())
+            {
+                ofd.Filter = "PDF Files (*.pdf)|*.pdf|Image Files (*.jpg;*.png)|*.jpg;*.png|All Files (*.*)|*.*";
+                ofd.Title = "Select a Certificate to Upload";
+
+                if (ofd.ShowDialog() == DialogResult.OK)
+                {
+                    string localFilePath = ofd.FileName;
+
+                    string certName = txtCertName.Text.Trim();
+                    string key = string.IsNullOrWhiteSpace(txtKey.Text) ? string.Empty : txtKey.Text.Trim()[0].ToString();
+                    double.TryParse(txtHrs.Text.Trim(), out double hrs);
+                    string provider = txtProvider.Text.Trim();
+                    DateTime issueDate = dtpIssueDate.Value.Date;
+                    DateTime expiryDate = dtpExpiryDate.Value.Date;
+
+                    if (string.IsNullOrEmpty(certName))
+                    {
+                        MessageBox.Show("Please enter a name for the certificate.");
+                        return;
+                    }
+
+                    // We pass an empty string for the name because the employee dashboard doesn't track it.
+                    // S3Service will automatically default to "Unknown_123/file.pdf", which works perfectly!
+                    bool success = await CertificateService.SaveCertificateAsync(
+                        employeeId, "", certName, localFilePath,
+                        issueDate, expiryDate, key, hrs, provider);
+
+                    if (success)
+                    {
+                        MessageBox.Show("Certificate successfully uploaded to the cloud!");
+                        LoadCertificates(employeeId);
+                        ClearInputs();
+                    }
+                    else
+                    {
+                        MessageBox.Show("Upload failed. Please try again.");
+                    }
+                }
+            }
         }
 
         private void btnEdit_Click(object sender, EventArgs e)
@@ -142,51 +171,73 @@ namespace EmployeeTrainingTracker
 
             int certId = Convert.ToInt32(dataGridView1.CurrentRow.Cells["CertificateID"].Value);
             string certName = txtCertName.Text.Trim();
-            string key = txtKey.Text.Trim();
+            string key = string.IsNullOrWhiteSpace(txtKey.Text)
+                ? string.Empty
+                : txtKey.Text.Trim()[0].ToString();
             double.TryParse(txtHrs.Text.Trim(), out double hrs);
             string provider = txtProvider.Text.Trim();
-            DateTime issueDate = dtpIssueDate.Value;
-            DateTime expiryDate = dtpExpiryDate.Value;
-            string? filePath = string.IsNullOrEmpty(txtFilePath.Text.Trim()) ? null : txtFilePath.Text.Trim('"').Trim();
 
-            CertificateService.UpdateCertificate(certId, certName, key, hrs, provider, issueDate, expiryDate, filePath);
+            // Check dates before processing
+            if (dtpExpiryDate.Checked && dtpExpiryDate.Value.Date < dtpIssueDate.Value.Date)
+            {
+                MessageBox.Show("Expiry Date cannot be earlier than Issue Date.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            DateTime issueDate = dtpIssueDate.Value.Date;
+            DateTime? expiryDate = dtpExpiryDate.Checked ? dtpExpiryDate.Value.Date : null;
+
+            // UPDATE THIS LINE to just pass null at the end instead of filePath:
+            CertificateService.UpdateCertificate(certId, certName, key, hrs, provider, issueDate, expiryDate, null);
+
+
             LoadCertificates(employeeId);
             ClearInputs();
         }
 
-        private void btnDelete_Click(object sender, EventArgs e)
+        private void btnRequestDelete_Click(object sender, EventArgs e)
         {
             if (dataGridView1.CurrentRow == null)
             {
-                MessageBox.Show("Please select a certificate to delete.");
+                MessageBox.Show("Please select a certificate.");
                 return;
             }
 
             int certId = Convert.ToInt32(dataGridView1.CurrentRow.Cells["CertificateID"].Value);
+            bool isMarked = false;
 
-            var confirm = MessageBox.Show("Are you sure you want to delete this certificate?", "Confirm", MessageBoxButtons.YesNo);
-            if (confirm == DialogResult.No) return;
+            // Check the current status of the selected row
+            if (dataGridView1.CurrentRow.DataBoundItem is DataRowView rowView &&
+                rowView.Row.Table.Columns.Contains("ismarkedfordeletion"))
+            {
+                isMarked = rowView["ismarkedfordeletion"] != DBNull.Value &&
+                           Convert.ToBoolean(rowView["ismarkedfordeletion"]);
+            }
 
-            CertificateService.DeleteCertificate(certId);
+            if (isMarked)
+            {
+                // Execute Revoke Logic
+                var confirm = MessageBox.Show("Cancel your deletion request and keep this certificate?", "Revoke Request", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                if (confirm == DialogResult.No) return;
+
+                CertificateService.UnmarkCertificateForDeletion(certId);
+                MessageBox.Show("Deletion request revoked. The certificate is active again.");
+            }
+            else
+            {
+                // Execute Deletion Request Logic
+                var confirm = MessageBox.Show("Request manager approval to delete this certificate?", "Confirm Request", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (confirm == DialogResult.No) return;
+
+                CertificateService.MarkCertificateForDeletion(certId);
+                MessageBox.Show("Certificate flagged for deletion. It will be removed once a manager approves.");
+            }
+
+            // Refresh UI
             LoadCertificates(employeeId);
             ClearInputs();
         }
 
-        private void btnBrowseFile_Click(object sender, EventArgs e)
-        {
-            using (OpenFileDialog ofd = new OpenFileDialog())
-            {
-                ofd.Title = "Select Report File";
-                ofd.Filter = "PDF Files (*.pdf)|*.pdf|Excel Files (*.xlsx;*.xls)|*.xlsx;*.xls|CSV Files (*.csv)|*.csv|All Files (*.*)|*.*";
-                ofd.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                ofd.RestoreDirectory = true;
-
-                if (ofd.ShowDialog() == DialogResult.OK)
-                {
-                    txtFilePath.Text = ofd.FileName;
-                }
-            }
-        }
 
         private void ClearInputs()
         {
@@ -194,58 +245,36 @@ namespace EmployeeTrainingTracker
             txtKey.Text = "";
             txtHrs.Text = "";
             txtProvider.Text = "";
-            txtFilePath.Text = "";
             dtpIssueDate.Value = DateTime.Today;
             dtpExpiryDate.Value = DateTime.Today;
         }
 
         // Events
-
         private void dataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e)
-        {
-            if (e.RowIndex < 0) return;
-
-            if (dataGridView1.Columns[e.ColumnIndex].Name == "FileLink")
-            {
-                string? path = dataGridView1.Rows[e.RowIndex].Cells["FilePath"].Value?.ToString();
-
-                if (!string.IsNullOrEmpty(path))
-                {
-                    // Remove any surrounding quotes
-                    path = path.Trim('"');
-
-                    if (System.IO.File.Exists(path))
-                    {
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = path,
-                            UseShellExecute = true
-                        });
-                    }
-                    else
-                    {
-                        MessageBox.Show($"File not found:\n{path}");
-                    }
-                }
-            }
-        }
+            => DashboardHelper.FileLinkCellClick(sender, e);
 
         private void dataGridView1_SelectionChanged(object sender, EventArgs e)
         {
             if (dataGridView1.CurrentRow == null || dataGridView1.CurrentRow.IsNewRow)
             {
+                // Reset inputs
                 txtCertName.Text = "";
                 txtKey.Text = "";
                 txtHrs.Text = "";
                 txtProvider.Text = "";
                 dtpIssueDate.Value = DateTime.Today;
                 dtpExpiryDate.Value = DateTime.Today;
-                txtFilePath.Text = "";
+
+                // DELETED: txtFilePath.Text = ""; <-- This was causing the crash!
+
+                // Reset Button
+                btnRequestDelete.Text = "Request Deletion";
                 return;
             }
 
             if (dataGridView1.CurrentRow.DataBoundItem is not DataRowView rowView) return;
 
+            // Populate inputs
             txtCertName.Text = rowView["CertificateName"]?.ToString() ?? "";
             txtKey.Text = rowView["Key"]?.ToString() ?? "";
             txtHrs.Text = rowView["HRS"]?.ToString() ?? "";
@@ -261,9 +290,24 @@ namespace EmployeeTrainingTracker
             else
                 dtpExpiryDate.Value = DateTime.Today;
 
-            txtFilePath.Text = rowView["FilePath"]?.ToString() ?? "";
+            // DELETED: txtFilePath.Text = rowView["FilePath"]?.ToString() ?? ""; <-- This would have crashed too!
+
+            // TOGGLE BUTTON TEXT LOGIC
+            if (rowView.Row.Table.Columns.Contains("ismarkedfordeletion"))
+            {
+                bool isMarked = rowView["ismarkedfordeletion"] != DBNull.Value &&
+                                Convert.ToBoolean(rowView["ismarkedfordeletion"]);
+
+                btnRequestDelete.Text = isMarked ? "Revoke Deletion" : "Request Deletion";
+            }
         }
 
-        
+        private void dataGridView1_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+            => DashboardHelper.FileLinkCellFormatting(sender, e);
+
+        private void DataGridView1_DataBindingComplete(object sender, DataGridViewBindingCompleteEventArgs e)
+            => DashboardHelper.ApplyStandardRowStyling((DataGridView)sender);
+
+
     }
 }

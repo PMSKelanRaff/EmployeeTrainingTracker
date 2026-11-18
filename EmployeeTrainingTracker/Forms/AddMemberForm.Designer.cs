@@ -28,6 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(AddMemberForm));
             dgvAvailable = new DataGridView();
             btnAdd = new Button();
             btnCancel = new Button();
@@ -70,6 +71,7 @@
             Controls.Add(btnCancel);
             Controls.Add(btnAdd);
             Controls.Add(dgvAvailable);
+            Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "AddMemberForm";
             Text = "AddMemberForm";
             ((System.ComponentModel.ISupportInitialize)dgvAvailable).EndInit();

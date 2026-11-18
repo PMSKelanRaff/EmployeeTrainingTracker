@@ -6,18 +6,40 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon>favicon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="EPPlus" Version="8.2.0" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.8" />
+    <Content Include="favicon.ico" />
+  </ItemGroup>
+
+  <!-- Keep the standalone DataExportTool console project out of this WinForms assembly's build -->
+  <ItemGroup>
+    <Compile Remove="Tools\**" />
+    <Content Remove="Tools\**" />
+    <None Remove="Tools\**" />
+    <EmbeddedResource Remove="Tools\**" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" Version="4.0.19" />
+    <PackageReference Include="EPPlus" Version="8.2.0" />
+    <PackageReference Include="Npgsql" Version="9.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Forms\ManagerDashboard.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Update="Properties\Resources.Designer.cs">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <Compile Update="Properties\Settings.Designer.cs">
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
     </Compile>
   </ItemGroup>
 
@@ -26,6 +48,22 @@
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+    <None Update="Resources\favicon.ico">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\HTSF13_Template.xlsx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

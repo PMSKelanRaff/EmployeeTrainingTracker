@@ -1,10 +1,11 @@
-﻿using System;
+﻿using EmployeeTrainingTracker.Helpers;
+using Npgsql; 
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.Data.Sqlite;
 
 namespace EmployeeTrainingTracker.Utilities
 {
@@ -12,15 +13,59 @@ namespace EmployeeTrainingTracker.Utilities
     {
         public static DataTable GetCertificates(int employeeId)
         {
-            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+            using var conn = DatabaseHelper.GetConnection();
             conn.Open();
 
-            using var cmd = new SqliteCommand(@"
-                  SELECT CertificateID, CertificateName, Key, HRS, Provider, IssueDate, ExpiryDate, FilePath, LastNotifiedDate
-                    FROM TrainingCertificates
-                    WHERE EmployeeID = @id", conn);
+            NpgsqlCommand cmd;
 
-            cmd.Parameters.AddWithValue("@id", employeeId);
+            if (employeeId == 0)
+            {
+                // "All Employees" - Added tc.status!
+                cmd = new NpgsqlCommand(@"
+            SELECT 
+                tc.CertificateID, 
+                tc.CertificateName, 
+                tc.Key, 
+                tc.HRS, 
+                tc.Provider, 
+                tc.IssueDate, 
+                tc.ExpiryDate, 
+                tc.FilePath, 
+                tc.S3Key, 
+                tc.LastNotifiedDate, 
+                tc.ismarkedfordeletion, 
+                tc.status, 
+                COALESCE(e.FullName, 'Unknown') AS EmployeeName    
+            FROM TrainingCertificates tc
+            LEFT JOIN Employees e ON tc.EmployeeID = e.EmployeeID
+            WHERE NOT COALESCE(e.IsArchived, FALSE)    -- archived employees' certificates are kept but not listed here
+            ORDER BY e.FullName ASC, tc.IssueDate DESC", conn);
+            }
+            else
+            {
+                // Specific Employee - Added tc.status!
+                cmd = new NpgsqlCommand(@"
+            SELECT 
+                tc.CertificateID, 
+                tc.CertificateName, 
+                tc.Key, 
+                tc.HRS, 
+                tc.Provider, 
+                tc.IssueDate, 
+                tc.ExpiryDate, 
+                tc.FilePath, 
+                tc.S3Key, 
+                tc.LastNotifiedDate, 
+                tc.ismarkedfordeletion, 
+                tc.status, 
+                COALESCE(e.FullName, 'Unknown') AS EmployeeName    
+            FROM TrainingCertificates tc    
+            LEFT JOIN Employees e ON tc.EmployeeID = e.EmployeeID    
+            WHERE tc.EmployeeID = $1    
+            ORDER BY tc.IssueDate DESC", conn);
+
+                cmd.Parameters.AddWithValue(employeeId);
+            }
 
             using var reader = cmd.ExecuteReader();
             DataTable table = new DataTable();
@@ -28,68 +73,297 @@ namespace EmployeeTrainingTracker.Utilities
             return table;
         }
 
-        public static void AddCertificate(int employeeId, string certName, string key, double cpdHrs, string provider, DateTime issueDate, DateTime expiryDate, string? filePath = null)
+        // Manager view - only certificates for employees in groups they manage.
+        // employeeId = 0 means "All Employees"; otherwise that employee must also be one of the manager's.
+        public static DataTable GetCertificatesForManager(int managerId, int employeeId = 0)
         {
-            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+            using var conn = DatabaseHelper.GetConnection();
             conn.Open();
 
-            using var cmd = new SqliteCommand(@"
+            using var cmd = new NpgsqlCommand(@"
+            SELECT
+                tc.CertificateID,
+                tc.CertificateName,
+                tc.Key,
+                tc.HRS,
+                tc.Provider,
+                tc.IssueDate,
+                tc.ExpiryDate,
+                tc.FilePath,
+                tc.S3Key,
+                tc.LastNotifiedDate,
+                tc.ismarkedfordeletion,
+                tc.status,
+                COALESCE(e.FullName, 'Unknown') AS EmployeeName
+            FROM TrainingCertificates tc
+            INNER JOIN Employees e ON tc.EmployeeID = e.EmployeeID
+            WHERE (tc.EmployeeID = @managerId    -- the manager's own certificates
+                   OR tc.EmployeeID IN (
+                       SELECT gm.EmployeeID
+                       FROM GroupMembers gm
+                       INNER JOIN Groups g ON gm.GroupID = g.GroupID
+                       WHERE g.ManagerID = @managerId))
+              AND (@employeeId = 0 OR tc.EmployeeID = @employeeId)
+            ORDER BY e.FullName ASC, tc.IssueDate DESC", conn);
+
+            cmd.Parameters.AddWithValue("managerId", managerId);
+            cmd.Parameters.AddWithValue("employeeId", employeeId);
+
+            using var reader = cmd.ExecuteReader();
+            DataTable table = new DataTable();
+            table.Load(reader);
+            return table;
+        }
+
+        public static async Task<bool> SaveCertificateAsync(
+        int employeeId, string employeeName, string certName, string localFilePath,
+        DateTime issueDate, DateTime expiryDate, string key, double? cpdHrs, string provider)
+        {
+            string fileName = Path.GetFileName(localFilePath);
+            string cleanName = string.IsNullOrWhiteSpace(employeeName) ? "Unknown" : employeeName.Replace(" ", "_");
+            string s3Key = $"{cleanName}_{employeeId}/{fileName}";
+
+            try
+            {
+                // 1. Upload to S3
+                bool s3Success = await S3Service.UploadCertificateAsync(localFilePath, s3Key);
+                if (!s3Success) return false;
+
+                // 2. Save EVERYTHING to PostgreSQL
+                using (var conn = DatabaseHelper.GetConnection())
+                {
+                    await conn.OpenAsync();
+                    const string sql = @"INSERT INTO TrainingCertificates 
+                                (EmployeeID, CertificateName, S3Key, IssueDate, ExpiryDate, Key, HRS, Provider, IsMarkedForDeletion) 
+                                VALUES (@empId, @name, @keyPath, @issue, @expiry, @key, @hrs, @provider, FALSE)";
+
+                    using (var cmd = new NpgsqlCommand(sql, conn))
+                    {
+                        cmd.Parameters.AddWithValue("empId", employeeId);
+                        cmd.Parameters.AddWithValue("name", certName);
+                        cmd.Parameters.AddWithValue("keyPath", s3Key);
+                        cmd.Parameters.Add(DatabaseHelper.DateParam(issueDate, "issue"));
+                        cmd.Parameters.Add(DatabaseHelper.DateParam(expiryDate, "expiry"));
+                        cmd.Parameters.AddWithValue("key", key ?? (object)DBNull.Value);
+                        cmd.Parameters.AddWithValue("hrs", cpdHrs ?? (object)DBNull.Value);
+                        cmd.Parameters.AddWithValue("provider", provider ?? (object)DBNull.Value);
+
+                        await cmd.ExecuteNonQueryAsync();
+                    }
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Windows.Forms.MessageBox.Show($"Upload Workflow Error: {ex.Message}");
+                return false;
+            }
+        }
+
+        public static void AddCertificate(int employeeId, string certName, string key, double cpdHrs, string provider, DateTime issueDate, DateTime? expiryDate, string? filePath = null)
+        {
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+
+            using var cmd = new NpgsqlCommand(@"
         INSERT INTO TrainingCertificates (EmployeeID, CertificateName, Key, HRS, Provider, IssueDate, ExpiryDate, FilePath)
-        VALUES (@eid, @name, @key, @hrs, @provider, @issue, @expiry, @file)", conn);
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)", conn);
 
-            cmd.Parameters.AddWithValue("@eid", employeeId);
-            cmd.Parameters.AddWithValue("@name", certName);
-            cmd.Parameters.AddWithValue("@key", string.IsNullOrEmpty(key) ? DBNull.Value : key);
-            cmd.Parameters.AddWithValue("@hrs", cpdHrs);
-            cmd.Parameters.AddWithValue("@provider", string.IsNullOrEmpty(provider) ? DBNull.Value : provider);
-            cmd.Parameters.AddWithValue("@issue", issueDate.ToString("yyyy-MM-dd"));
-            cmd.Parameters.AddWithValue("@expiry", expiryDate.ToString("yyyy-MM-dd"));
-            cmd.Parameters.AddWithValue("@file", string.IsNullOrEmpty(filePath) ? DBNull.Value : filePath);
 
+            cmd.Parameters.AddWithValue(employeeId);
+            cmd.Parameters.AddWithValue(certName);
+            cmd.Parameters.AddWithValue(string.IsNullOrEmpty(key) ? DBNull.Value : key);
+            cmd.Parameters.AddWithValue(cpdHrs);
+            cmd.Parameters.AddWithValue(string.IsNullOrEmpty(provider) ? DBNull.Value : provider);
+            cmd.Parameters.Add(DatabaseHelper.DateParam(issueDate));
+            cmd.Parameters.Add(DatabaseHelper.DateParam(expiryDate));
+
+            cmd.Parameters.AddWithValue(string.IsNullOrEmpty(filePath) ? DBNull.Value : filePath);
             cmd.ExecuteNonQuery();
         }
 
-        public static void UpdateCertificate(int certId, string name, string key, double cpdHrs, string provider, DateTime issue, DateTime expiry, string? filePath)
+        public static void UpdateCertificate(int certId, string name, string key, double hrs, string provider, DateTime issueDate, DateTime? expiryDate, string? filePath)
         {
-            using var conn = new SqliteConnection(DatabaseHelper.ConnectionString);
+            using var conn = DatabaseHelper.GetConnection();
             conn.Open();
 
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = @"
-        UPDATE TrainingCertificates
-        SET CertificateName = @name,
-            Key = @key,
-            HRS = @hrs,
-            Provider = @provider,
-            IssueDate = @issue,
-            ExpiryDate = @expiry,
-            FilePath = @file
-        WHERE CertificateID = @id";
+            using var cmd = new NpgsqlCommand(@"
+        UPDATE TrainingCertificates 
+        SET CertificateName = $1, 
+            Key = $2, 
+            HRS = $3, 
+            Provider = $4, 
+            IssueDate = $5, 
+            ExpiryDate = $6, 
+            FilePath = $7
+        WHERE CertificateID = $8", conn);
 
-            cmd.Parameters.AddWithValue("@name", name);
-            cmd.Parameters.AddWithValue("@key", string.IsNullOrEmpty(key) ? DBNull.Value : key);
-            cmd.Parameters.AddWithValue("@hrs", cpdHrs);
-            cmd.Parameters.AddWithValue("@provider", string.IsNullOrEmpty(provider) ? DBNull.Value : provider);
-            cmd.Parameters.AddWithValue("@issue", issue.Date.ToString("yyyy-MM-dd"));
-            cmd.Parameters.AddWithValue("@expiry", expiry.Date.ToString("yyyy-MM-dd"));
-            cmd.Parameters.AddWithValue("@file", (object?)filePath ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@id", certId);
+            cmd.Parameters.AddWithValue(name);
+            cmd.Parameters.AddWithValue(string.IsNullOrEmpty(key) ? DBNull.Value : key);
+            cmd.Parameters.AddWithValue(hrs);
+            cmd.Parameters.AddWithValue(string.IsNullOrEmpty(provider) ? DBNull.Value : provider);
+            cmd.Parameters.Add(DatabaseHelper.DateParam(issueDate));
+            cmd.Parameters.Add(DatabaseHelper.DateParam(expiryDate)); // null = no expiry
+
+            cmd.Parameters.AddWithValue(string.IsNullOrEmpty(filePath) ? DBNull.Value : filePath);
+
+            // The ID goes last because it is the last parameter ($8) in the query
+            cmd.Parameters.AddWithValue(certId);
 
             cmd.ExecuteNonQuery();
         }
 
         public static void DeleteCertificate(int certId)
         {
-            using (var conn = new SqliteConnection(DatabaseHelper.ConnectionString))
+            using (var conn = DatabaseHelper.GetConnection())
             {
                 conn.Open();
-                using (var cmd = new SqliteCommand(
-                    "DELETE FROM TrainingCertificates WHERE CertificateID=@id", conn))
+                using (var cmd = new NpgsqlCommand(
+                    "DELETE FROM TrainingCertificates WHERE CertificateID=$1", conn))
                 {
-                    cmd.Parameters.AddWithValue("@id", certId);
+                    cmd.Parameters.AddWithValue(certId);
                     cmd.ExecuteNonQuery();
                 }
             }
+        }
+
+        public static void MarkCertificateForDeletion(int certId)
+        {
+            using (var conn = DatabaseHelper.GetConnection())
+            {
+                conn.Open();
+                // We update the boolean instead of deleting the row
+                using (var cmd = new NpgsqlCommand(
+                    "UPDATE TrainingCertificates SET IsMarkedForDeletion = TRUE WHERE CertificateID = $1", conn))
+                {
+                    cmd.Parameters.AddWithValue(certId);
+                    cmd.ExecuteNonQuery();
+                }
+            }
+        }
+
+        // Fetches all certificates flagged for deletion for the Admin Tasks Tab
+        public static DataTable GetPendingDeletions()
+        {
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+
+            string sql = @"
+        SELECT 
+            tc.CertificateID, 
+            e.FullName AS EmployeeName, 
+            tc.CertificateName, 
+            tc.Key,
+            tc.HRS,
+            tc.Provider,
+            tc.IssueDate, 
+            tc.ExpiryDate,
+            tc.S3Key,
+            tc.LastNotifiedDate
+        FROM TrainingCertificates tc
+        JOIN Employees e ON tc.EmployeeID = e.EmployeeID
+        WHERE tc.ismarkedfordeletion = TRUE AND NOT e.IsArchived
+        ORDER BY tc.IssueDate DESC";
+
+            using var cmd = new NpgsqlCommand(sql, conn);
+            using var reader = cmd.ExecuteReader();
+            DataTable table = new DataTable();
+            table.Load(reader);
+            return table;
+        }
+
+        public static DataTable GetPendingDeletionsForManager(int managerId)
+        {
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+
+            // This query joins the Groups and GroupMembers tables to ensure 
+            // the manager only sees requests from employees they manage.
+            string sql = @"
+        SELECT DISTINCT
+            tc.CertificateID, 
+            e.FullName AS EmployeeName, 
+            tc.CertificateName, 
+            tc.Key,
+            tc.HRS,
+            tc.Provider,
+            tc.IssueDate, 
+            tc.ExpiryDate,
+            tc.S3Key,
+            tc.LastNotifiedDate
+        FROM TrainingCertificates tc
+        JOIN Employees e ON tc.EmployeeID = e.EmployeeID
+        JOIN GroupMembers gm ON e.EmployeeID = gm.EmployeeID
+        JOIN Groups g ON gm.GroupID = g.GroupID
+        WHERE tc.ismarkedfordeletion = TRUE AND g.ManagerID = @managerId
+        ORDER BY tc.IssueDate DESC";
+
+            using var cmd = new NpgsqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("managerId", managerId);
+
+            using var reader = cmd.ExecuteReader();
+            DataTable table = new DataTable();
+            table.Load(reader);
+            return table;
+        }
+
+        // Un-flags a certificate if the Admin rejects the deletion
+        public static void UnmarkCertificateForDeletion(int certificateId)
+        {
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+            using var cmd = new NpgsqlCommand("UPDATE TrainingCertificates SET IsMarkedForDeletion = FALSE WHERE CertificateID = @id", conn);
+            cmd.Parameters.AddWithValue("id", certificateId);
+            cmd.ExecuteNonQuery();
+        }
+
+        public static DataTable GetPendingCertificateApprovals(int managerId)
+        {
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+
+            string sql = @"
+        SELECT 
+            tc.CertificateID, 
+            e.FullName AS employeename,
+            tc.CertificateName AS trainingtopic, 
+            tc.HRS AS hours, 
+            tc.IssueDate AS trainingdate, 
+            tc.S3Key,
+            '' AS trainername
+        FROM trainingcertificates tc
+        JOIN employees e ON tc.EmployeeID = e.EmployeeID
+        JOIN GroupMembers gm ON e.EmployeeID = gm.EmployeeID
+        JOIN Groups g ON gm.GroupID = g.GroupID
+        WHERE g.ManagerID = @manId AND tc.status = 'Pending'
+        ORDER BY tc.CertificateID ASC";
+
+            using var cmd = new NpgsqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("manId", managerId);
+
+            using var reader = cmd.ExecuteReader();
+            DataTable table = new DataTable();
+            table.Load(reader);
+            return table;
+        }
+
+        public static void ApproveCertificate(int certificateId, string trainerName)
+        {
+            using var conn = DatabaseHelper.GetConnection();
+            conn.Open();
+
+            string sql = @"
+        UPDATE trainingcertificates 
+        SET status = 'Completed', 
+            trainername = @trainer, 
+            trainersignedat = CURRENT_TIMESTAMP 
+        WHERE CertificateID = @certId";
+
+            using var cmd = new NpgsqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("trainer", trainerName);
+            cmd.Parameters.AddWithValue("certId", certificateId);
+
+            cmd.ExecuteNonQuery();
         }
     }
 }
