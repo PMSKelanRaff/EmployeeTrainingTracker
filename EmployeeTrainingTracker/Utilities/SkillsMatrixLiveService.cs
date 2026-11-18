@@ -12,8 +12,8 @@ namespace EmployeeTrainingTracker.Utilities
     ///
     /// Saving (SaveCells) is all-or-nothing, in one transaction:
     ///   * re-reads the editor from the database: an active Admin may change any level; an active Manager only the
-    ///     levels of the people in the groups they manage, never their own (application-level check, as everywhere
-    ///     else in the app - not database-enforced security; see docs/SkillsMatrix.md);
+    ///     levels on the sheets where a workbook team heading names them (migration 007), never their own
+    ///     (application-level check, as everywhere else in the app - not database-enforced security; see docs/SkillsMatrix.md);
     ///   * locks the affected cells and refuses the whole save if any of them changed since it was read (Version),
     ///     reporting who changed it and when, so nothing is silently overwritten;
     ///   * only levels 1-5 or 'not assessed' can be saved; a flagged cell can be resolved to one of those.
@@ -25,14 +25,16 @@ namespace EmployeeTrainingTracker.Utilities
         public sealed record LiveState(bool Installed, long? BasedOnImportId, DateTime? SeededAt, string? SeededBy);
 
         /// <summary>
-        /// Who is using the matrix (decision 2026-11-11). Admins: every sheet and person, edit everything.
-        /// Managers: the people in the groups they manage (Groups.ManagerID, as ManagerAccessService) plus themselves;
-        /// they can change the levels of those people but not their own. Re-read from the database on every call.
+        /// Who is using the matrix. Admins: every sheet and person, edit everything.
+        /// Managers (decision 2026-11-18): the matrix follows the WORKBOOK's chain of command, not the app's groups.
+        /// A Manager sees the whole sheet(s) on which a team heading names them (SkillMatrixTeamManagers, migration
+        /// 007) - every column, as in Excel - and can change everyone's levels there except their own. No other
+        /// sheets. Re-read from the database on every call. ManagedAreas holds LIVE area IDs.
         /// </summary>
-        public sealed record Access(int EmployeeId, string Name, bool IsAdmin, IReadOnlySet<long> Managed)
+        public sealed record Access(int EmployeeId, string Name, bool IsAdmin, IReadOnlySet<long> ManagedAreas)
         {
-            public bool CanSee(long employeeId) => IsAdmin || Managed.Contains(employeeId);
-            public bool CanEdit(long employeeId) => IsAdmin || (employeeId != EmployeeId && Managed.Contains(employeeId));
+            public bool CanSeeArea(long areaId) => IsAdmin || ManagedAreas.Contains(areaId);
+            public bool CanEdit(long areaId, long employeeId) => IsAdmin || (employeeId != EmployeeId && ManagedAreas.Contains(areaId));
         }
 
         /// <summary>
@@ -146,18 +148,20 @@ namespace EmployeeTrainingTracker.Utilities
                     throw new UnauthorizedAccessException("The Skills Matrix is available to Admins and Managers only.");
                 name = r.GetString(0); isAdmin = r.GetBoolean(1); isManager = r.GetBoolean(2);
             }
-            var managed = new HashSet<long> { employeeId };
-            if (!isAdmin && isManager)
+            // A Manager's sheets: those with a (not removed) column under a team heading that names them.
+            // Before migration 007 is installed there are no team managers, so a Manager sees no sheets.
+            var areas = new HashSet<long>();
+            if (!isAdmin && isManager && Exists(conn, tx, "public.skillmatrixteammanagers"))
             {
                 using var cmd = new NpgsqlCommand(@"
-                    SELECT DISTINCT gm.EmployeeID FROM public.GroupMembers gm
-                    JOIN public.Groups g ON g.GroupID = gm.GroupID
-                    WHERE g.ManagerID = @id", conn, tx);
+                    SELECT DISTINCT c.AreaID FROM public.SkillMatrixLiveColumns c
+                    JOIN public.SkillMatrixTeamManagers tm ON tm.HeadingText = c.SubGroupLabel
+                    WHERE tm.EmployeeID = @id AND NOT c.IsDeleted", conn, tx);
                 cmd.Parameters.AddWithValue("id", (long)employeeId);
                 using var r = cmd.ExecuteReader();
-                while (r.Read()) managed.Add(Convert.ToInt64(r.GetValue(0)));
+                while (r.Read()) areas.Add(r.GetInt64(0));
             }
-            return new Access(employeeId, name, isAdmin, managed);
+            return new Access(employeeId, name, isAdmin, areas);
         }
 
         // ---- Reads ------------------------------------------------------------------------------------
@@ -178,7 +182,7 @@ namespace EmployeeTrainingTracker.Utilities
 
         /// <summary>
         /// Sheets of the live copy, in order. AreaId is the LIVE area ID. With a Manager's access: only the sheets
-        /// that have at least one of the people they can see. (null access = everything, as for an Admin.)
+        /// on which they manage a team. (null access = everything, as for an Admin.)
         /// </summary>
         public static List<SkillAreaInfo> GetAreas(NpgsqlConnection conn, Access? access = null)
         {
@@ -187,12 +191,9 @@ namespace EmployeeTrainingTracker.Utilities
                 SELECT la.AreaID, la.Name, a.SourceSheet, a.SkillHeaderRef, a.InabHeaderRef
                 FROM public.SkillMatrixLiveAreas la
                 JOIN public.SkillMatrixAreas a ON a.AreaID = la.SourceAreaID
-                {(filter ? @"WHERE EXISTS (SELECT 1 FROM public.SkillMatrixLiveColumns c
-                                         JOIN public.Employees e ON e.EmployeeID = c.EmployeeID
-                                         WHERE c.AreaID = la.AreaID AND NOT c.IsDeleted AND NOT e.IsArchived
-                                           AND c.EmployeeID = ANY(@people))" : "")}
+                {(filter ? "WHERE la.AreaID = ANY(@areas)" : "")}
                 ORDER BY la.DisplayOrder, la.AreaID", conn);
-            if (filter) cmd.Parameters.AddWithValue("people", access!.Managed.ToArray());
+            if (filter) cmd.Parameters.AddWithValue("areas", access!.ManagedAreas.ToArray());
             var areas = new List<SkillAreaInfo>();
             using var r = cmd.ExecuteReader();
             while (r.Read())
@@ -211,6 +212,8 @@ namespace EmployeeTrainingTracker.Utilities
         /// </summary>
         public static SkillMatrixData GetMatrix(NpgsqlConnection conn, long liveAreaId, Access? access = null, bool includeArchived = false)
         {
+            if (access != null && !access.CanSeeArea(liveAreaId))
+                throw new UnauthorizedAccessException(NotYourSheet);
             SkillAreaInfo area;
             long sourceAreaId, scaleId;
             string scaleName, scaleRef;
@@ -366,15 +369,14 @@ namespace EmployeeTrainingTracker.Utilities
                     excluded.Add(new SkillExcludedColumn(r.GetString(0), r.GetString(1), r.GetString(2)));
             }
 
-            // A Manager sees only the people they manage (and themselves); no other columns, cells or exclusions.
+            // A Manager sees the whole sheet (checked above), but not the import's excluded columns (import detail).
             // Archived people (Employees tab) are hidden unless asked for.
-            bool manager = access is { IsAdmin: false };
-            if (manager || !includeArchived)
+            if (access is { IsAdmin: false }) excluded = new List<SkillExcludedColumn>();
+            if (!includeArchived)
             {
-                members = members.Where(x => (!manager || access!.CanSee(x.EmployeeId)) && (includeArchived || !x.EmployeeArchived)).ToList();
+                members = members.Where(x => !x.EmployeeArchived).ToList();
                 var shown = members.Select(x => x.MemberId).ToHashSet();
                 cells = cells.Where(kv => shown.Contains(kv.Key.Item2)).ToDictionary(kv => kv.Key, kv => kv.Value);
-                if (manager) excluded = new List<SkillExcludedColumn>();
             }
 
             var legend = new SkillLegend(scaleName, needsConfirmation, legendNote, scaleRef, entries);
@@ -384,18 +386,18 @@ namespace EmployeeTrainingTracker.Utilities
         /// <summary>The change log for one live sheet (plus re-seeds), newest first.</summary>
         public static List<ChangeEntry> GetChanges(NpgsqlConnection conn, long liveAreaId, int limit = 1000, Access? access = null)
         {
-            // A Manager sees the changes to the people they manage (and the rebuilds)
-            bool filter = access is { IsAdmin: false };
-            using var cmd = new NpgsqlCommand($@"
+            // A Manager sees the whole history of the sheets they manage a team on (and the rebuilds)
+            if (access != null && !access.CanSeeArea(liveAreaId))
+                throw new UnauthorizedAccessException(NotYourSheet);
+            using var cmd = new NpgsqlCommand(@"
                 SELECT ChangedAt, ChangedByName, Action, SkillName, EmployeeName, OldValue, NewValue, Note,
                        ChangeID, AreaID, SkillID, ColumnID
                 FROM public.SkillMatrixLiveChanges
-                WHERE Action = 'Reseed' OR (AreaID = @id {(filter ? "AND EmployeeID = ANY(@people)" : "")})
+                WHERE Action = 'Reseed' OR AreaID = @id
                 ORDER BY ChangedAt DESC, ChangeID DESC
                 LIMIT @limit", conn);
             cmd.Parameters.AddWithValue("id", liveAreaId);
             cmd.Parameters.AddWithValue("limit", limit);
-            if (filter) cmd.Parameters.AddWithValue("people", access!.Managed.ToArray());
             var list = new List<ChangeEntry>();
             using var r = cmd.ExecuteReader();
             while (r.Read())
@@ -458,9 +460,14 @@ namespace EmployeeTrainingTracker.Utilities
             return SaveCells(conn, editorEmployeeId, areaId, new[] { new CellChange(skillId, columnId, version, restore, $"Undo of change {changeId}") });
         }
 
-        private static bool Exists(NpgsqlConnection conn, string table)
+        public const string NotYourSheet =
+            "You can only open and change the Skills Matrix sheets on which you manage a team (as named in the workbook's team headings).";
+
+        private static bool Exists(NpgsqlConnection conn, string table) => Exists(conn, null, table);
+
+        private static bool Exists(NpgsqlConnection conn, NpgsqlTransaction? tx, string table)
         {
-            using var cmd = new NpgsqlCommand("SELECT to_regclass(@t) IS NOT NULL", conn);
+            using var cmd = new NpgsqlCommand("SELECT to_regclass(@t) IS NOT NULL", conn, tx);
             cmd.Parameters.AddWithValue("t", table);
             return cmd.ExecuteScalar() is true;
         }
@@ -547,10 +554,10 @@ namespace EmployeeTrainingTracker.Utilities
                         throw new ArgumentException($"'{now.SkillName}' / {now.EmployeeName} has been removed from the sheet. Refresh the tab. Nothing was saved.");
                     if (now.EmployeeArchived)
                         throw new ArgumentException($"{now.EmployeeName} is archived (Employees tab), so their levels are read-only. Nothing was saved.");
-                    if (!access.CanEdit(now.EmployeeId))
-                        throw new UnauthorizedAccessException(now.EmployeeId == editorEmployeeId
-                            ? "You cannot change your own levels; ask your manager or an Admin. Nothing was saved."
-                            : $"You can only change levels for the people you manage ({now.EmployeeName} is not one of them). Nothing was saved.");
+                    if (!access.CanEdit(now.AreaId, now.EmployeeId))
+                        throw new UnauthorizedAccessException(!access.CanSeeArea(now.AreaId)
+                            ? NotYourSheet + " Nothing was saved."
+                            : "You cannot change your own levels; ask your manager or an Admin. Nothing was saved.");
                     if (now.Version != c.ExpectedVersion)
                         conflicts.Add(new CellConflict(c.SkillId, c.ColumnId, now.SkillName, now.EmployeeName,
                             DescribeValue(now.Status, now.Level, now.Raw), now.UpdatedBy, now.UpdatedAt));

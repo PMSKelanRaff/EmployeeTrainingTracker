@@ -25,7 +25,7 @@ public static class ReportService
         FROM TrainingCertificates tc
         JOIN Users u ON tc.EmployeeID = u.EmployeeID
         LEFT JOIN Employees e ON u.EmployeeID = e.EmployeeID
-        WHERE 1=1";
+        WHERE tc.DeletedAt IS NULL   -- soft-deleted certificates (migration 008) are not reported";
 
         var parameters = new List<NpgsqlParameter>();
         int paramCounter = 1;

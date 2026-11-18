@@ -322,48 +322,74 @@ internal static class LiveTests
         Throws<ArgumentException>(() => SaveCells(conn, Alice, lab.AreaId, new[] { new CellChange(abr, bob, withArchived.Cells[(abr, bob)].Version, 2) }),
                                   "archived: saving their level is refused", "archived");
         Check(Scalar("SELECT COUNT(*) FROM public.SkillMatrixLiveChanges") == before, "... nothing saved or logged");
-        Check(GetAreas(conn, GetAccess(conn, null, Carol)).Select(a => a.Name).SequenceEqual(new[] { "Admin" }),
-              "archived: a manager's sheet list leaves out sheets where her only people are archived");
         new NpgsqlCommand("UPDATE public.Employees SET IsArchived = FALSE WHERE EmployeeID = 2", conn).ExecuteNonQuery();
         Check(GetMatrix(conn, lab.AreaId).Members.Any(x => x.EmployeeName == "Bob Tester" && x.MemberId == bob),
               "unarchived: Bob is back, same column and levels");
 
-        // --- Managers (stand-in: Carol (3) manages group 'Lab' = Bob (2) and Carol) ---
+        // --- Managers: the workbook's team headings decide (migration 007), not the app's groups ---
+        // Stand-in: Carol (3) is a Manager and manages the app group 'Lab' (Bob and herself). Migration 007's seed
+        // names production employees, none of whom exist here, so no team managers yet.
+        Check(Scalar("SELECT COUNT(*) FROM public.SkillMatrixTeamManagers") == 0, "007 seeded no team managers in the test database");
         var carol = GetAccess(conn, null, Carol);
-        Check(!carol.IsAdmin && carol.Managed.SetEquals(new long[] { 2, 3 }) && carol.CanEdit(2) && !carol.CanEdit(3) && !carol.CanSee(1),
-              "manager access: sees Bob and herself, edits Bob only");
+        Check(!carol.IsAdmin && carol.ManagedAreas.Count == 0 && GetAreas(conn, carol).Count == 0,
+              "manager named on no team heading: no sheets (her app group does not count)");
+        Throws<UnauthorizedAccessException>(() => GetMatrix(conn, lab.AreaId, carol), "... and cannot open a sheet", "manage a team");
         Throws<UnauthorizedAccessException>(() => GetAccess(conn, null, Bob), "an Employee has no access to the matrix", "Admins and Managers");
-        var carolAreas = GetAreas(conn, carol);
-        Check(carolAreas.Select(a => a.Name).SequenceEqual(new[] { "Lab", "Admin" }), "manager: sheets with her people (Lab: Bob; Admin: herself)");
+
+        // Name her as the manager of Lab's 'Senior' team heading
+        new NpgsqlCommand("INSERT INTO public.SkillMatrixTeamManagers (HeadingText, EmployeeID, AddedBy) VALUES ('Senior', 3, 'test')", conn).ExecuteNonQuery();
+        carol = GetAccess(conn, null, Carol);
+        Check(GetAreas(conn, carol).Select(a => a.Name).SequenceEqual(new[] { "Lab" }),
+              "manager named on Lab's heading: Lab only (not Admin, although she is a column there)");
         var cm = GetMatrix(conn, lab.AreaId, carol);
-        Check(cm.Members.Count == 1 && cm.Members[0].EmployeeName == "Bob Tester" && cm.Cells.Keys.All(k => k.Item2 == bob) && cm.ExcludedColumns.Count == 0,
-              "manager: Lab shows only Bob's column and cells; no excluded columns");
+        Check(cm.Members.Select(x => x.EmployeeName).SequenceEqual(new[] { "Alice Admin", "Bob Tester" })
+              && cm.Cells.Count == GetMatrix(conn, lab.AreaId).Cells.Count && cm.ExcludedColumns.Count == 0,
+              "manager: the whole Lab sheet (everyone, every cell, as in the workbook); no excluded columns");
+        Check(carol.CanEdit(lab.AreaId, 1) && carol.CanEdit(lab.AreaId, 2) && !carol.CanEdit(adminArea.AreaId, 1) && !carol.CanEdit(lab.AreaId, 3),
+              "manager CanEdit: everyone on Lab, nobody on other sheets, never herself");
+        Throws<UnauthorizedAccessException>(() => GetMatrix(conn, adminArea.AreaId, carol), "manager cannot open a sheet she manages no team on", "manage a team");
+        Throws<UnauthorizedAccessException>(() => GetChanges(conn, adminArea.AreaId, 1000, carol), "... nor see its history", "manage a team");
+        new NpgsqlCommand("UPDATE public.Employees SET IsArchived = TRUE WHERE EmployeeID = 2", conn).ExecuteNonQuery();
+        Check(GetMatrix(conn, lab.AreaId, carol).Members.All(x => x.EmployeeName != "Bob Tester"), "manager: archived people hidden as for Admins");
+        new NpgsqlCommand("UPDATE public.Employees SET IsArchived = FALSE WHERE EmployeeID = 2", conn).ExecuteNonQuery();
+
+        // Saves for anyone on her sheet - Bob (in her group) and Alice (not in her group): the heading decides
         var binBob = cm.Cells[(bin, bob)];
-        r = SaveCells(conn, Carol, lab.AreaId, new[] { new CellChange(bin, bob, binBob.Version, 3) });
-        var carolEntry = GetChanges(conn, lab.AreaId).First(c => c.Action == "SetCell");
-        Check(r.Saved == 1 && GetMatrix(conn, lab.AreaId).Cells[(bin, bob)].Level == 3 && carolEntry.ChangedBy == "Carol Manager" && carolEntry.EmployeeName == "Bob Tester",
-              "manager saves a level for her person, logged under her name");
+        var aliceDen = cm.Cells[(den, alice)];
+        r = SaveCells(conn, Carol, lab.AreaId, new[] { new CellChange(bin, bob, binBob.Version, 3), new CellChange(den, alice, aliceDen.Version, 5) });
+        var carolEntry = GetChanges(conn, lab.AreaId).First(c => c.Action == "SetCell" && c.EmployeeName == "Bob Tester");
+        Check(r.Saved == 2 && GetMatrix(conn, lab.AreaId).Cells[(bin, bob)].Level == 3 && GetMatrix(conn, lab.AreaId).Cells[(den, alice)].Level == 5
+              && carolEntry.ChangedBy == "Carol Manager", "manager saves levels for anyone on her sheet (also outside her app group), logged under her name");
+        var carolLog = GetChanges(conn, lab.AreaId, 1000, carol);
+        Check(carolLog.Any(c => c.EmployeeName == "Alice Admin") && carolLog.Any(c => c.EmployeeName == "Bob Tester") && carolLog.Any(c => c.Action == "Reseed"),
+              "manager's history: the whole sheet's changes (and rebuilds)");
+
+        // Another sheet: refused. Her own column: refused, even on a sheet she manages; a batch with one such cell saves nothing
         before = Scalar("SELECT COUNT(*) FROM public.SkillMatrixLiveChanges");
-        var aliceDen = GetMatrix(conn, lab.AreaId).Cells[(den, alice)];
-        Throws<UnauthorizedAccessException>(() => SaveCells(conn, Carol, lab.AreaId, new[] { new CellChange(den, alice, aliceDen.Version, 5) }),
-                                            "manager cannot change someone she doesn't manage", "people you manage");
-        var admCarolCol = Col(GetMatrix(conn, adminArea.AreaId), "Carol Manager");
+        var admNow = GetMatrix(conn, adminArea.AreaId);
+        long admCarolCol = Col(admNow, "Carol Manager");
+        var admAliceFil = admNow.Cells[(fil, admAlice)];
+        Throws<UnauthorizedAccessException>(() => SaveCells(conn, Carol, adminArea.AreaId, new[] { new CellChange(fil, admAlice, admAliceFil.Version, 1) }),
+                                            "manager cannot change levels on a sheet she manages no team on", "manage a team");
+        new NpgsqlCommand($"UPDATE public.SkillMatrixLiveColumns SET SubGroupLabel = 'Senior' WHERE ColumnID = {admCarolCol}", conn).ExecuteNonQuery();
+        carol = GetAccess(conn, null, Carol);
+        Check(GetAreas(conn, carol).Select(a => a.Name).SequenceEqual(new[] { "Lab", "Admin" }), "her heading on a second sheet: both sheets");
         var ownCell = GetMatrix(conn, adminArea.AreaId).Cells[(fil, admCarolCol)];
         Throws<UnauthorizedAccessException>(() => SaveCells(conn, Carol, adminArea.AreaId, new[] { new CellChange(fil, admCarolCol, ownCell.Version, 5) }),
                                             "manager cannot change her own level", "own levels");
-        var binBobNow = GetMatrix(conn, lab.AreaId).Cells[(bin, bob)];
-        Throws<UnauthorizedAccessException>(() => SaveCells(conn, Carol, lab.AreaId, new[] {
-                new CellChange(bin, bob, binBobNow.Version, 1), new CellChange(den, alice, aliceDen.Version, 5) }),
-            "a batch with one forbidden cell is refused", "people you manage");
-        Check(GetMatrix(conn, lab.AreaId).Cells[(bin, bob)].Level == 3 && Scalar("SELECT COUNT(*) FROM public.SkillMatrixLiveChanges") == before,
+        Throws<UnauthorizedAccessException>(() => SaveCells(conn, Carol, adminArea.AreaId, new[] {
+                new CellChange(fil, admAlice, admAliceFil.Version, 1), new CellChange(fil, admCarolCol, ownCell.Version, 5) }),
+            "a batch with one forbidden cell is refused", "own levels");
+        Check(GetMatrix(conn, adminArea.AreaId).Cells[(fil, admAlice)].Level == admAliceFil.Level && Scalar("SELECT COUNT(*) FROM public.SkillMatrixLiveChanges") == before,
               "... and nothing in it was saved");
-        var carolLog = GetChanges(conn, lab.AreaId, 1000, carol);
-        Check(carolLog.Count > 0 && carolLog.All(c => c.Action == "Reseed" || c.EmployeeName == "Bob Tester"), "manager's history: only her people (and rebuilds)");
-        // Taken out of her group: refused at once (access is re-read inside the save)
-        new NpgsqlCommand("DELETE FROM public.GroupMembers WHERE GroupID = 1 AND EmployeeID = 2", conn).ExecuteNonQuery();
+        new NpgsqlCommand($"UPDATE public.SkillMatrixLiveColumns SET SubGroupLabel = NULL WHERE ColumnID = {admCarolCol}", conn).ExecuteNonQuery();
+
+        // No longer named on the heading: refused at once (access is re-read inside the save)
+        var binBobNow = GetMatrix(conn, lab.AreaId).Cells[(bin, bob)];
+        new NpgsqlCommand("DELETE FROM public.SkillMatrixTeamManagers WHERE EmployeeID = 3", conn).ExecuteNonQuery();
         Throws<UnauthorizedAccessException>(() => SaveCells(conn, Carol, lab.AreaId, new[] { new CellChange(bin, bob, binBobNow.Version, 1) }),
-                                            "manager loses access as soon as the person leaves her group", "people you manage");
-        new NpgsqlCommand("INSERT INTO public.GroupMembers (GroupID, EmployeeID) VALUES (1, 2)", conn).ExecuteNonQuery();
+                                            "manager loses access as soon as the heading no longer names her", "manage a team");
+        new NpgsqlCommand("INSERT INTO public.SkillMatrixTeamManagers (HeadingText, EmployeeID, AddedBy) VALUES ('Senior', 3, 'test')", conn).ExecuteNonQuery();
         r = UndoChange(conn, Carol, carolEntry.ChangeId);
         Check(r.Saved == 1 && GetMatrix(conn, lab.AreaId).Cells[(bin, bob)].Level == 1, "manager undoes her own change (Bob's Binder back to 1)");
 
@@ -392,9 +418,66 @@ internal static class LiveTests
         }
 
         MergeTests(conn);
+        CertificateSoftDeleteTests(conn);
 
         Console.WriteLine();
         Console.WriteLine($"LIVE {_passed} passed, {_failed} failed");
         return _failed == 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Certificate soft delete (migration 008) through the app's CertificateService, against the stand-in
+    /// TrainingCertificates (dummy rows 1-5): Bob (2) has 1 active, 2 a deletion request, 3 awaiting approval.
+    /// </summary>
+    private static void CertificateSoftDeleteTests(NpgsqlConnection conn)
+    {
+        const int Alice = 1, Bob = 2, Carol = 3;   // Admin, Employee, Manager
+        Console.WriteLine();
+        Console.WriteLine("-- Certificate soft delete (migration 008) --");
+        // (the import test above renamed the stand-in people; put the names back)
+        new NpgsqlCommand("UPDATE public.Employees SET FullName = 'Alice Admin' WHERE EmployeeID = 1; UPDATE public.Employees SET FullName = 'Bob Tester' WHERE EmployeeID = 2; " +
+                          "UPDATE public.Employees SET FullName = 'Carol Manager' WHERE EmployeeID = 3", conn).ExecuteNonQuery();
+        string Q(string sql) => Convert.ToString(new NpgsqlCommand(sql, conn).ExecuteScalar()) ?? "";
+        string Row(long id) => Q($"SELECT concat_ws('|', Status, IsMarkedForDeletion, DeletedAt IS NOT NULL, DeletedByName, DeletedReason) FROM public.TrainingCertificates WHERE CertificateID = {id}");
+        long count = Convert.ToInt64(new NpgsqlCommand("SELECT COUNT(*) FROM public.TrainingCertificates", conn).ExecuteScalar());
+
+        // Approving a deletion request (Tasks: Delete), by a manager
+        CertificateService.SoftDeleteCertificate(conn, 2, Carol, CertificateService.ReasonDeletionRequestApproved);
+        Check(Row(2) == "Completed|t|t|Carol Manager|DeletionRequestApproved",
+              "Delete: the record is kept, marked deleted with who and why, still marked for deletion", Row(2));
+        Throws<InvalidOperationException>(() => CertificateService.SoftDeleteCertificate(conn, 2, Carol, CertificateService.ReasonDeletionRequestApproved),
+                                          "deleting it again is refused", "already been deleted");
+        Throws<InvalidOperationException>(() => CertificateService.SoftDeleteCertificate(conn, 999, Carol, CertificateService.ReasonDeletedDirectly),
+                                          "deleting an unknown certificate is refused", "no longer exists");
+        Throws<ArgumentException>(() => CertificateService.SoftDeleteCertificate(conn, 1, Carol, "Oops"), "an unknown reason is refused", "Unknown deletion reason");
+
+        // Rejecting an upload awaiting approval (Tasks: Reject)
+        CertificateService.SoftDeleteCertificate(conn, 3, Alice, CertificateService.ReasonUploadRejected);
+        Check(Row(3) == "Pending|t|t|Alice Admin|UploadRejected", "Reject: kept as Pending, marked deleted", Row(3));
+
+        var deleted = CertificateService.GetDeletedCertificates(conn);
+        var ids = deleted.Rows.Cast<System.Data.DataRow>().Select(r => Convert.ToInt64(r["CertificateID"])).ToList();
+        Check(ids.Count == 2 && ids.Contains(2) && ids.Contains(3)
+              && deleted.Rows.Cast<System.Data.DataRow>().Any(r => (string)r["DeletedReason"] == "Rejected while awaiting approval")
+              && deleted.Rows.Cast<System.Data.DataRow>().Any(r => (string)r["DeletedReason"] == "Deletion request approved"
+                                                                   && (string)r["EmployeeName"] == "Bob Tester" && (string)r["DeletedByName"] == "Carol Manager"),
+              "Deleted certificates list: both, with employee, readable reason and who deleted them");
+        Check(Convert.ToInt64(new NpgsqlCommand("SELECT COUNT(*) FROM public.TrainingCertificates", conn).ExecuteScalar()) == count,
+              "no certificate row was removed");
+
+        // Restore: Admins only
+        Throws<UnauthorizedAccessException>(() => CertificateService.RestoreCertificate(conn, 2, Carol), "a Manager cannot restore", "Only Admins");
+        Throws<UnauthorizedAccessException>(() => CertificateService.RestoreCertificate(conn, 2, Bob), "an Employee cannot restore", "Only Admins");
+        new NpgsqlCommand("UPDATE public.Employees SET IsArchived = TRUE WHERE EmployeeID = 1", conn).ExecuteNonQuery();
+        Throws<UnauthorizedAccessException>(() => CertificateService.RestoreCertificate(conn, 2, Alice), "an archived Admin cannot restore", "Only Admins");
+        new NpgsqlCommand("UPDATE public.Employees SET IsArchived = FALSE WHERE EmployeeID = 1", conn).ExecuteNonQuery();
+        Check(Row(2).Contains("|t|t|"), "... and nothing was restored");
+
+        CertificateService.RestoreCertificate(conn, 2, Alice);
+        Check(Row(2) == "Completed|f|f", "restored deletion: an active certificate again (no longer marked for deletion)", Row(2));
+        CertificateService.RestoreCertificate(conn, 3, Alice);
+        Check(Row(3) == "Pending|f|f", "restored rejected upload: awaiting approval again", Row(3));
+        Throws<InvalidOperationException>(() => CertificateService.RestoreCertificate(conn, 3, Alice), "restoring a certificate that is not deleted is refused", "not deleted");
+        Check(CertificateService.GetDeletedCertificates(conn).Rows.Count == 0, "Deleted certificates list empty again");
     }
 }
