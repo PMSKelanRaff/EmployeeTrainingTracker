@@ -1082,8 +1082,9 @@ namespace EmployeeTrainingTracker
             footerTip.Add(_preview != null
                 ? "PREVIEW of a local workbook copy - not an approved database import. Not previewed: " + string.Join("; ", _preview.ExcludedSheets)
                 : _live
-                    ? "Live copy: levels changed in the app use the colour of that level in the sheet's key and show who changed them (hover). " +
-                      "Every change is in History."
+                    ? "Live copy: every level is shown in the colour of that level in the sheet's key (the workbook's own cell colours " +
+                      "are not always consistent; the Import tab's preview shows them exactly). Levels changed in the app show who " +
+                      "changed them (hover). Every change is in History."
                     : "Read-only view of the approved import. The audited workbook remains the reference document.");
             toolTip.SetToolTip(lblFooter, string.Join("\n", footerTip));
 
@@ -1130,9 +1131,10 @@ namespace EmployeeTrainingTracker
             {
                 case "Level":
                     cell.Value = data.Level;
-                    // As imported: the cell's colour exactly as in the workbook. Changed in the app: the colour of that
-                    // level in the sheet's own key, so it follows the workbook's colour standard.
-                    PaintStyle(cell.Style, data.UpdatedAt != null ? LevelColour(data.Level!.Value) : Look(data.SourceCell));
+                    // Live matrix: every level in the colour of that level in the sheet's key (the workbook itself is
+                    // not consistent: e.g. some Laboratory 2s/3s have no fill or a dark blue one - decision 2026-11-18).
+                    // Preview / imported snapshot: the cell's colour exactly as in the workbook, for checking against it.
+                    PaintStyle(cell.Style, _live || data.UpdatedAt != null ? LevelColour(data.Level!.Value) : Look(data.SourceCell));
                     cell.ToolTipText = LevelLabel(data.Level!.Value) + changed + where + EvidenceTip(skill, member, data);
                     break;
                 case "Unassessed":
@@ -1452,41 +1454,56 @@ namespace EmployeeTrainingTracker
             using var dialog = new Form
             {
                 Text = $"Supporting evidence - {skill.Name} / {member.EmployeeName}",
-                Size = new Size(S(780), S(420)),
-                MinimumSize = new Size(S(560), S(300)),
+                Size = new Size(S(1000), S(560)),
+                MinimumSize = new Size(S(720), S(400)),
                 StartPosition = FormStartPosition.CenterParent,
                 Font = Font,
                 ShowInTaskbar = false,
                 MinimizeBox = false,
             };
+            // Heading (sizes to its text) | certificates | buttons
+            var layoutRoot = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(S(10)) };
+            layoutRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layoutRoot.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            layoutRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             var info = new Label
             {
-                Dock = DockStyle.Top, Height = S(52), Padding = new Padding(S(8), S(6), S(8), 0),
-                Text = $"{skill.Name} - {member.EmployeeName} - {LevelLabel(data.Level ?? 0)}\n{status}\n" +
+                AutoSize = true, Margin = new Padding(0, 0, 0, S(8)),
+                Text = $"{skill.Name}  -  {member.EmployeeName}  -  {LevelLabel(data.Level ?? 0)}\n{status}\n\n" +
                        (certs.Count > 0 ? "Choose one of their approved certificates as the evidence for this level:"
                                         : $"{member.EmployeeName} has no approved certificates yet. They appear here once uploaded and approved."),
             };
             var list = new DataGridView
             {
                 Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, AllowUserToDeleteRows = false, MultiSelect = false,
-                SelectionMode = DataGridViewSelectionMode.FullRowSelect, RowHeadersVisible = false,
-                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, AutoGenerateColumns = false,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect, RowHeadersVisible = false, AllowUserToResizeRows = false,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, AutoGenerateColumns = false, Margin = new Padding(0),
             };
-            list.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Certificate", FillWeight = 34 });
-            list.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Training Key", FillWeight = 12 });
-            list.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Provider", FillWeight = 20 });
-            list.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Issue Date", FillWeight = 12 });
-            list.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Expiry Date", FillWeight = 12 });
-            list.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "File", FillWeight = 20 });
+            UIHelpers.StyleDataGridView(list);
+            // Readable at the dashboard's size: the dialog's (scaled) font, rows and headers tall enough for it
+            list.DefaultCellStyle.Font = Font;
+            list.ColumnHeadersDefaultCellStyle.Font = new Font(Font, FontStyle.Bold);
+            list.DefaultCellStyle.Padding = new Padding(S(4), 0, S(4), 0);
+            list.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+            list.ColumnHeadersHeight = TextRenderer.MeasureText("Ag", list.ColumnHeadersDefaultCellStyle.Font).Height + S(12);
+            list.RowTemplate.Height = TextRenderer.MeasureText("Ag", Font).Height + S(12);
+            list.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Certificate", FillWeight = 30, MinimumWidth = S(160) });
+            list.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Key", FillWeight = 8, MinimumWidth = S(50) });
+            list.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Provider", FillWeight = 16, MinimumWidth = S(90) });
+            list.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Issue Date", FillWeight = 13, MinimumWidth = S(100) });
+            list.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Expiry Date", FillWeight = 13, MinimumWidth = S(100) });
+            list.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "File", FillWeight = 26, MinimumWidth = S(120) });
             foreach (var c in certs)
             {
+                string file = System.IO.Path.GetFileName(c.S3Key ?? "");
                 int i = list.Rows.Add(c.Name + (current?.CertificateId == c.CertificateId ? "  (linked)" : ""), c.Key, c.Provider,
-                    c.IssueDate?.ToString("yyyy-MM-dd"), c.ExpiryDate?.ToString("yyyy-MM-dd"), System.IO.Path.GetFileName(c.S3Key ?? ""));
+                    c.IssueDate?.ToString("yyyy-MM-dd"), c.ExpiryDate?.ToString("yyyy-MM-dd"), file);
                 list.Rows[i].Tag = c;
+                list.Rows[i].Cells[0].ToolTipText = c.Name;
+                list.Rows[i].Cells[5].ToolTipText = file;
             }
-            UIHelpers.StyleDataGridView(list);
 
-            var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(S(4)) };
+            var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Margin = new Padding(0, S(8), 0, 0), WrapContents = false };
             var close = new Button { Text = "Close", AutoSize = true, DialogResult = DialogResult.Cancel };
             var link = new Button { Text = current == null ? "Link selected" : "Link selected instead", AutoSize = true, Enabled = certs.Count > 0,
                                     BackColor = EvidenceGreen, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, UseVisualStyleBackColor = false };
@@ -1533,9 +1550,15 @@ namespace EmployeeTrainingTracker
                 }
             };
 
-            dialog.Controls.Add(list);
-            dialog.Controls.Add(buttons);
-            dialog.Controls.Add(info);
+            foreach (Button b in buttons.Controls)
+            {
+                b.Padding = new Padding(S(8), S(3), S(8), S(3));
+                b.Margin = new Padding(S(6), 0, 0, 0);
+            }
+            layoutRoot.Controls.Add(info, 0, 0);
+            layoutRoot.Controls.Add(list, 0, 1);
+            layoutRoot.Controls.Add(buttons, 0, 2);
+            dialog.Controls.Add(layoutRoot);
             dialog.CancelButton = close;
             dialog.ShowDialog(this);
 

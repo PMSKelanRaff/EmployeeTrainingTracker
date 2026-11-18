@@ -495,6 +495,11 @@ unmarked table; 004 rollback refused while 005 exists; no import yet; failure pa
   each cell and one `SetCell` log entry (old -> new; resolving a flagged cell keeps its original value in the log).
 - Display: a level changed in the app takes the colour of that level's key cell on the sheet (workbook
   colours on); hover shows who changed it and when. **History…** lists the sheet's change log.
+  *Update (2026-11-18, requested):* on the live matrix **every** level is painted in its sheet's key colour,
+  imported or changed, because the workbook's own fills are inconsistent (Laboratory 2s/3s with no fill or
+  dark blue `#5A8AC6`; Software 1s in `#9DC4E6` vs key `#9BC2E6`). The import preview and imported
+  snapshots still show the workbook's exact colours, for checking against the file. Formula cells (e.g.
+  Admin `H6 =G6 / F6`, `H7 =G7/F7`) stay flagged ⚠ until an Admin types the level and saves.
 - Tests: `Run-005Tests.ps1` scenario H builds `Tests/SkillsMatrixTests` and runs `--live-test` (guarded:
   localhost:54329/live with a sentinel table): **31/31** (reads, saves, stale-save refusal, all-or-nothing,
   Employee/Manager/unknown/archived refused, invalid levels, cells outside the range or from another sheet,
