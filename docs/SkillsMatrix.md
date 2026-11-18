@@ -535,6 +535,9 @@ cells byte-for-byte unchanged (fingerprint), the change log untouched; snapshot 
 
 ### Managers (step 4) and re-import (step 5)
 
+> **Superseded for managers on 2026-11-18** - see "Managers follow the workbook's team headings (migration 007)"
+> below. The group-based rule described in the first bullet is no longer used by the Skills Matrix.
+
 - **Managers**: the Manager dashboard has a **Skills Matrix** tab (live copy only). It lists the sheets that have
   at least one of their people, and on each sheet shows only the people in the groups they manage (Groups.ManagerID,
   the same rule as `ManagerAccessService`) plus themselves. They can change those people's levels, **not their
@@ -611,6 +614,52 @@ no database call (the decisions are read when the preview is opened; source-chec
 Tests: 9 new (rules, and a pre-filled plan identical to the hand-filled one); suite 186/186. Real data (read-only):
 the current workbook with import 1's decisions - 64/64 names pre-filled, plan identical to the reviewed one
 (0 errors, 112 members, 3 excluded, 2,522 cells, same decision for every column).
+
+### Managers follow the workbook's team headings (migration 007, 2026-11-18)
+
+**Why:** the app's Groups were set by the director and stay as they are; they keep deciding manager access
+everywhere else in the app (certificates, training, employees). They do not match the workbook's teams (e.g. the
+Software group held David Power, Kelan Rafferty and Páraic Ó Fátharta; the workbook's Software and Data Analytics
+team is David Power, Kelan Rafferty, Ibrahim Syed and Viraj Aher). The workbook's team headings are the chain of
+command for changing the matrix, so the Skills Matrix follows them instead.
+
+**Rule** (`SkillsMatrixLiveService.Access`):
+- A Manager sees only the sheet(s) on which a team heading names them, and the **whole** sheet - every column, as in
+  Excel (support staff included) - and can change everyone's levels there **except their own**. No other sheets.
+- Sheets without team headings (H&S Environmental, QMS, Admin) and headings naming no manager ('Support Lab Staff',
+  'Data Collection Support staff') name nobody: only Admins edit them (support staff are still visible to the
+  sheet's managers, on the whole sheet).
+- Admins: unchanged. Archived people: hidden as before. History: the whole sheet's changes.
+- Re-checked on every call and inside every save, as before.
+
+**Storage:** `SkillMatrixTeamManagers` (heading as written, EmployeeID; several managers per heading allowed;
+deleting the employee removes their rows). The heading text is the key, so the link survives a re-import while the
+heading is written the same. A **new or reworded heading names nobody** until a row is added (only Admins can edit
+that team meanwhile) - check headings after each re-import. There is no screen for this table yet (SQL only).
+
+**Seeded** (checked read-only against production 2026-11-18: all 9 match, ID + exact name + active):
+
+| Sheet | Heading | Manager |
+|---|---|---|
+| Laboratory | Dermot Leonard Lab Manager | Dermot Leonard (111) |
+| Data Collection | Pat Burns Data Collection Manager | Patrick Burns (23) |
+| Data Analysis | Eric Donohue Network Team Manager | Eric Donohue (89) |
+| Data Analysis | Darragh O'Dea Non-Structural Team Manager | Darragh O'Dea (75) |
+| Data Analysis | Monica Loughnane Structural Team Manager | Monica Loughnane (63) |
+| GIS | GIS Team Rory Donnellan Manager | Rory Donnellan (68) |
+| Software and Data Analytics | Software and Data Analytics Team Manager David Power | David Power (21, Admin) |
+| Innovation | Equipment Innovation Team Joe Mchale Manager | Joe McHale (133) |
+| Innovation | Innovation Team Kieran Feighan Manager | Kieran Feighan (138, Admin) |
+
+Manager accounts on no heading (Ibrahim Syed, Mike Jordan, Kelan Rafferty) see "You are not named as a team manager".
+Before 007 is installed, Managers see no sheets (the app treats the missing table as "no team managers").
+
+**Also:** person columns are capped at a normal width, so a sheet with few people no longer gets very wide columns.
+
+**Tests:** 007 SQL suite 10/10; runner scenarios P-S (apply, repeat refused, rollback x2 restores schema and data
+exactly, requires 005, marker check) - runner 42/42; C# live tests 94/94 (manager on no heading sees nothing even
+with an app group; whole sheet; edits people outside her app group; other sheets and their history refused; own
+level refused; mixed batch saves nothing; access removed at once when un-named; undo); suite 186/186.
 
 ## Access control and its limitations
 

@@ -190,11 +190,55 @@ try {
     Check 'N1 006 rollback refuses a table without the 006 marker and drops nothing' ($r.Code -ne 0 -and $r.Out -match 'marker missing' -and
         (Scalar 'n' "SELECT COUNT(*) FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname IN ('skillmatrixlivelevels','skillmatrixliveteamlabels')") -eq '2') $r.Out
 
+    # P-S. Migration 007 (team managers from the workbook headings) on top of 006
+    $m007 = Join-Path $mig '007_skills_matrix_team_managers.sql'
+    $r007 = Join-Path $mig '007_skills_matrix_team_managers_rollback.sql'
+    # stand-in people for the seed: one exact match, one wrong name, one archived
+    $seedPeople = "INSERT INTO public.Employees (EmployeeID, FullName, IsArchived) VALUES (111, 'Dermot Leonard', FALSE), (23, 'Pat Burns', FALSE), (75, 'Darragh O''Dea', TRUE)"
+    NewDb 'p' -With004 -WithImport
+    if ((Sql 'p' -file $m005).Code -or (Sql 'p' -file $m006).Code) { throw 'P: 005/006 failed' }
+    if ((Sql 'p' -cmd $seedPeople).Code) { throw 'P: stand-in people failed' }
+    $r = Sql 'p' -file $m007
+    Check 'P1 migration 007 applies on 006' ($r.Code -eq 0) $r.Out
+    $t = Sql 'p' -file (Join-Path $here 'tests_007.sql')
+    $t.Out.Trim()
+    $m = [regex]::Match($t.Out, 'RESULT (\d+)/(\d+)')
+    Check 'P2 007 SQL test suite ran and every test passed' ($t.Code -eq 0 -and $m.Success -and $m.Groups[1].Value -eq $m.Groups[2].Value) "exit $($t.Code)"
+    $r = Sql 'p' -file $m007
+    Check 'P3 running 007 a second time fails (table exists) and changes nothing' ($r.Code -ne 0 -and (Scalar 'p' 'SELECT COUNT(*) FROM public.SkillMatrixTeamManagers') -eq '1') $r.Out
+
+    NewDb 'q' -With004 -WithImport
+    if ((Sql 'q' -file $m005).Code -or (Sql 'q' -file $m006).Code -or (Sql 'q' -cmd $seedPeople).Code) { throw 'Q: setup failed' }
+    $schemaQ = Dump 'q' 'schema'; $dataQ = Dump 'q' 'data'
+    foreach ($cycle in 1, 2) {
+        if ((Sql 'q' -file $m007).Code) { throw "Q: 007 failed (cycle $cycle)" }
+        Sql 'q' -cmd "INSERT INTO public.SkillMatrixTeamManagers (HeadingText, EmployeeID, AddedBy) VALUES ('Senior', 3, 'x')" | Out-Null
+        $r = Sql 'q' -file $r007
+        Check "Q$cycle-1 007 rollback succeeds (cycle $cycle)" ($r.Code -eq 0) $r.Out
+        Check "Q$cycle-2 schema identical to before 007 (cycle $cycle)" ((Dump 'q' 'schema') -eq $schemaQ)
+        Check "Q$cycle-3 data identical to before 007 - Employees untouched (cycle $cycle)" ((Dump 'q' 'data') -eq $dataQ)
+    }
+    $r = Sql 'q' -file $r007
+    Check 'Q4 007 rollback again when nothing is installed changes nothing' ($r.Code -eq 0 -and (Dump 'q' 'schema') -eq $schemaQ) $r.Out
+
+    NewDb 'r' -With004 -WithImport
+    $schemaR = Dump 'r' 'schema'
+    $r = Sql 'r' -file $m007
+    Check 'R1 007 without 005 fails with a clear message and creates nothing' ($r.Code -ne 0 -and $r.Out -match 'Migration 005' -and (Dump 'r' 'schema') -eq $schemaR) $r.Out
+
+    NewDb 's' -With004 -WithImport
+    if ((Sql 's' -file $m005).Code -or (Sql 's' -file $m007).Code) { throw 'S: 005/007 failed' }
+    Sql 's' -cmd "COMMENT ON TABLE public.SkillMatrixTeamManagers IS 'someone else''s table'" | Out-Null
+    $r = Sql 's' -file $r007
+    Check 'S1 007 rollback refuses a table without the 007 marker and drops nothing' ($r.Code -ne 0 -and $r.Out -match 'marker missing' -and
+        (Scalar 's' "SELECT to_regclass('public.skillmatrixteammanagers') IS NOT NULL") -eq 't') $r.Out
+
     # H. The application's live-copy service (C#) against this database: reads, saves, conflicts, permissions
     if (-not $SkipAppTests) {
         NewDb 'live' -With004 -WithImport
         if ((Sql 'live' -file $m005).Code) { throw 'H: 005 failed' }
         if ((Sql 'live' -file $m006).Code) { throw 'H: 006 failed' }
+        if ((Sql 'live' -file $m007).Code) { throw 'H: 007 failed' }
         Sql 'live' -cmd 'CREATE TABLE public.disposable_test_sentinel (x INT)' | Out-Null
         $repo = Split-Path -Parent (Split-Path -Parent $here)
         $bin = Join-Path $WorkDir 'testbin'

@@ -40,6 +40,7 @@ namespace EmployeeTrainingTracker
         private const int SkillColWidth = 290;
         private const int InabColWidth = 92;
         private const int MemberColMinWidth = 92;
+        private const int MemberColMaxWidth = 170;   // few people on a sheet: keep columns readable, not stretched across the tab
         private const int AreaComboWidth = 240;
         private const string BaseFontFamily = "Segoe UI";
         private const float BaseFontSize = 9F;
@@ -285,7 +286,8 @@ namespace EmployeeTrainingTracker
 
         /// <summary>
         /// Person columns are at least their minimum width; when the window is wider than the sheet needs,
-        /// they share the spare width so the grid fills the tab like the other grids.
+        /// they share the spare width so the grid fills the tab like the other grids - up to a maximum, so a
+        /// sheet with only one or two people (e.g. a manager's view) doesn't get huge columns.
         /// </summary>
         private void FitColumns()
         {
@@ -294,7 +296,7 @@ namespace EmployeeTrainingTracker
 
             int scrollBar = grid.Controls.OfType<VScrollBar>().Any(v => v.Visible) ? SystemInformation.VerticalScrollBarWidth : 0;
             int available = grid.ClientSize.Width - scrollBar - grid.Columns[0].Width - grid.Columns[1].Width - 2;
-            int width = Math.Max(S(MemberColMinWidth), available / members);
+            int width = Math.Min(S(MemberColMaxWidth), Math.Max(S(MemberColMinWidth), available / members));
             for (int i = 2; i < grid.Columns.Count; i++)
                 if (grid.Columns[i].Width != width)
                     grid.Columns[i].Width = width;
@@ -432,7 +434,10 @@ namespace EmployeeTrainingTracker
             OnAreaChanged();
         }
 
-        /// <summary>Manager dashboard: the live copy, showing (and letting them edit) only the people they manage.</summary>
+        /// <summary>
+        /// Manager dashboard: the live copy, showing (and letting them edit) the whole sheet(s) on which a workbook team
+        /// heading names them - the matrix's own chain of command (migration 007), not the app's groups.
+        /// </summary>
         private void LoadManagerView()
         {
             try
@@ -450,13 +455,16 @@ namespace EmployeeTrainingTracker
                 var areas = SkillsMatrixLiveService.GetAreas(_adminEmployeeId);
                 if (areas.Count == 0)
                 {
-                    ShowEmpty("None of the people you manage are on the Skills Matrix yet.");
+                    ShowEmpty("You are not named as a team manager on the Skills Matrix.\n" +
+                              "Managers see the sheet(s) where a team heading in the workbook names them; " +
+                              "ask an Admin if this is wrong.");
                     return;
                 }
 
-                lblSource.Text = "Skills Matrix  ·  the people you manage  ·  changes are logged";
+                lblSource.Text = "Skills Matrix  ·  the sheets where you manage a team  ·  changes are logged";
                 lblSource.ForeColor = SystemColors.GrayText;
-                toolTip.SetToolTip(lblSource, "You can change the levels of the people in the groups you manage (not your own). " +
+                toolTip.SetToolTip(lblSource, "You can change the levels of everyone on these sheets (not your own), " +
+                                              "as the workbook's team headings name you as a manager. " +
                                               "Every change is logged with your name; see History.");
                 chkEdit.Visible = true;
                 btnHistory.Visible = true;
@@ -1107,7 +1115,7 @@ namespace EmployeeTrainingTracker
             string where = string.IsNullOrEmpty(data.SourceCell) ? "" : $"\n{data.SourceCell}";
             if (member.EmployeeArchived && _live)
                 where += "\n(archived in the Employees tab - read-only)";
-            else if (EditActive && _access != null && !_access.CanEdit(member.EmployeeId))
+            else if (EditActive && _access != null && _matrix != null && !_access.CanEdit(_matrix.Area.AreaId, member.EmployeeId))
                 where += member.EmployeeId == _access.EmployeeId ? "\n(your own level - read-only)" : "\n(read-only)";
             switch (data.Status)
             {
@@ -1179,7 +1187,7 @@ namespace EmployeeTrainingTracker
             if (grid.Rows[cell.RowIndex].Tag is not SkillRowInfo s) return false;
             int i = cell.ColumnIndex - 2;
             if (i >= _matrix.Members.Count) return false;
-            if (_access != null && !_access.CanEdit(_matrix.Members[i].EmployeeId)) return false;   // e.g. a manager's own column
+            if (_access != null && !_access.CanEdit(_matrix.Area.AreaId, _matrix.Members[i].EmployeeId)) return false;   // e.g. a manager's own column
             if (_matrix.Members[i].EmployeeArchived) return false;                                  // archived: read-only
             if (!_matrix.Cells.TryGetValue((s.SkillId, _matrix.Members[i].MemberId), out var d)) return false;
             skill = s; member = _matrix.Members[i]; data = d;
