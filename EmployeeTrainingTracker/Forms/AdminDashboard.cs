@@ -32,7 +32,7 @@ namespace EmployeeTrainingTracker
         public AdminDashboard(int userId)
         {
             InitializeComponent();
-            DashboardHelper.DecorateTaskGrids(dgvTasks, btnApproveDeletion, btnRejectDeletion, dgvPendingAcks, btnApproveAck, btnRejectAck);   // before the scaler captures the layout
+            BuildTasksLayout();   // before the scaler captures the layout
             ResponsiveScaler.Attach(this);
             loggedInUserId = userId; // Save the ID when the form opens
         }
@@ -40,17 +40,131 @@ namespace EmployeeTrainingTracker
         public AdminDashboard()
         {
             InitializeComponent();
-            DashboardHelper.DecorateTaskGrids(dgvTasks, btnApproveDeletion, btnRejectDeletion, dgvPendingAcks, btnApproveAck, btnRejectAck);   // before the scaler captures the layout
+            BuildTasksLayout();   // before the scaler captures the layout
             ResponsiveScaler.Attach(this);
 
+        }
+
+        // ---- Tasks tab: deletion requests (red), awaiting approval (green), deleted certificates (grey) ----
+
+        private SplitContainer splitApprovalsDeleted = null!;
+        private DataGridView dgvDeletedCerts = null!;
+        private Button btnRestoreCert = null!;
+
+        /// <summary>
+        /// Splits the lower half of the Tasks tab so the soft-deleted certificates (migration 008) sit under the
+        /// approvals, then adds the coloured title bars and buttons. Runs before ResponsiveScaler.Attach so the new
+        /// controls scale with the window like the designer's.
+        /// </summary>
+        private void BuildTasksLayout()
+        {
+            var lower = splitContainer1.Panel2;
+            var existing = lower.Controls.Cast<Control>().ToList();
+
+            // 1. A nested split the size of the lower panel; with its second panel collapsed, its first panel is
+            //    exactly the old size, so the approvals grid and buttons keep their anchoring when moved into it
+            splitApprovalsDeleted = new SplitContainer
+            {
+                Orientation = Orientation.Horizontal,
+                Location = Point.Empty,
+                Size = lower.ClientSize,
+                Panel2Collapsed = true,
+            };
+            lower.Controls.Add(splitApprovalsDeleted);
+            foreach (var c in existing)
+                splitApprovalsDeleted.Panel1.Controls.Add(c);
+            splitApprovalsDeleted.Dock = DockStyle.Fill;
+            splitApprovalsDeleted.Panel2Collapsed = false;
+            splitApprovalsDeleted.SplitterDistance = splitApprovalsDeleted.Height / 2;
+
+            // 2. Deleted certificates grid + Restore, laid out like the other two (grid left, buttons bottom-right)
+            var bottom = splitApprovalsDeleted.Panel2;
+            const int margin = 3, buttonWidth = 110, buttonHeight = 23, rightColumn = 124;
+            dgvDeletedCerts = new DataGridView
+            {
+                Name = "dgvDeletedCerts",
+                Location = new Point(margin, margin),
+                Size = new Size(bottom.ClientSize.Width - margin - rightColumn, bottom.ClientSize.Height - 2 * margin),
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize,
+                ReadOnly = true,
+                AllowUserToAddRows = false,
+                AllowUserToDeleteRows = false,
+            };
+            btnRestoreCert = new Button
+            {
+                Name = "btnRestoreCert",
+                Size = new Size(buttonWidth, buttonHeight),
+                Location = new Point(bottom.ClientSize.Width - buttonWidth - 8, bottom.ClientSize.Height - buttonHeight - margin),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+            };
+            btnRestoreCert.Click += btnRestoreCert_Click;
+            dgvDeletedCerts.CellFormatting += DashboardHelper.FileLinkCellFormatting;
+            dgvDeletedCerts.CellContentClick += DashboardHelper.FileLinkCellClick;
+            bottom.Controls.Add(dgvDeletedCerts);
+            bottom.Controls.Add(btnRestoreCert);
+
+            // 3. Title bars, colours and button names
+            DashboardHelper.DecorateTaskGrids(dgvTasks, btnApproveDeletion, btnRejectDeletion, dgvPendingAcks, btnApproveAck, btnRejectAck);
+            DashboardHelper.DecorateDeletedGrid(dgvDeletedCerts, btnRestoreCert);
+        }
+
+        private void LoadDeletedCertificates()
+        {
+            try
+            {
+                DashboardHelper.BindDeletedCertificates(dgvDeletedCerts, CertificateService.GetDeletedCertificates());
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading deleted certificates: {ex.Message}", "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void btnRestoreCert_Click(object? sender, EventArgs e)
+        {
+            if (dgvDeletedCerts.CurrentRow == null)
+            {
+                MessageBox.Show("Please select a deleted certificate to restore.", "Selection Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var row = dgvDeletedCerts.CurrentRow;
+            int certId = Convert.ToInt32(row.Cells["CertificateID"].Value);
+            string certName = row.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
+            string employee = row.Cells["EmployeeName"].Value?.ToString() ?? "Unknown";
+            string reason = row.Cells["DeletedReason"].Value?.ToString() ?? "";
+            string whereTo = reason.StartsWith("Rejected")
+                ? "It goes back to Certificates awaiting approval."
+                : "It goes back to the employee's certificates (no longer marked for deletion).";
+
+            var confirm = MessageBox.Show($"Restore '{certName}' for {employee}?\n\n{whereTo}", "Confirm Restore",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (confirm == DialogResult.No) return;
+
+            try
+            {
+                CertificateService.RestoreCertificate(certId, loggedInUserId);
+                LoadDeletedCertificates();
+                LoadDeletionTasks();
+                LoadPendingApprovals();
+                int? currentEmp = GetSelectedEmployeeId();
+                if (currentEmp != null) LoadCertificates(currentEmp.Value);
+                MessageBox.Show("Certificate restored.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not restore the certificate:\n{ex.Message}", "Restore", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private void AdminDashboard_Load(object sender, EventArgs e)
         {
             try
             {
-                // Perfectly divide the split container in half dynamically
-                splitContainer1.SplitterDistance = splitContainer1.Height / 2;
+                // Tasks tab in thirds: deletion requests / awaiting approval / deleted certificates
+                splitContainer1.SplitterDistance = splitContainer1.Height / 3;
+                splitApprovalsDeleted.SplitterDistance = splitApprovalsDeleted.Height / 2;
 
                 LoadEmployees();
                 LoadGroupsForReports();
@@ -66,6 +180,7 @@ namespace EmployeeTrainingTracker
                 dgvPlannedTraining.CellFormatting += dgvPlannedTraining_CellFormatting;
                 dgvCertificates.DataBindingComplete += dgvCertificates_DataBindingComplete;
                 LoadPendingApprovals();
+                LoadDeletedCertificates();
 
                 LoadReportSettings();
                 StyleAllDGVs();
@@ -527,7 +642,7 @@ namespace EmployeeTrainingTracker
             try
             {
                 // 1. Point this to our NEW Certificate method
-                DataTable pendingAcks = CertificateService.GetPendingCertificateApprovals(loggedInUserId); // Use loggedInUserId for AdminDashboard
+                DataTable pendingAcks = CertificateService.GetPendingCertificateApprovals(null); // Admins see every pending approval (decision 2026-11-18)
                 DashboardHelper.BindPendingApprovals(dgvPendingAcks, pendingAcks);
             }
             catch (Exception ex)
@@ -575,29 +690,23 @@ namespace EmployeeTrainingTracker
 
         }
 
-        private async void btnDeleteCert_Click(object sender, EventArgs e)
+        private void btnDeleteCert_Click(object sender, EventArgs e)
         {
             if (dgvCertificates.CurrentRow == null) return;
 
             int certId = Convert.ToInt32(dgvCertificates.CurrentRow.Cells["CertificateID"].Value);
             string certName = dgvCertificates.CurrentRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
-            string? s3Key = dgvCertificates.CurrentRow.Cells["FileLink"].Value?.ToString();
 
-            var confirm = MessageBox.Show($"Are you sure you want to permanently delete the certificate '{certName}'?", "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            var confirm = MessageBox.Show($"Delete the certificate '{certName}'?\n\nIt can be restored from Tasks > Deleted certificates.", "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (confirm == DialogResult.No) return;
 
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
 
             try
             {
-                // 1. Delete the physical file from S3
-                if (!string.IsNullOrEmpty(s3Key))
-                {
-                    await S3Service.DeleteCertificateAsync(s3Key);
-                }
-
-                // 2. Delete the record from database
-                CertificateService.DeleteCertificate(certId);
+                // Soft delete (migration 008): the record and its S3 file are kept, so an Admin can restore it
+                CertificateService.SoftDeleteCertificate(certId, loggedInUserId, CertificateService.ReasonDeletedDirectly);
+                LoadDeletedCertificates();
 
                 // 3. Refresh UI
                 LoadCertificates(empId);
@@ -1179,7 +1288,7 @@ namespace EmployeeTrainingTracker
         }
 
         // Tasks
-        private async void btnApproveDeletion_Click(object sender, EventArgs e)
+        private void btnApproveDeletion_Click(object sender, EventArgs e)
         {
             if (dgvTasks.CurrentRow == null)
             {
@@ -1189,26 +1298,20 @@ namespace EmployeeTrainingTracker
 
             int certId = Convert.ToInt32(dgvTasks.CurrentRow.Cells["CertificateID"].Value);
             string certName = dgvTasks.CurrentRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
-            string s3Key = dgvTasks.CurrentRow.Cells["FileLink"].Value?.ToString();
 
-            var confirm = MessageBox.Show($"Are you sure you want to PERMANENTLY delete '{certName}'?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            var confirm = MessageBox.Show($"Delete '{certName}'?\n\nIt can be restored from Deleted certificates below.", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (confirm == DialogResult.No) return;
 
             try
             {
-                // 1. Delete the physical file from S3 Cloud (Reusing your existing logic)
-                if (!string.IsNullOrEmpty(s3Key))
-                {
-                    await S3Service.DeleteCertificateAsync(s3Key);
-                }
+                // Soft delete (migration 008): the record and its S3 file are kept, so it can be restored
+                CertificateService.SoftDeleteCertificate(certId, loggedInUserId, CertificateService.ReasonDeletionRequestApproved);
 
-                // 2. Delete the record from the database
-                CertificateService.DeleteCertificate(certId);
+                MessageBox.Show("Certificate deleted. It can be restored from Deleted certificates.");
 
-                MessageBox.Show("Certificate permanently deleted.");
-
-                // 3. Refresh the grids
+                // Refresh the grids
                 LoadDeletionTasks();
+                LoadDeletedCertificates();
 
                 // Optional: Refresh the main employee cert grid if that specific employee happens to be selected
                 int? currentEmp = GetSelectedEmployeeId();
@@ -1293,7 +1396,7 @@ namespace EmployeeTrainingTracker
             }
         }
 
-        private async void btnRejectAck_Click(object sender, EventArgs e)
+        private void btnRejectAck_Click(object sender, EventArgs e)
         {
             // Changed to check CurrentRow
             if (dgvPendingAcks.CurrentRow == null)
@@ -1307,10 +1410,9 @@ namespace EmployeeTrainingTracker
 
             int certId = Convert.ToInt32(selectedRow.Cells["CertificateID"].Value);
             string topic = selectedRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
-            string? s3Key = selectedRow.Cells["FileLink"].Value?.ToString();
 
             var confirm = MessageBox.Show(
-                $"Are you sure you want to REJECT and DELETE the pending certificate for '{topic}'?",
+                $"Reject the certificate '{topic}'?\n\nIt is removed from the employee's certificates; it can be restored from Deleted certificates below.",
                 "Confirm Rejection",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
@@ -1319,18 +1421,13 @@ namespace EmployeeTrainingTracker
             {
                 try
                 {
-                    // 1. Delete the bad file from the S3 Cloud
-                    if (!string.IsNullOrEmpty(s3Key))
-                    {
-                        await S3Service.DeleteCertificateAsync(s3Key);
-                    }
+                    // Soft delete (migration 008): the record and its S3 file are kept, so it can be restored
+                    CertificateService.SoftDeleteCertificate(certId, loggedInUserId, CertificateService.ReasonUploadRejected);
 
-                    // 2. Delete the record from the database
-                    CertificateService.DeleteCertificate(certId);
-
-                    MessageBox.Show("Record Rejected and Deleted Successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("Certificate rejected.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
                     LoadPendingApprovals(); // Refresh the grid
+                    LoadDeletedCertificates();
                 }
                 catch (Exception ex)
                 {

@@ -200,10 +200,43 @@ namespace EmployeeTrainingTracker.Utilities
             ApplyTaskTheme(dgv, ApprovalGreen, ApprovalTint, ApprovalTitle, table.Rows.Count);
         }
 
+        /// <summary>
+        /// Admin Tasks tab: soft-deleted certificates (migration 008) - the deletion-request columns plus when,
+        /// who and why - in grey, with the title showing how many.
+        /// </summary>
+        public static void BindDeletedCertificates(DataGridView dgv, DataTable table)
+        {
+            BuildDeletionTaskColumns(dgv);
+            dgv.AllowUserToAddRows = false;
+            dgv.Columns.Add(new DataGridViewTextBoxColumn { Name = "DeletedAt", DataPropertyName = "DeletedAt", HeaderText = "Deleted", DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd HH:mm" } });
+            dgv.Columns.Add(new DataGridViewTextBoxColumn { Name = "DeletedByName", DataPropertyName = "DeletedByName", HeaderText = "Deleted By" });
+            dgv.Columns.Add(new DataGridViewTextBoxColumn { Name = "DeletedReason", DataPropertyName = "DeletedReason", HeaderText = "Reason" });
+            foreach (DataGridViewColumn col in dgv.Columns)
+                col.ReadOnly = true;
+            dgv.DataSource = table;
+            dgv.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            UIHelpers.StyleDataGridView(dgv);
+            ApplyTaskTheme(dgv, DeletedGrey, DeletedTint, DeletedTitle, table.Rows.Count);
+        }
+
+        /// <summary>The grey title bar and Restore button of the Admin's Deleted certificates table.</summary>
+        public static void DecorateDeletedGrid(DataGridView deleted, Button restore)
+        {
+            deleted.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            deleted.MultiSelect = false;
+            AddTaskTitle(deleted, DeletedGrey, DeletedTitle);
+            restore.Text = "Restore";
+            StyleActionButton(restore, DeletedGrey);
+        }
+
         // ------------------------------------------------------------------
         // Tasks tab: colour-coded tables so deletion requests (red) and
         // certificate approvals (green) can't be mistaken for each other
         // ------------------------------------------------------------------
+
+        public static readonly Color DeletedGrey = Color.FromArgb(95, 99, 104);
+        public static readonly Color DeletedTint = Color.FromArgb(226, 228, 231);
+        private const string DeletedTitle = "Deleted certificates ({0})  -  Restore puts a certificate back where it was";
 
         public static readonly Color DeletionRed = Color.FromArgb(192, 57, 43);
         public static readonly Color DeletionTint = Color.FromArgb(250, 219, 216);

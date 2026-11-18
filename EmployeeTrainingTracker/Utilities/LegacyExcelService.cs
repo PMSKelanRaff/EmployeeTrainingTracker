@@ -80,7 +80,7 @@ namespace EmployeeTrainingTracker
                     Traineesignedat, 
                     Trainername
                 FROM trainingcertificates
-                WHERE EmployeeID = @empId AND status = 'Completed'
+                WHERE EmployeeID = @empId AND status = 'Completed' AND DeletedAt IS NULL
                 ORDER BY IssueDate ASC";
 
             using var cmd = new NpgsqlCommand(sql, conn);

@@ -233,12 +233,49 @@ try {
     Check 'S1 007 rollback refuses a table without the 007 marker and drops nothing' ($r.Code -ne 0 -and $r.Out -match 'marker missing' -and
         (Scalar 's' "SELECT to_regclass('public.skillmatrixteammanagers') IS NOT NULL") -eq 't') $r.Out
 
+    # T-W. Migration 008 (certificate soft delete) - independent of the Skills Matrix migrations
+    $m008 = Join-Path $mig '008_certificate_soft_delete.sql'
+    $r008 = Join-Path $mig '008_certificate_soft_delete_rollback.sql'
+    NewDb 't'
+    $r = Sql 't' -file $m008
+    Check 'T1 migration 008 applies' ($r.Code -eq 0) $r.Out
+    $t = Sql 't' -file (Join-Path $here 'tests_008.sql')
+    $t.Out.Trim()
+    $m = [regex]::Match($t.Out, 'RESULT (\d+)/(\d+)')
+    Check 'T2 008 SQL test suite ran and every test passed' ($t.Code -eq 0 -and $m.Success -and $m.Groups[1].Value -eq $m.Groups[2].Value) "exit $($t.Code)"
+    $r = Sql 't' -file $m008
+    Check 'T3 running 008 a second time fails with a clear message and changes nothing' ($r.Code -ne 0 -and $r.Out -match 'already') $r.Out
+
+    NewDb 'u'
+    $schemaU = Dump 'u' 'schema'; $dataU = Dump 'u' 'data'
+    foreach ($cycle in 1, 2) {
+        if ((Sql 'u' -file $m008).Code) { throw "U: 008 failed (cycle $cycle)" }
+        $r = Sql 'u' -file $r008
+        Check "U$cycle-1 008 rollback succeeds (cycle $cycle)" ($r.Code -eq 0) $r.Out
+        Check "U$cycle-2 schema identical to before 008 (cycle $cycle)" ((Dump 'u' 'schema') -eq $schemaU)
+        Check "U$cycle-3 data identical to before 008 (cycle $cycle)" ((Dump 'u' 'data') -eq $dataU)
+    }
+    if ((Sql 'u' -file $m008).Code) { throw 'U: 008 failed' }
+    Sql 'u' -cmd "UPDATE public.TrainingCertificates SET DeletedAt = now(), DeletedReason = 'DeletedDirectly', IsMarkedForDeletion = TRUE WHERE CertificateID = 4" | Out-Null
+    $schemaU2 = Dump 'u' 'schema'; $dataU2 = Dump 'u' 'data'
+    $r = Sql 'u' -file $r008
+    Check 'U4 008 rollback refuses while a certificate is soft-deleted, and changes nothing' ($r.Code -ne 0 -and $r.Out -match 'soft-deleted' -and
+        (Dump 'u' 'schema') -eq $schemaU2 -and (Dump 'u' 'data') -eq $dataU2) $r.Out
+
+    NewDb 'w'
+    if ((Sql 'w' -file $m008).Code) { throw 'W: 008 failed' }
+    Sql 'w' -cmd "COMMENT ON COLUMN public.TrainingCertificates.DeletedByName IS 'someone else''s column'" | Out-Null
+    $r = Sql 'w' -file $r008
+    Check 'W1 008 rollback refuses a column without the 008 marker and drops nothing' ($r.Code -ne 0 -and $r.Out -match 'marker missing' -and
+        (Scalar 'w' "SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'trainingcertificates' AND column_name LIKE 'deleted%'") -eq '4') $r.Out
+
     # H. The application's live-copy service (C#) against this database: reads, saves, conflicts, permissions
     if (-not $SkipAppTests) {
         NewDb 'live' -With004 -WithImport
         if ((Sql 'live' -file $m005).Code) { throw 'H: 005 failed' }
         if ((Sql 'live' -file $m006).Code) { throw 'H: 006 failed' }
         if ((Sql 'live' -file $m007).Code) { throw 'H: 007 failed' }
+        if ((Sql 'live' -file $m008).Code) { throw 'H: 008 failed' }
         Sql 'live' -cmd 'CREATE TABLE public.disposable_test_sentinel (x INT)' | Out-Null
         $repo = Split-Path -Parent (Split-Path -Parent $here)
         $bin = Join-Path $WorkDir 'testbin'

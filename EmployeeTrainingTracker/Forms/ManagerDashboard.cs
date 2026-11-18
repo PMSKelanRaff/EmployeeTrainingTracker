@@ -373,31 +373,24 @@ namespace EmployeeTrainingTracker
 
         }
 
-        private async void btnDeleteCert_Click(object sender, EventArgs e)
+        private void btnDeleteCert_Click(object sender, EventArgs e)
         {
             if (dgvCertificates.CurrentRow == null) return;
 
             int certId = Convert.ToInt32(dgvCertificates.CurrentRow.Cells["CertificateID"].Value);
             string certName = dgvCertificates.CurrentRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
-            string? s3Key = dgvCertificates.CurrentRow.Cells["FileLink"].Value?.ToString();
 
             if (!EnsureAccess(ManagerAccessService.CanManageCertificate(_managerId, certId))) return;
 
-            var confirm = MessageBox.Show($"Are you sure you want to permanently delete the certificate '{certName}'?", "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            var confirm = MessageBox.Show($"Delete the certificate '{certName}'?\n\nAn Admin can restore it if needed.", "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (confirm == DialogResult.No) return;
 
             int empId = Convert.ToInt32(dgvEmployees.CurrentRow.Cells["EmployeeID"].Value);
 
             try
             {
-                // 1. Delete the physical file from S3
-                if (!string.IsNullOrEmpty(s3Key))
-                {
-                    await S3Service.DeleteCertificateAsync(s3Key);
-                }
-
-                // 2. Delete the record from database
-                CertificateService.DeleteCertificate(certId);
+                // Soft delete (migration 008): the record and its S3 file are kept, so an Admin can restore it
+                CertificateService.SoftDeleteCertificate(certId, _managerId, CertificateService.ReasonDeletedDirectly);
 
                 // 3. Refresh UI
                 LoadCertificates(empId);
@@ -881,31 +874,24 @@ namespace EmployeeTrainingTracker
         }
 
         //Tasks
-        private async void btnApproveDeletion_Click(object sender, EventArgs e)
+        private void btnApproveDeletion_Click(object sender, EventArgs e)
         {
             if (dgvTasks.CurrentRow == null) return;
 
             int certId = Convert.ToInt32(dgvTasks.CurrentRow.Cells["CertificateID"].Value);
             string certName = dgvTasks.CurrentRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
 
-            // FIXED: Using "FileLink" instead of "S3Key" to avoid the crash
-            string s3Key = dgvTasks.CurrentRow.Cells["FileLink"].Value?.ToString();
-
             if (!EnsureAccess(ManagerAccessService.CanManageCertificate(_managerId, certId))) return;
 
-            var confirm = MessageBox.Show($"Permanently delete '{certName}'?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            var confirm = MessageBox.Show($"Delete '{certName}'?\n\nAn Admin can restore it if needed.", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (confirm == DialogResult.No) return;
 
             try
             {
-                if (!string.IsNullOrEmpty(s3Key))
-                {
-                    await S3Service.DeleteCertificateAsync(s3Key);
-                }
+                // Soft delete (migration 008): the record and its S3 file are kept, so an Admin can restore it
+                CertificateService.SoftDeleteCertificate(certId, _managerId, CertificateService.ReasonDeletionRequestApproved);
 
-                CertificateService.DeleteCertificate(certId);
-
-                MessageBox.Show("Certificate permanently deleted.");
+                MessageBox.Show("Certificate deleted.");
                 LoadDeletionTasks();
             }
             catch (Exception ex)
@@ -980,7 +966,7 @@ namespace EmployeeTrainingTracker
             }
         }
 
-        private async void btnRejectAck_Click(object sender, EventArgs e)
+        private void btnRejectAck_Click(object sender, EventArgs e)
         {
             // Changed to check CurrentRow
             if (dgvPendingAcks.CurrentRow == null)
@@ -994,12 +980,11 @@ namespace EmployeeTrainingTracker
 
             int certId = Convert.ToInt32(selectedRow.Cells["CertificateID"].Value);
             string topic = selectedRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
-            string? s3Key = selectedRow.Cells["FileLink"].Value?.ToString();
 
             if (!EnsureAccess(ManagerAccessService.CanManageCertificate(_managerId, certId))) return;
 
             var confirm = MessageBox.Show(
-                $"Are you sure you want to REJECT and DELETE the pending certificate for '{topic}'?",
+                $"Reject the certificate '{topic}'?\n\nIt is removed from the employee's certificates; an Admin can restore it if needed.",
                 "Confirm Rejection",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
@@ -1008,16 +993,10 @@ namespace EmployeeTrainingTracker
             {
                 try
                 {
-                    // 1. Delete the bad file from the S3 Cloud
-                    if (!string.IsNullOrEmpty(s3Key))
-                    {
-                        await S3Service.DeleteCertificateAsync(s3Key);
-                    }
+                    // Soft delete (migration 008): the record and its S3 file are kept, so an Admin can restore it
+                    CertificateService.SoftDeleteCertificate(certId, _managerId, CertificateService.ReasonUploadRejected);
 
-                    // 2. Delete the record from the database
-                    CertificateService.DeleteCertificate(certId);
-
-                    MessageBox.Show("Record Rejected and Deleted Successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("Certificate rejected.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
                     LoadPendingApprovals(); // Refresh the grid
                 }

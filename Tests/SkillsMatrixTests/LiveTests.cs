@@ -418,9 +418,66 @@ internal static class LiveTests
         }
 
         MergeTests(conn);
+        CertificateSoftDeleteTests(conn);
 
         Console.WriteLine();
         Console.WriteLine($"LIVE {_passed} passed, {_failed} failed");
         return _failed == 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Certificate soft delete (migration 008) through the app's CertificateService, against the stand-in
+    /// TrainingCertificates (dummy rows 1-5): Bob (2) has 1 active, 2 a deletion request, 3 awaiting approval.
+    /// </summary>
+    private static void CertificateSoftDeleteTests(NpgsqlConnection conn)
+    {
+        const int Alice = 1, Bob = 2, Carol = 3;   // Admin, Employee, Manager
+        Console.WriteLine();
+        Console.WriteLine("-- Certificate soft delete (migration 008) --");
+        // (the import test above renamed the stand-in people; put the names back)
+        new NpgsqlCommand("UPDATE public.Employees SET FullName = 'Alice Admin' WHERE EmployeeID = 1; UPDATE public.Employees SET FullName = 'Bob Tester' WHERE EmployeeID = 2; " +
+                          "UPDATE public.Employees SET FullName = 'Carol Manager' WHERE EmployeeID = 3", conn).ExecuteNonQuery();
+        string Q(string sql) => Convert.ToString(new NpgsqlCommand(sql, conn).ExecuteScalar()) ?? "";
+        string Row(long id) => Q($"SELECT concat_ws('|', Status, IsMarkedForDeletion, DeletedAt IS NOT NULL, DeletedByName, DeletedReason) FROM public.TrainingCertificates WHERE CertificateID = {id}");
+        long count = Convert.ToInt64(new NpgsqlCommand("SELECT COUNT(*) FROM public.TrainingCertificates", conn).ExecuteScalar());
+
+        // Approving a deletion request (Tasks: Delete), by a manager
+        CertificateService.SoftDeleteCertificate(conn, 2, Carol, CertificateService.ReasonDeletionRequestApproved);
+        Check(Row(2) == "Completed|t|t|Carol Manager|DeletionRequestApproved",
+              "Delete: the record is kept, marked deleted with who and why, still marked for deletion", Row(2));
+        Throws<InvalidOperationException>(() => CertificateService.SoftDeleteCertificate(conn, 2, Carol, CertificateService.ReasonDeletionRequestApproved),
+                                          "deleting it again is refused", "already been deleted");
+        Throws<InvalidOperationException>(() => CertificateService.SoftDeleteCertificate(conn, 999, Carol, CertificateService.ReasonDeletedDirectly),
+                                          "deleting an unknown certificate is refused", "no longer exists");
+        Throws<ArgumentException>(() => CertificateService.SoftDeleteCertificate(conn, 1, Carol, "Oops"), "an unknown reason is refused", "Unknown deletion reason");
+
+        // Rejecting an upload awaiting approval (Tasks: Reject)
+        CertificateService.SoftDeleteCertificate(conn, 3, Alice, CertificateService.ReasonUploadRejected);
+        Check(Row(3) == "Pending|t|t|Alice Admin|UploadRejected", "Reject: kept as Pending, marked deleted", Row(3));
+
+        var deleted = CertificateService.GetDeletedCertificates(conn);
+        var ids = deleted.Rows.Cast<System.Data.DataRow>().Select(r => Convert.ToInt64(r["CertificateID"])).ToList();
+        Check(ids.Count == 2 && ids.Contains(2) && ids.Contains(3)
+              && deleted.Rows.Cast<System.Data.DataRow>().Any(r => (string)r["DeletedReason"] == "Rejected while awaiting approval")
+              && deleted.Rows.Cast<System.Data.DataRow>().Any(r => (string)r["DeletedReason"] == "Deletion request approved"
+                                                                   && (string)r["EmployeeName"] == "Bob Tester" && (string)r["DeletedByName"] == "Carol Manager"),
+              "Deleted certificates list: both, with employee, readable reason and who deleted them");
+        Check(Convert.ToInt64(new NpgsqlCommand("SELECT COUNT(*) FROM public.TrainingCertificates", conn).ExecuteScalar()) == count,
+              "no certificate row was removed");
+
+        // Restore: Admins only
+        Throws<UnauthorizedAccessException>(() => CertificateService.RestoreCertificate(conn, 2, Carol), "a Manager cannot restore", "Only Admins");
+        Throws<UnauthorizedAccessException>(() => CertificateService.RestoreCertificate(conn, 2, Bob), "an Employee cannot restore", "Only Admins");
+        new NpgsqlCommand("UPDATE public.Employees SET IsArchived = TRUE WHERE EmployeeID = 1", conn).ExecuteNonQuery();
+        Throws<UnauthorizedAccessException>(() => CertificateService.RestoreCertificate(conn, 2, Alice), "an archived Admin cannot restore", "Only Admins");
+        new NpgsqlCommand("UPDATE public.Employees SET IsArchived = FALSE WHERE EmployeeID = 1", conn).ExecuteNonQuery();
+        Check(Row(2).Contains("|t|t|"), "... and nothing was restored");
+
+        CertificateService.RestoreCertificate(conn, 2, Alice);
+        Check(Row(2) == "Completed|f|f", "restored deletion: an active certificate again (no longer marked for deletion)", Row(2));
+        CertificateService.RestoreCertificate(conn, 3, Alice);
+        Check(Row(3) == "Pending|f|f", "restored rejected upload: awaiting approval again", Row(3));
+        Throws<InvalidOperationException>(() => CertificateService.RestoreCertificate(conn, 3, Alice), "restoring a certificate that is not deleted is refused", "not deleted");
+        Check(CertificateService.GetDeletedCertificates(conn).Rows.Count == 0, "Deleted certificates list empty again");
     }
 }

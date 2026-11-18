@@ -125,6 +125,7 @@ internal static class Program
             DryRunAndReportTests(preview, roster, root);
             IntegrityTests(workbook, originalBytes, originalWrite, preview);
             NoDatabaseTests();
+            SoftDeleteSourceTests();
             ImportTests.Run(preview, roster, root);
             ImportTests.PriorDecisionTests(preview, roster, root);
         }
@@ -447,6 +448,47 @@ internal static class Program
         string body = start >= 0 && end > start ? view[start..end] : "";
         Check(body.Length > 0 && !body.Contains("SkillsMatrixService") && !body.Contains("DatabaseHelper"),
               "the dry-run button handler makes no database call");
+    }
+
+    /// <summary>
+    /// Certificate soft delete (migration 008): every query in the app that reads or changes TrainingCertificates
+    /// must say what it does with deleted rows (DeletedAt), nothing may delete a certificate row or its S3 file,
+    /// and the app may not hide deleted rows from the notifier by any means other than IsMarkedForDeletion.
+    /// </summary>
+    private static void SoftDeleteSourceTests()
+    {
+        Group("Certificate soft delete (source check)");
+        string? dir = Path.GetDirectoryName(ThisSourceFile());
+        while (dir != null && !File.Exists(Path.Combine(dir, "EmployeeTrainingTracker.sln"))) dir = Path.GetDirectoryName(dir);
+        if (dir == null) { Fail("repository found", "EmployeeTrainingTracker.sln not found above this test's source file"); return; }
+        string app = Path.Combine(dir, "EmployeeTrainingTracker");
+        var files = Directory.GetFiles(app, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains(@"\obj\") && !f.Contains(@"\bin\") && !f.Contains(@"\Tools\")).ToList();
+
+        var statement = new System.Text.RegularExpressions.Regex(@"(?i)\b(from|update|join)\s+(public\.)?trainingcertificates\b");
+        int checkedQueries = 0;
+        var missing = new List<string>();
+        foreach (var f in files)
+        {
+            string src = File.ReadAllText(f);
+            foreach (System.Text.RegularExpressions.Match m in statement.Matches(src))
+            {
+                // The rest of the SQL literal: up to the end of the verbatim string ("; or ", or ")
+                int end = src.IndexOfAny(new[] { '"' }, m.Index);
+                while (end >= 0 && end + 1 < src.Length && src[end + 1] == '"') end = src.IndexOf('"', end + 2);   // skip "" escapes
+                string sql = end > m.Index ? src[m.Index..end] : src[m.Index..];
+                checkedQueries++;
+                if (!sql.Contains("DeletedAt", StringComparison.OrdinalIgnoreCase))
+                    missing.Add($"{Path.GetFileName(f)} line {src[..m.Index].Count(c => c == '\n') + 1}");
+            }
+            Check(!System.Text.RegularExpressions.Regex.IsMatch(src, @"(?i)delete\s+from\s+(public\.)?trainingcertificates"),
+                  $"{Path.GetFileName(f)}: never deletes a certificate row");
+        }
+        Check(checkedQueries >= 15 && missing.Count == 0,
+              $"every TrainingCertificates query handles soft-deleted rows ({checkedQueries} checked)", string.Join("; ", missing));
+
+        foreach (var form in new[] { @"Forms\AdminDashboard.cs", @"Forms\ManagerDashboard.cs", @"Forms\EmployeeDashboard.cs" })
+            Check(!File.ReadAllText(Path.Combine(app, form)).Contains("DeleteCertificateAsync"), $"{Path.GetFileName(form)}: never deletes a certificate file from S3");
     }
 }
 

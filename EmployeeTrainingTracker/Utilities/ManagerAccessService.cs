@@ -47,7 +47,7 @@ namespace EmployeeTrainingTracker.Utilities
             return Exists($@"
                 SELECT EXISTS (
                     SELECT 1 FROM TrainingCertificates tc
-                    WHERE tc.CertificateID = @id
+                    WHERE tc.CertificateID = @id AND tc.DeletedAt IS NULL
                       AND (tc.EmployeeID = @managerId OR tc.EmployeeID IN ({ManagedEmployeesSql})))", managerId, certificateId);
         }
 
