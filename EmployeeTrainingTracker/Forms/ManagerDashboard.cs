@@ -16,6 +16,8 @@ namespace EmployeeTrainingTracker
         private string currentEmployeeName = "None";
         private bool _loadingManagerCombo = false;
         private bool _isSyncingSelection = false;
+        private TabPage? tabSkillsMatrix;
+        private SkillsMatrixView? skillsMatrixView;
 
         public ManagerDashboard(int managerId)
         {
@@ -77,6 +79,9 @@ namespace EmployeeTrainingTracker
         // Re-reads department membership when switching tabs, since an Admin may have changed it
         private void tabControl_SelectedIndexChanged_Refresh(object? sender, EventArgs e)
         {
+            if (tabSkillsMatrix != null && tabControl.SelectedTab == tabSkillsMatrix)
+                skillsMatrixView?.EnsureLoaded();
+
             try
             {
                 if (tabControl.SelectedTab == tabEmployees)
@@ -150,6 +155,22 @@ namespace EmployeeTrainingTracker
 
                 // Select the manager themselves once the grid is on screen (the grid picks row 0 when first shown)
                 this.Shown += (s, args) => SelectEmployeeRow(_managerId);
+
+                // Skills Matrix: the people this manager manages (view and edit their levels, not their own).
+                // Loads the first time the tab is opened; isolated so a problem here can't stop the dashboard loading.
+                try
+                {
+                    skillsMatrixView = new SkillsMatrixView(_managerId, managerView: true) { Dock = DockStyle.Fill };
+                    tabSkillsMatrix = new TabPage("Skills Matrix") { Name = "tabSkillsMatrix" };
+                    tabSkillsMatrix.Controls.Add(skillsMatrixView);
+                    tabControl.TabPages.Add(tabSkillsMatrix);
+                }
+                catch (Exception smEx)
+                {
+                    skillsMatrixView = null;
+                    tabSkillsMatrix = null;
+                    System.Diagnostics.Debug.WriteLine($"Skills Matrix tab not added: {smEx}");
+                }
 
                 // Pick up department changes an Admin makes while this dashboard is open
                 tabControl.SelectedIndexChanged += tabControl_SelectedIndexChanged_Refresh;
