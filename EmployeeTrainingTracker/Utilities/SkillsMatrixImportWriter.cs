@@ -34,7 +34,7 @@ namespace EmployeeTrainingTracker.Utilities
     {
         /// <summary>LiveCellsRebuilt: cells in the rebuilt live copy, or null when the live copy (migration 005) is not installed.</summary>
         public sealed record WriteResult(long ImportId, int Areas, int Skills, int Columns, int Cells, int Formats, TimeSpan Took,
-            int? LiveCellsRebuilt = null, int AppValuesKept = 0);
+            int? LiveCellsRebuilt = null, int AppValuesKept = 0, int EvidenceCarried = 0, int EvidenceClosed = 0);
 
         /// <summary>
         /// The connection failed while committing, so it is not known whether the server committed the import.
@@ -151,9 +151,17 @@ namespace EmployeeTrainingTracker.Utilities
 
                 // Live copy (migration 005): rebuild it from this import, in this transaction
                 int? liveCells = null;
+                int evidenceCarried = 0, evidenceClosed = 0;
                 if (Scalar(conn, tx, "SELECT to_regprocedure('public.skillmatrixlive_seed(bigint,bigint,text)') IS NOT NULL") is true)
+                {
+                    // Evidence links (migration 009) point at live IDs, which the rebuild replaces: remember where each
+                    // current link is, rebuild, then point it at the same skill / person in the new live copy
+                    bool evidence = SkillsMatrixEvidenceService.IsInstalled(conn, tx);
+                    if (evidence) SkillsMatrixEvidenceService.RememberLinksBeforeRebuild(conn, tx);
                     liveCells = Convert.ToInt32(Scalar(conn, tx, "SELECT public.SkillMatrixLive_Seed(@id, @by, @name)",
                         ("id", importId), ("by", importedByEmployeeId), ("name", i.ImportedBy)));
+                    if (evidence) (evidenceCarried, evidenceClosed) = SkillsMatrixEvidenceService.CarryLinksAfterRebuild(conn, tx, i.ImportedBy);
+                }
                 else if (merge != null)
                     throw new InvalidOperationException("A merge was requested but the live copy is not installed. Nothing was written.");
 
@@ -203,7 +211,8 @@ namespace EmployeeTrainingTracker.Utilities
                     // Anything else (network, timeout) leaves the outcome unknown.
                     throw new CommitOutcomeUnknownException(ex);
                 }
-                return new WriteResult(importId, plan.Areas.Count, skills, columns, cells, formats, timer.Elapsed, liveCells, kept);
+                return new WriteResult(importId, plan.Areas.Count, skills, columns, cells, formats, timer.Elapsed, liveCells, kept,
+                    evidenceCarried, evidenceClosed);
             }
             catch
             {

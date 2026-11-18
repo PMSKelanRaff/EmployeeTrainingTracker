@@ -661,6 +661,39 @@ exactly, requires 005, marker check) - runner 42/42; C# live tests 94/94 (manage
 with an app group; whole sheet; edits people outside her app group; other sheets and their history refused; own
 level refused; mixed batch saves nothing; access removed at once when un-named; undo); suite 186/186.
 
+### Supporting evidence for levels (migration 009, 2026-11-18)
+
+Each level cell (1-5) on the live matrix has a small square in its bottom-right corner:
+
+| Square | Meaning | Click |
+|---|---|---|
+| white **+** | no evidence linked | pick one of that person's approved certificates (Admins; Managers on their sheets, not their own column) |
+| **green** with a tick | evidence valid: linked at the cell's current level | opens the document (anyone who can see the sheet) |
+| white **+**, orange outline | needs relinking: the level has changed since it was linked, or the certificate was deleted / is no longer approved | pick a certificate again |
+
+**Decisions:** one certificate per cell; only **approved** (`Completed`), not deleted certificates **of that person**; a link is
+valid while the level equals the level it was linked at (3 -> 4 needs relinking; back to 3 is valid again). No square on
+'not assessed' / flagged cells or on a cell with an unsaved change. Cells are 2 px taller (24) to fit it.
+
+**Storage:** `SkillMatrixCellEvidence` (cell = live SkillID + ColumnID, person, certificate, LinkedLevel, who/when;
+RemovedAt/RemovedReason `Replaced` | `Unlinked` | `NotInNewImport`). Links are never deleted (trigger), only closed;
+one current link per cell (partial unique index). No foreign key to the live cells, because a re-import rebuilds them with new
+IDs: `SkillsMatrixImportWriter` remembers each current link by sheet / category / skill (n-th occurrence) / person
+(n-th column) before the rebuild and points it at the same cell afterwards, in the same transaction; a level the
+workbook changed then shows "needs relinking"; a link whose skill or person is gone is closed (`NotInNewImport`). The
+import message says how many were carried over / closed. Certificates linked as evidence cannot be hard-deleted (FK);
+the app only soft-deletes them (migration 008).
+
+**Service:** `SkillsMatrixEvidenceService` - `GetEvidence`, `GetLinkableCertificates`, `LinkCertificate` (one
+transaction: access re-read, cell locked, certificate owner / approval / deletion checked, old link closed),
+`RemoveLink`; rollback refuses while any link exists.
+
+**Tests:** 009 SQL 13/13; runner scenarios X-Z (apply, repeat refused, rollback refused while links exist, rollback x2
+exact, requires 005 and 008, marker check) - runner 66/66; C# 25 evidence tests (linkable list, validity follows the level,
+someone else's / pending / deleted certificate refused, Employee / other-sheet Manager / archived person / not-assessed
+cell refused, replace and remove close old links, delete refused, re-import carries 3 links and closes 1 with the right
+validity) - live 134/134; suite 237/237.
+
 ## Access control and its limitations
 
 - The tab exists only on the Admin dashboard, and `SkillsMatrixService` re-checks **on every call**

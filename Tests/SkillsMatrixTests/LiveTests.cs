@@ -418,11 +418,123 @@ internal static class LiveTests
         }
 
         MergeTests(conn);
+        EvidenceTests(conn);
         CertificateSoftDeleteTests(conn);
 
         Console.WriteLine();
         Console.WriteLine($"LIVE {_passed} passed, {_failed} failed");
         return _failed == 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Supporting evidence (migration 009) through SkillsMatrixEvidenceService, on the dummy 'Innovation' sheet:
+    /// import version 1, link certificates (rules, permissions, replace / remove), then import version 2 WITHOUT a
+    /// merge and check every link is carried to the same skill / person, needs relinking where the workbook changed
+    /// the level, and is closed where the row is gone. Stand-in certificates: Bob (2) 1, 2, 5 approved, 3 pending;
+    /// Alice (1) 4 approved.
+    /// </summary>
+    private static void EvidenceTests(NpgsqlConnection conn)
+    {
+        const int Alice = 1, Bob = 2, Carol = 3;   // Admin, Employee, Manager
+        Console.WriteLine();
+        Console.WriteLine("-- Supporting evidence (migration 009) --");
+        long Scalar(string sql) => Convert.ToInt64(new NpgsqlCommand(sql, conn).ExecuteScalar());
+        new NpgsqlCommand("UPDATE public.Employees SET FullName = 'Alice Example' WHERE EmployeeID = 1; UPDATE public.Employees SET FullName = 'Bob O Test' WHERE EmployeeID = 2; " +
+                          "UPDATE public.Employees SET FullName = 'Carol Sample' WHERE EmployeeID = 3", conn).ExecuteNonQuery();
+        string root = Path.Combine(Path.GetTempPath(), "SkillsMatrixEvidenceTest", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var d1 = new Dictionary<string, (string, string, string)> { ["Alice Example"] = (Confirmed, "1", ""), ["Bob O'Test"] = (Confirmed, "2", "") };
+            var plan1 = ImportTests.PlanForWorkbook(MergeWorkbook(Path.Combine(root, "v1.xlsx"), 1), root, d1, out _);
+            SkillsMatrixImportWriter.Write(conn, plan1, plan1.Acknowledgements.Select(a => a.Key).ToHashSet(), SkillsMatrixImportWriter.ExpectedConfirmation(plan1), Alice);
+
+            var area = GetAreas(conn).Single(a => a.Name == "Innovation");
+            var m = GetMatrix(conn, area.AreaId);
+            long Sk(SkillsMatrixService.SkillMatrixData d, string n) => d.Skills.Single(s => s.Name == n).SkillId;
+            long Pe(SkillsMatrixService.SkillMatrixData d, string n) => d.Members.First(x => x.EmployeeName == n).MemberId;
+            long ali = Pe(m, "Alice Example"), bob = Pe(m, "Bob O Test");
+            var admin = GetAccess(conn, null, Alice);
+            SkillsMatrixEvidenceService.EvidenceState State(long skill, long col)
+            {
+                var mm = GetMatrix(conn, area.AreaId);
+                var ev = SkillsMatrixEvidenceService.GetEvidence(conn, admin, area.AreaId);
+                return SkillsMatrixEvidenceService.StateOf(ev.GetValueOrDefault((skill, col)), mm.Cells.GetValueOrDefault((skill, col)));
+            }
+            void Link(int who, long skill, long col, long cert) => SkillsMatrixEvidenceService.LinkCertificate(conn, who, area.AreaId, skill, col, cert);
+
+            // Which certificates can be linked for Bob: his approved, not deleted ones
+            var linkable = SkillsMatrixEvidenceService.GetLinkableCertificates(conn, admin, area.AreaId, bob).Select(c => c.CertificateId).OrderBy(x => x).ToList();
+            Check(linkable.SequenceEqual(new long[] { 1, 2, 5 }), "linkable for Bob: his approved certificates only (not the pending one, not Alice's)", string.Join(",", linkable));
+
+            // Link, validity follows the level
+            Link(Alice, Sk(m, "Skill one"), bob, 1);       // Bob skill one = 1 (the workbook changes it to 5 in version 2)
+            Link(Alice, Sk(m, "Skill two"), bob, 5);       // Bob skill two = 2 (unchanged in version 2)
+            Link(Alice, Sk(m, "Skill two"), ali, 4);       // Alice skill two = 2 (version 2: 3)
+            Link(Alice, Sk(m, "Skill four"), ali, 4);      // row renamed in version 2 -> closed
+            Check(State(Sk(m, "Skill one"), bob) == SkillsMatrixEvidenceService.EvidenceState.Valid
+                  && Scalar("SELECT COUNT(*) FROM public.SkillMatrixCellEvidence WHERE RemovedAt IS NULL") == 4
+                  && Scalar($"SELECT LinkedLevel FROM public.SkillMatrixCellEvidence WHERE RemovedAt IS NULL AND SkillID = {Sk(m, "Skill one")} AND ColumnID = {bob}") == 1,
+                  "linked: valid, at the cell's current level, with who linked it");
+            var r = SaveCells(conn, Alice, area.AreaId, new[] { new CellChange(Sk(m, "Skill one"), bob, GetMatrix(conn, area.AreaId).Cells[(Sk(m, "Skill one"), bob)].Version, 3) });
+            Check(State(Sk(m, "Skill one"), bob) == SkillsMatrixEvidenceService.EvidenceState.NeedsRelinking, "level changed 1 -> 3: needs relinking");
+            SaveCells(conn, Alice, area.AreaId, new[] { new CellChange(Sk(m, "Skill one"), bob, GetMatrix(conn, area.AreaId).Cells[(Sk(m, "Skill one"), bob)].Version, 1) });
+            Check(State(Sk(m, "Skill one"), bob) == SkillsMatrixEvidenceService.EvidenceState.Valid, "level back to 1: valid again (decision: the level decides)");
+
+            // Refusals - nothing changes
+            long rows = Scalar("SELECT COUNT(*) FROM public.SkillMatrixCellEvidence");
+            Throws<ArgumentException>(() => Link(Alice, Sk(m, "Skill three"), bob, 4), "someone else's certificate is refused", "does not belong");
+            Throws<ArgumentException>(() => Link(Alice, Sk(m, "Skill three"), bob, 3), "a certificate awaiting approval is refused", "approved");
+            new NpgsqlCommand("UPDATE public.TrainingCertificates SET DeletedAt = now(), DeletedReason = 'DeletedDirectly', IsMarkedForDeletion = TRUE WHERE CertificateID = 5", conn).ExecuteNonQuery();
+            Check(State(Sk(m, "Skill two"), bob) == SkillsMatrixEvidenceService.EvidenceState.CertificateRemoved, "a linked certificate that is deleted: needs relinking");
+            Throws<ArgumentException>(() => Link(Alice, Sk(m, "Skill three"), bob, 5), "a deleted certificate is refused", "deleted");
+            new NpgsqlCommand("UPDATE public.TrainingCertificates SET DeletedAt = NULL, DeletedReason = NULL, IsMarkedForDeletion = FALSE WHERE CertificateID = 5", conn).ExecuteNonQuery();
+            Check(State(Sk(m, "Skill two"), bob) == SkillsMatrixEvidenceService.EvidenceState.Valid, "... restored: valid again");
+            Throws<UnauthorizedAccessException>(() => Link(Bob, Sk(m, "Skill three"), bob, 1), "an Employee cannot link", "Admins and Managers");
+            Throws<UnauthorizedAccessException>(() => Link(Carol, Sk(m, "Skill three"), bob, 1), "a Manager cannot link on a sheet where they manage no team", "manage a team");
+            new NpgsqlCommand("UPDATE public.Employees SET IsArchived = TRUE WHERE EmployeeID = 2", conn).ExecuteNonQuery();
+            Throws<ArgumentException>(() => Link(Alice, Sk(m, "Skill three"), bob, 1), "an archived person's level cannot get evidence", "archived");
+            new NpgsqlCommand("UPDATE public.Employees SET IsArchived = FALSE WHERE EmployeeID = 2", conn).ExecuteNonQuery();
+            SaveCells(conn, Alice, area.AreaId, new[] { new CellChange(Sk(m, "Skill three"), bob, GetMatrix(conn, area.AreaId).Cells[(Sk(m, "Skill three"), bob)].Version, null) });
+            Throws<ArgumentException>(() => Link(Alice, Sk(m, "Skill three"), bob, 1), "a 'not assessed' cell cannot get evidence", "level 1-5");
+            Throws<ArgumentException>(() => SkillsMatrixEvidenceService.LinkCertificate(conn, Alice, area.AreaId + 999, Sk(m, "Skill one"), bob, 1),
+                                      "a cell from another sheet is refused", "not on this sheet");
+            Check(Scalar("SELECT COUNT(*) FROM public.SkillMatrixCellEvidence") == rows, "... none of the refusals wrote anything");
+
+            // Replace and remove: old links are closed, never deleted; one current link per cell
+            Link(Alice, Sk(m, "Skill one"), bob, 2);
+            Check(Scalar($"SELECT COUNT(*) FROM public.SkillMatrixCellEvidence WHERE SkillID = {Sk(m, "Skill one")} AND ColumnID = {bob} AND RemovedAt IS NULL") == 1
+                  && Scalar($"SELECT CertificateID FROM public.SkillMatrixCellEvidence WHERE SkillID = {Sk(m, "Skill one")} AND ColumnID = {bob} AND RemovedAt IS NULL") == 2
+                  && Scalar($"SELECT COUNT(*) FROM public.SkillMatrixCellEvidence WHERE SkillID = {Sk(m, "Skill one")} AND ColumnID = {bob} AND RemovedReason = 'Replaced'") == 1,
+                  "replacing: one current link (the new certificate), the old one closed as Replaced");
+            SkillsMatrixEvidenceService.RemoveLink(conn, Alice, area.AreaId, Sk(m, "Skill one"), bob);
+            Check(State(Sk(m, "Skill one"), bob) == SkillsMatrixEvidenceService.EvidenceState.None
+                  && Scalar("SELECT COUNT(*) FROM public.SkillMatrixCellEvidence WHERE RemovedReason = 'Unlinked'") == 1, "removing: no evidence, the link closed as Unlinked");
+            Throws<InvalidOperationException>(() => SkillsMatrixEvidenceService.RemoveLink(conn, Alice, area.AreaId, Sk(m, "Skill one"), bob), "removing again is refused", "no evidence");
+            Throws<PostgresException>(() => new NpgsqlCommand("DELETE FROM public.SkillMatrixCellEvidence", conn).ExecuteNonQuery(), "the database refuses to delete links", "not deleted");
+            Link(Alice, Sk(m, "Skill one"), bob, 1);   // back, for the re-import below
+
+            // Re-import (version 2, no merge: the workbook's values replace the app's)
+            var d2 = new Dictionary<string, (string, string, string)>(d1) { ["Carol Sample"] = (Confirmed, "3", ""), ["Eve Closname"] = (Excluded, "", "test: not imported") };
+            var plan2 = ImportTests.PlanForWorkbook(MergeWorkbook(Path.Combine(root, "v2.xlsx"), 2), root, d2, out _);
+            var w = SkillsMatrixImportWriter.Write(conn, plan2, plan2.Acknowledgements.Select(a => a.Key).ToHashSet(), SkillsMatrixImportWriter.ExpectedConfirmation(plan2), Alice);
+            Check(w.EvidenceCarried == 3 && w.EvidenceClosed == 1, "re-import: 3 links carried over, 1 closed (its row was renamed)", $"carried {w.EvidenceCarried}, closed {w.EvidenceClosed}");
+            area = GetAreas(conn).Single(a => a.Name == "Innovation");
+            m = GetMatrix(conn, area.AreaId);
+            ali = Pe(m, "Alice Example"); bob = Pe(m, "Bob O Test");
+            Check(State(Sk(m, "Skill two"), bob) == SkillsMatrixEvidenceService.EvidenceState.Valid, "after: unchanged level -> still valid, on the new cell");
+            Check(State(Sk(m, "Skill one"), bob) == SkillsMatrixEvidenceService.EvidenceState.NeedsRelinking, "after: the workbook changed the level (1 -> 5) -> needs relinking");
+            Check(State(Sk(m, "Skill two"), ali) == SkillsMatrixEvidenceService.EvidenceState.NeedsRelinking, "after: Alice skill two 2 -> 3 -> needs relinking");
+            Check(Scalar("SELECT COUNT(*) FROM public.SkillMatrixCellEvidence WHERE RemovedReason = 'NotInNewImport'") == 1
+                  && State(Sk(m, "Skill 4"), ali) == SkillsMatrixEvidenceService.EvidenceState.None, "after: the renamed row's link closed (NotInNewImport), the new row has none");
+            Check(Scalar(@"SELECT COUNT(*) FROM public.SkillMatrixCellEvidence ev WHERE ev.RemovedAt IS NULL
+                           AND NOT EXISTS (SELECT 1 FROM public.SkillMatrixLiveCells c WHERE c.SkillID = ev.SkillID AND c.ColumnID = ev.ColumnID)") == 0,
+                  "after: every current link points at a cell of the new live copy");
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
     }
 
     /// <summary>

@@ -322,7 +322,12 @@ namespace EmployeeTrainingTracker
                 var r = SkillsMatrixImportWriter.Write(conn, _plan, _acknowledged, typed, _adminEmployeeId, _mergePlan);
                 MessageBox.Show(this, $"Import {r.ImportId} written and made current ({r.Columns} columns, {r.Cells} cells, {r.Formats} formatting rows, {r.Took.TotalSeconds:0.0} s)." +
                                       (r.LiveCellsRebuilt is int live ? $"\n\nThe live copy was rebuilt from it ({live} cells)" +
-                                          (_mergePlan != null ? $" and {r.AppValuesKept} value(s) changed in the app were kept" : "") + ". Refresh the Skills Matrix tab." : ""),
+                                          (_mergePlan != null ? $" and {r.AppValuesKept} value(s) changed in the app were kept" : "") + "." +
+                                          (r.EvidenceCarried + r.EvidenceClosed > 0
+                                              ? $"\n{r.EvidenceCarried} evidence link(s) carried over (any whose level changed now need relinking)" +
+                                                (r.EvidenceClosed > 0 ? $"; {r.EvidenceClosed} closed because the skill or person is no longer in the workbook" : "") + "."
+                                              : "") +
+                                          " Refresh the Skills Matrix tab." : ""),
                                 "Skills Matrix import", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 DialogResult = DialogResult.OK;
             }
