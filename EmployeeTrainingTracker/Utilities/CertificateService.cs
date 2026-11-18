@@ -322,14 +322,20 @@ namespace EmployeeTrainingTracker.Utilities
             using var conn = DatabaseHelper.GetConnection();
             conn.Open();
 
+            // Same columns as the deletion requests (GetPendingDeletions), so both Tasks tables read the same,
+            // plus the Trainer Name typed in when acknowledging
             string sql = @"
-        SELECT 
-            tc.CertificateID, 
-            e.FullName AS employeename,
-            tc.CertificateName AS trainingtopic, 
-            tc.HRS AS hours, 
-            tc.IssueDate AS trainingdate, 
+        SELECT
+            tc.CertificateID,
+            e.FullName AS EmployeeName,
+            tc.CertificateName,
+            tc.Key,
+            tc.HRS,
+            tc.Provider,
+            tc.IssueDate,
+            tc.ExpiryDate,
             tc.S3Key,
+            tc.LastNotifiedDate,
             '' AS trainername
         FROM trainingcertificates tc
         JOIN employees e ON tc.EmployeeID = e.EmployeeID

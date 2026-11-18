@@ -166,6 +166,7 @@ namespace EmployeeTrainingTracker.Utilities
 
             dgv.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             UIHelpers.StyleDataGridView(dgv);
+            ApplyTaskTheme(dgv, DeletionRed, DeletionTint, DeletionTitle, table.Rows.Count);
         }
 
         /// <summary>
@@ -173,16 +174,11 @@ namespace EmployeeTrainingTracker.Utilities
         /// </summary>
         public static void BuildPendingApprovalColumns(DataGridView dgv)
         {
-            dgv.Columns.Clear();
-            dgv.AutoGenerateColumns = false;
+            // The same columns and headings as the deletion requests table, then the editable Trainer Name
+            BuildDeletionTaskColumns(dgv);
             dgv.AllowUserToAddRows = false;
-
-            dgv.Columns.Add(new DataGridViewTextBoxColumn { Name = "CertificateID", DataPropertyName = "CertificateID", Visible = false });
-            dgv.Columns.Add(new DataGridViewTextBoxColumn { Name = "employeename", DataPropertyName = "employeename", HeaderText = "Employee Name", ReadOnly = true });
-            dgv.Columns.Add(new DataGridViewTextBoxColumn { Name = "trainingtopic", DataPropertyName = "trainingtopic", HeaderText = "Certificate / Topic", ReadOnly = true });
-            dgv.Columns.Add(new DataGridViewTextBoxColumn { Name = "hours", DataPropertyName = "hours", HeaderText = "Hours", ReadOnly = true });
-            dgv.Columns.Add(new DataGridViewTextBoxColumn { Name = "trainingdate", DataPropertyName = "trainingdate", HeaderText = "Date", ReadOnly = true, DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } });
-            dgv.Columns.Add(new DataGridViewLinkColumn { Name = "FileLink", DataPropertyName = "S3Key", HeaderText = "View Document", TrackVisitedState = true });
+            foreach (DataGridViewColumn col in dgv.Columns)
+                col.ReadOnly = true;
 
             var trainerCol = new DataGridViewTextBoxColumn
             {
@@ -201,6 +197,91 @@ namespace EmployeeTrainingTracker.Utilities
             dgv.DataSource = table;
             dgv.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             UIHelpers.StyleDataGridView(dgv);
+            ApplyTaskTheme(dgv, ApprovalGreen, ApprovalTint, ApprovalTitle, table.Rows.Count);
+        }
+
+        // ------------------------------------------------------------------
+        // Tasks tab: colour-coded tables so deletion requests (red) and
+        // certificate approvals (green) can't be mistaken for each other
+        // ------------------------------------------------------------------
+
+        public static readonly Color DeletionRed = Color.FromArgb(192, 57, 43);
+        public static readonly Color DeletionTint = Color.FromArgb(250, 219, 216);
+        public static readonly Color ApprovalGreen = Color.FromArgb(30, 132, 73);
+        public static readonly Color ApprovalTint = Color.FromArgb(212, 239, 223);
+        // {0} = how many are waiting
+        private const string DeletionTitle = "Deletion requests ({0})  -  approving permanently deletes the certificate";
+        private const string ApprovalTitle = "Certificates awaiting approval ({0})";
+
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<DataGridView, Label> TaskTitles = new();
+
+        /// <summary>
+        /// Adds a coloured title bar above each Tasks grid and colours its main action button (red: deletions,
+        /// green: approvals). Call in the dashboard constructor straight after InitializeComponent() and BEFORE
+        /// ResponsiveScaler.Attach, so the title bars scale and move with the window like every other control.
+        /// The Reject buttons are left plain so the coloured button is always the main action. Also standardises
+        /// both dashboards: whole-row selection, and the button names Delete / Reject and Acknowledge / Reject.
+        /// </summary>
+        public static void DecorateTaskGrids(DataGridView deletions, Button approveDeletion, Button rejectDeletion,
+                                             DataGridView approvals, Button approveAck, Button rejectAck)
+        {
+            foreach (var dgv in new[] { deletions, approvals })
+            {
+                dgv.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+                dgv.MultiSelect = false;
+            }
+            AddTaskTitle(deletions, DeletionRed, DeletionTitle);
+            AddTaskTitle(approvals, ApprovalGreen, ApprovalTitle);
+            approveDeletion.Text = "Delete";
+            rejectDeletion.Text = "Reject";
+            approveAck.Text = "Acknowledge";
+            rejectAck.Text = "Reject";
+            StyleActionButton(approveDeletion, DeletionRed);
+            StyleActionButton(approveAck, ApprovalGreen);
+        }
+
+        private static void AddTaskTitle(DataGridView dgv, Color colour, string title)
+        {
+            if (dgv.Parent == null || TaskTitles.TryGetValue(dgv, out _)) return;
+
+            const int height = 26, gap = 2;
+            var label = new Label
+            {
+                AutoSize = false,
+                Text = string.Format(title, "..."),
+                BackColor = colour,
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(8, 0, 0, 0),
+                Bounds = new Rectangle(dgv.Left, dgv.Top, dgv.Width, height),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+            };
+            dgv.Parent.Controls.Add(label);
+            dgv.SetBounds(dgv.Left, dgv.Top + height + gap, dgv.Width, dgv.Height - height - gap);
+            TaskTitles.Add(dgv, label);
+        }
+
+        private static void StyleActionButton(Button button, Color colour)
+        {
+            button.UseVisualStyleBackColor = false;
+            button.FlatStyle = FlatStyle.Flat;
+            button.FlatAppearance.BorderColor = colour;
+            button.BackColor = colour;
+            button.ForeColor = Color.White;
+            button.Font = new Font(button.Font, FontStyle.Bold);
+        }
+
+        // Header row and selection in the table's colour; the title shows how many are waiting
+        private static void ApplyTaskTheme(DataGridView dgv, Color colour, Color tint, string title, int count)
+        {
+            dgv.ColumnHeadersDefaultCellStyle.BackColor = colour;
+            dgv.ColumnHeadersDefaultCellStyle.SelectionBackColor = colour;
+            dgv.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+            dgv.DefaultCellStyle.SelectionBackColor = tint;
+            dgv.DefaultCellStyle.SelectionForeColor = Color.Black;
+            if (TaskTitles.TryGetValue(dgv, out var label))
+                label.Text = string.Format(title, count);
         }
 
         // ------------------------------------------------------------------

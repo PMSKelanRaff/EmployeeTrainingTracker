@@ -22,6 +22,7 @@ namespace EmployeeTrainingTracker
         public ManagerDashboard(int managerId)
         {
             InitializeComponent();
+            DashboardHelper.DecorateTaskGrids(dgvTasks, btnApproveDeletion, btnRejectDeletion, dgvPendingAcks, btnApproveAck, btnRejectAck);   // before the scaler captures the layout
             ResponsiveScaler.Attach(this);
             _managerId = managerId;
         }
@@ -992,7 +993,7 @@ namespace EmployeeTrainingTracker
             DataGridViewRow selectedRow = dgvPendingAcks.CurrentRow;
 
             int certId = Convert.ToInt32(selectedRow.Cells["CertificateID"].Value);
-            string topic = selectedRow.Cells["trainingtopic"].Value?.ToString() ?? "Unknown";
+            string topic = selectedRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
             string? s3Key = selectedRow.Cells["FileLink"].Value?.ToString();
 
             if (!EnsureAccess(ManagerAccessService.CanManageCertificate(_managerId, certId))) return;

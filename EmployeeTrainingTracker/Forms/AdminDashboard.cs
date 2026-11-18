@@ -32,6 +32,7 @@ namespace EmployeeTrainingTracker
         public AdminDashboard(int userId)
         {
             InitializeComponent();
+            DashboardHelper.DecorateTaskGrids(dgvTasks, btnApproveDeletion, btnRejectDeletion, dgvPendingAcks, btnApproveAck, btnRejectAck);   // before the scaler captures the layout
             ResponsiveScaler.Attach(this);
             loggedInUserId = userId; // Save the ID when the form opens
         }
@@ -39,6 +40,7 @@ namespace EmployeeTrainingTracker
         public AdminDashboard()
         {
             InitializeComponent();
+            DashboardHelper.DecorateTaskGrids(dgvTasks, btnApproveDeletion, btnRejectDeletion, dgvPendingAcks, btnApproveAck, btnRejectAck);   // before the scaler captures the layout
             ResponsiveScaler.Attach(this);
 
         }
@@ -1304,7 +1306,7 @@ namespace EmployeeTrainingTracker
             DataGridViewRow selectedRow = dgvPendingAcks.CurrentRow;
 
             int certId = Convert.ToInt32(selectedRow.Cells["CertificateID"].Value);
-            string topic = selectedRow.Cells["trainingtopic"].Value?.ToString() ?? "Unknown";
+            string topic = selectedRow.Cells["CertificateName"].Value?.ToString() ?? "Unknown";
             string? s3Key = selectedRow.Cells["FileLink"].Value?.ToString();
 
             var confirm = MessageBox.Show(
